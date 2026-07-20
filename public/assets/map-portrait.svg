@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1400">
+  <rect width="900" height="1400" fill="#f5f5f4"/>
+  <path d="M160 340 Q280 200 460 260 Q660 320 720 480 Q780 660 700 880 Q620 1100 440 1140 Q260 1180 180 980 Q100 780 140 580 Q160 460 160 340 Z"
+        fill="#e7e5e4" stroke="#d6d3d1" stroke-width="4"/>
+  <text x="450" y="110" text-anchor="middle" font-size="36" font-family="sans-serif" fill="#a8a29e">�H0�`M�</text>
+  <text x="450" y="160" text-anchor="middle" font-size="26" font-family="sans-serif" fill="#a8a29e">�b public/assets/map-portrait.svg	</text>
+</svg>

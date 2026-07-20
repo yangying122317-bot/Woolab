@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+  <rect width="1600" height="1000" fill="#f5f5f4"/>
+  <path d="M180 320 Q320 180 560 220 Q820 260 900 180 Q1120 100 1320 240 Q1480 360 1400 560 Q1320 760 1080 800 Q840 840 620 780 Q380 720 260 600 Q120 460 180 320 Z"
+        fill="#e7e5e4" stroke="#d6d3d1" stroke-width="4"/>
+  <path d="M520 420 Q640 380 760 430 Q880 480 820 560 Q740 640 600 600 Q480 560 520 420 Z"
+        fill="#eeedec" stroke="#d6d3d1" stroke-width="3"/>
+  <text x="800" y="90" text-anchor="middle" font-size="42" font-family="sans-serif" fill="#a8a29e">*H0�`M��b public/assets/map-bg.svg	</text>
+</svg>
