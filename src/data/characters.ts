@@ -9,6 +9,8 @@ export interface Character {
   description: Localized;
   /** 角色图片路径（放在 public/assets/characters/ 下） */
   image: string;
+  /** 身份卡上的档案项（生日/性格/喜好等），按顺序展示 */
+  profile?: { label: Localized; value: Localized }[];
 }
 
 /**
@@ -24,6 +26,20 @@ export const characters: Character[] = [
       en: "Placeholder: describe Little Sheep's personality, hobbies and stories here.",
     },
     image: "/assets/characters/char-sheep.svg",
+    profile: [
+      {
+        label: { zh: "生日", en: "Birthday" },
+        value: { zh: "占位：某月某日", en: "TBD" },
+      },
+      {
+        label: { zh: "性格", en: "Personality" },
+        value: { zh: "占位：慢吞吞但很执着", en: "Slow but determined" },
+      },
+      {
+        label: { zh: "喜欢", en: "Likes" },
+        value: { zh: "占位：晒太阳、囤毛线", en: "Sunbathing, hoarding yarn" },
+      },
+    ],
   },
   {
     id: "friend-a",

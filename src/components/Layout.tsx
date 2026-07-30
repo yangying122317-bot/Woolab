@@ -1,59 +1,62 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { mapLocations } from "../data/mapLocations";
+import { hasUnreadNews } from "../data/news";
 import { useLanguage } from "../i18n/LanguageContext";
 import LangSwitcher from "./LangSwitcher";
+import SoundToggle from "./SoundToggle";
 
 /**
- * 内页统一布局：顶部为 logo + 导航 + 语言切换，中间渲染各板块页面。
- * 首页（地图）不走这个布局，见 App.tsx 路由配置。
+ * 内页轻壳：悬浮在页面上方的一条极简顶栏——
+ * 左边 logo（点击回首页），中间小号手写体导航，右边声音/语言。
+ * 背景、滚动和进场过场都交给各页面自己控制，保持沉浸感。
  */
 export default function Layout() {
   const { t } = useLanguage();
   const location = useLocation();
 
   return (
-    <div className="flex min-h-full flex-col bg-neutral-50 text-neutral-800">
-      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
-          <Link to="/" className="flex shrink-0 items-center gap-2">
-            <img src="/assets/logo.svg" alt="logo" className="h-8 w-8" />
-            <span className="hidden text-sm font-semibold sm:inline">
-              {t("siteName")}
-            </span>
-          </Link>
+    <div className="relative min-h-full bg-[#F4F4F4] text-neutral-800">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between px-4 py-3 sm:px-6">
+        <Link to="/" className="pointer-events-auto flex items-center gap-2">
+          <img src="/assets/logo.svg" alt="logo" className="h-8 w-8" />
+          <span className="font-hand hidden text-lg text-neutral-700 sm:inline">
+            {t("siteName")}
+          </span>
+        </Link>
 
-          <nav className="flex flex-1 items-center gap-1 overflow-x-auto text-sm">
-            {mapLocations.map((loc) => {
-              const active = location.pathname.startsWith(loc.path);
-              return (
-                <Link
-                  key={loc.id}
-                  to={loc.path}
-                  className={`shrink-0 rounded-full px-3 py-1.5 transition ${
-                    active
-                      ? "bg-neutral-800 text-white"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  }`}
-                >
-                  {t(loc.labelKey)}
-                </Link>
-              );
-            })}
-          </nav>
+        <nav className="pointer-events-auto flex items-center gap-1">
+          {mapLocations.map((loc) => {
+            const active = location.pathname.startsWith(loc.path);
+            // 日报有没看过的新刊时，导航上亮一个小圆点
+            const showDot = loc.id === "news" && !active && hasUnreadNews();
+            return (
+              <Link
+                key={loc.id}
+                to={loc.path}
+                className={`font-hand relative rounded-full px-3 py-1 text-base transition ${
+                  active
+                    ? "bg-neutral-800 text-white"
+                    : "text-neutral-500 hover:bg-black/5 hover:text-neutral-800"
+                }`}
+              >
+                {t(loc.labelKey)}
+                {showDot && (
+                  <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-neutral-800" />
+                )}
+              </Link>
+            );
+          })}
+        </nav>
 
+        <div className="pointer-events-auto flex items-center gap-2">
+          <SoundToggle />
           <LangSwitcher />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      <main className="min-h-screen">
         <Outlet />
       </main>
-
-      <footer className="border-t border-neutral-200 py-6 text-center text-xs text-neutral-400">
-        <Link to="/" className="underline-offset-2 hover:underline">
-          {t("backToMap")}
-        </Link>
-      </footer>
     </div>
   );
 }

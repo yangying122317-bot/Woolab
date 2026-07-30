@@ -1,5 +1,6 @@
 import HeroScene from "../components/HeroScene";
 import LangSwitcher from "../components/LangSwitcher";
+import SoundToggle from "../components/SoundToggle";
 import { useLanguage } from "../i18n/LanguageContext";
 
 export default function Home() {
@@ -15,7 +16,10 @@ export default function Home() {
             {t("siteName")}
           </span>
         </div>
-        <LangSwitcher />
+        <div className="flex items-center gap-2">
+          <SoundToggle />
+          <LangSwitcher />
+        </div>
       </header>
 
       <div className="h-screen">

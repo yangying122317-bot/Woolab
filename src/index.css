@@ -1,9 +1,40 @@
 @import "tailwindcss";
 
+/**
+ * 清松手写体 8（JasonHandwriting8，子集版）：只包含界面文案用到的
+ * 字符 + 全量 ASCII + 常用中文标点，用于入口提示等点缀。
+ * 若新增文案后出现缺字（回退到系统字体），需要重新生成子集
+ * （源文件：JasonHandwriting8.ttf）。
+ */
+@font-face {
+  font-family: "HandUI";
+  src: url("/assets/fonts/hand-ui.woff2") format("woff2");
+  font-display: swap;
+}
+
+/**
+ * 手写风格文字。
+ * 清松手写体只有 Regular 一档字重，用同色细描边模拟加粗：
+ * 想更粗调大 0.02em（≈0.4px@20px），想还原细体删掉 stroke 那行。
+ */
+.font-hand {
+  font-family: "HandUI", system-ui, -apple-system, "PingFang SC", sans-serif;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.04em currentColor;
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+/** 沉浸式页面（如屋内横滚长卷）挂在 <html> 上：隐藏原生滚动条，滚动仍然可用 */
+.scrollbar-hidden {
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / Edge */
 }
 
 body {

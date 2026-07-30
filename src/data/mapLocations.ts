@@ -15,11 +15,13 @@ export interface MapLocation {
  * 首页地图上的地点。调整位置只需修改 x / y（0-100）。
  */
 export const mapLocations: MapLocation[] = [
-  { id: "characters", path: "/characters", labelKey: "nav.characters", x: 30, y: 38 },
+  { id: "life", path: "/life", labelKey: "nav.life", x: 30, y: 38 },
   { id: "about", path: "/about", labelKey: "nav.about", x: 55, y: 22 },
   // Stories 暂时隐藏，需要时取消下面这行注释即可（路由仍然保留）
   // { id: "stories", path: "/stories", labelKey: "nav.stories", x: 72, y: 45 },
   { id: "lab", path: "/lab", labelKey: "nav.lab", x: 44, y: 62 },
-  { id: "downloads", path: "/downloads", labelKey: "nav.downloads", x: 18, y: 68 },
+  { id: "news", path: "/news", labelKey: "nav.news", x: 66, y: 55 },
+  // Downloads 暂时下线，恢复时取消注释（路由仍然保留）
+  // { id: "downloads", path: "/downloads", labelKey: "nav.downloads", x: 18, y: 68 },
   { id: "contact", path: "/contact", labelKey: "nav.contact", x: 82, y: 72 },
 ];

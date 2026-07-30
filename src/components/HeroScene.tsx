@@ -1,4 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  playDoorSlide,
+  playLightOff,
+  playLightOn,
+  playMailboxClose,
+  playMailboxOpen,
+  playNavigate,
+  startAmbient,
+  stopAmbient,
+} from "../audio/sfx";
 import { Link, useNavigate } from "react-router-dom";
 import {
   motion,
@@ -7,7 +17,9 @@ import {
   type TargetAndTransition,
 } from "framer-motion";
 import { heroHotspots } from "../data/heroHotspots";
+import IdentityCard from "./IdentityCard";
 import { useLanguage } from "../i18n/LanguageContext";
+import type { DictKey } from "../i18n/dict";
 
 /** 原图画板尺寸（Figma 1440 x 900），所有定位按它换算成百分比 */
 const FRAME_W = 1440;
@@ -25,63 +37,107 @@ const py = (y: number) => `${(y / FRAME_H) * 100}%`;
  * 若在 Figma 里挪动了元素，重新导出对应 PNG 并更新这里的数值。
  */
 const SPRITES = {
-  cloudBig: { src: "/assets/hero-cloud-big.png", x: 0, y: 117.3, w: 1440 },
-  cloud1: { src: "/assets/hero-cloud-1.png", x: 1084.7, y: 208.8, w: 153.9 },
-  cloud2: { src: "/assets/hero-cloud-2.png", x: 1208.1, y: 194.6, w: 89.7 },
+  // 新云图（1024x461，比旧图更扁）：y 按"云底贴原落地线 819"折算
+  cloudBig: { src: "/assets/hero-cloud-big.png", x: 0, y: 151.5, w: 1440 },
   base: { src: "/assets/hero-base.png" },
   openSign: { src: "/assets/hero-open-sign.png", x: 611.8, y: 554.9, w: 98.8 },
-  sheep: { src: "/assets/hero-sheep.png", x: 828.2, y: 588, w: 170.2 },
-  mailbox: { src: "/assets/hero-mailbox.png", x: 1157.6, y: 587.7, w: 115.7 },
-  woolabSign: { src: "/assets/hero-sign.png", x: 620.8, y: 439.1, w: 198.4 },
+  /**
+   * 小羊：透明动画 WebP（由手绘视频抠底合成，自带待机动作循环）。
+   * 画布比原静态图（341x543 @ x828.2 y588 w170.2）四周略大，坐标已折算。
+   * 脚下影子是独立静态层（与原静态图同画布），叠在身体下面。
+   */
+  sheep: { src: "/assets/hero-sheep-idle.webp", x: 825.2, y: 587, w: 176.2 },
+  sheepShadow: { src: "/assets/hero-sheep-shadow.png", x: 828.2, y: 588, w: 170.2 },
+  /**
+   * 邮箱拆成两个部件：杆完全静止，邮筒头悬停时开盖 + 微小弹开。
+   * 位置由旧整体图（x1157.6 y587.7 w116 h225）的像素分析推得：
+   * 杆在整体图中 x+34、宽 43、底对齐；开盖帧与闭合帧右上角对齐。
+   */
+  mailbox: {
+    headClosed: "/assets/hero-mailbox-head-closed.png",
+    headOpen: "/assets/hero-mailbox-head-open.png",
+    post: "/assets/hero-mailbox-post.png",
+    headX: 1157.6,
+    headY: 587.7,
+    headW: 116,
+    headOpenW: 130.5,
+    postX: 1191.6,
+    postY: 706.7,
+    postW: 43,
+  },
+  /**
+   * WOOLAB 吊灯 + 字：关灯/开灯两帧（底图中的吊灯和字已抠掉）。
+   * 两帧按灯罩位置对齐：关灯帧左缘即原招牌左缘，
+   * 开灯帧因光锥向两侧展开而更宽，需向左偏移。
+   */
+  woolab: {
+    off: { src: "/assets/hero-woolab-off.png", x: 620.8, y: 358.6, w: 198.5 },
+    on: { src: "/assets/hero-woolab-on.png", x: 523.3, y: 358.6, w: 394.5 },
+  },
+  /** 大门玻璃的亮灯帧：悬停玻璃门时屋内亮起暖黄灯光 */
+  doorLit: { src: "/assets/hero-door-lit.png", x: 622.6, y: 544.7, w: 200.7 },
+  /**
+   * 开门动画三件套（点击大门时才挂载）：
+   * open  = 门框 + 屋内暖光的底图，先盖住底图里画死的关门状态；
+   * left/right = 两扇门板，在裁剪框里向两侧滑开，像滑进墙里。
+   */
+  doorOpen: {
+    back: { src: "/assets/hero-door-open.png", x: 585.7, y: 512.7, w: 275.7 },
+    left: { src: "/assets/hero-door-left.png" },
+    right: { src: "/assets/hero-door-right.png" },
+    /** 两扇门板的整体渲染范围（也是滑动的裁剪框），单扇宽 124.7 */
+    panels: { x: 601.6, y: 527.7, w: 242.7, h: 252.7, single: 124.7 },
+  },
   board: { src: "/assets/hero-board.png", x: 158.3, y: 693.2, w: 159.4 },
   bush: { src: "/assets/hero-bush.png", x: 1116, y: 763.9, w: 98.2 },
+  /** 左右两丛灌木（已从底图抠出，风吹时轻轻摇摆） */
+  bushLeft: { src: "/assets/hero-bush-left.png", x: 49.9, y: 726.7, w: 232.7 },
+  bushRight: { src: "/assets/hero-bush-right.png", x: 1119.1, y: 695.8, w: 255.1 },
 } as const;
 
 /**
- * 小鸟的三帧姿态（宽高为 1 倍图尺寸，单位画板像素）。
- * 三帧在容器内底部居中对齐，切换帧时脚的位置不变。
+ * 小鸟扇翅三帧（同一画布尺寸 228x192，已对齐，直接轮播）。
+ * 播放顺序：上 → 中 → 下 → 中，循环。
  */
-const BIRD_FRAMES = {
-  fly: { src: "/assets/hero-bird-fly.png", w: 114, h: 77 },
-  brake: { src: "/assets/hero-bird-brake.png", w: 109, h: 87 },
-  stand: { src: "/assets/hero-bird-stand.png", w: 119, h: 91 },
-} as const;
+const BIRD_FLAP_FRAMES = [
+  "/assets/hero-bird-up.png",
+  "/assets/hero-bird-mid.png",
+  "/assets/hero-bird-down.png",
+] as const;
+const BIRD_FLAP_SEQ = [0, 1, 2, 1] as const;
+/** 每帧停留时长（毫秒），约 7 帧/秒的卡通扇翅节奏 */
+const BIRD_FLAP_MS = 140;
+/** 扇翅帧 1 倍尺寸：114x96；站立帧：119x91（画板像素） */
+const BIRD_FLAP_SIZE = { w: 114, h: 96 };
+const BIRD_STAND = { src: "/assets/hero-bird-stand.png", w: 119, h: 91 };
 
-type BirdFrame = keyof typeof BIRD_FRAMES;
+/** 小鸟容器（画板像素），所有姿态在容器内底部居中对齐 */
+const BIRD_BOX = { w: 120, h: 97 };
 
-/** 小鸟容器尺寸（画板像素），取三帧的最大值再留一点余量 */
-const BIRD_BOX = { w: 120, h: 95 };
-
-/** 降落点：屋顶栏杆（横杆顶边 y≈300，花箱左侧空档 x≈860） */
+/** 降落点：屋顶栏杆横杆（顶边 y≈300），花箱左侧的空档（x≈860） */
 const PERCH = {
   left: `${((860 - BIRD_BOX.w / 2) / FRAME_W) * 100}%`,
-  top: `${((300 - BIRD_BOX.h) / FRAME_H) * 100}%`,
+  top: `${((304 - BIRD_BOX.h) / FRAME_H) * 100}%`,
 };
 
 /** 悬停时每个热区元素"轻轻活起来"的小动作 */
 const HOVER_MOTION: Record<string, TargetAndTransition> = {
-  characters: {
-    // 小羊轻轻蹦一下
-    y: [0, -10, 0, -4, 0],
-    transition: { duration: 0.7, ease: "easeOut" },
-  },
+  // sheep（小羊）不加悬停动效，本体 WebP 自带待机动作，悬停时冒招呼气泡
+  // about（WOOLAB 吊灯）不走通用微动效，悬停时开灯，见 WoolabSprite
   lab: {
-    // 招牌微微歪头
-    rotate: [0, -1.6, 1.2, 0],
-    scale: [1, 1.03, 1.03, 1],
-    transition: { duration: 0.8, ease: "easeInOut" },
-  },
-  downloads: {
     // 小黑板晃一下
     rotate: [0, -3, 2, -1, 0],
     transition: { duration: 0.8, ease: "easeInOut" },
   },
-  contact: {
-    // 邮箱左右摇摆
-    rotate: [0, -2.5, 2, -1, 0],
-    transition: { duration: 0.8, ease: "easeInOut" },
-  },
+  // contact（邮箱）不走通用微动效，悬停时直接切换成打开状态，见 MailboxSprite
 };
+
+/** 悬停小羊时随机冒出的招呼语 */
+const SHEEP_GREETS: DictKey[] = [
+  "sheep.greet.1",
+  "sheep.greet.2",
+  "sheep.greet.3",
+];
 
 /** OPEN 吊牌的摆动（进场时播一次，悬停玻璃门时再播一次） */
 const SIGN_SWING: TargetAndTransition = {
@@ -89,10 +145,37 @@ const SIGN_SWING: TargetAndTransition = {
   transition: { duration: 2.4, ease: "easeInOut" },
 };
 
+/** 推镜头的焦点 = 门洞中心（占画板的百分比），也是缩放的不动点 */
+const DOOR_FOCUS = {
+  x: `${(723.5 / FRAME_W) * 100}%`,
+  y: `${(654 / FRAME_H) * 100}%`,
+};
+/** 门板滑开的运动曲线：先缓起、匀速滑、末端轻收 */
+const DOOR_SLIDE_EASE = [0.45, 0, 0.55, 1] as const;
+const DOOR_SLIDE_DURATION = 0.55;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+/** 小鸟站立时的中心点（占画板的比例），用于计算鼠标是否靠近 */
+const PERCH_CENTER = { x: 860 / FRAME_W, y: (304 - BIRD_BOX.h / 2) / FRAME_H };
+/** 惊飞触发半径：占画板宽度的比例（约 110px @1440） */
+const STARTLE_RADIUS = 0.077;
+
+/** 随风飘过的叶子素材 */
+const LEAF_IMGS = [
+  "/assets/hero-leaf-1.png",
+  "/assets/hero-leaf-2.png",
+  "/assets/hero-leaf-3.png",
+] as const;
+
 export default function HeroScene() {
+  // 白天场景的自然环境背景音，离开首页时淡出
+  useEffect(() => {
+    startAmbient("day");
+    return () => stopAmbient();
+  }, []);
+
   return (
     <>
       {/* 桌面端：全屏场景 */}
@@ -117,7 +200,35 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
   const signControls = useAnimationControls();
   const birdControls = useAnimationControls();
-  const [birdFrame, setBirdFrame] = useState<BirdFrame>("fly");
+  const zoomControls = useAnimationControls();
+  /** 点击大门后的"开门 → 推镜头 → 进屋"过场 */
+  const [entering, setEntering] = useState(false);
+  const enteringRef = useRef(false);
+  /** 小羊身份卡 */
+  const [cardOpen, setCardOpen] = useState(false);
+  /** 悬停小羊时的招呼语（每次进入热区随机换一句） */
+  const [greetKey, setGreetKey] = useState<DictKey>(SHEEP_GREETS[0]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+
+  // 场景里有画面外待命的元素（小鸟停在 106%、叶子飞出画面），
+  // 它们让 overflow-hidden 容器产生了可滚动区域；浏览器在聚焦热区、
+  // 推镜头缩放时会悄悄滚动容器把画面带偏——把滚动位置常驻钉死在原点。
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pin = () => {
+      stage.scrollLeft = 0;
+      stage.scrollTop = 0;
+    };
+    pin();
+    stage.addEventListener("scroll", pin);
+    return () => stage.removeEventListener("scroll", pin);
+  }, []);
+  const [birdFlapIdx, setBirdFlapIdx] = useState(0);
+  const [birdStanding, setBirdStanding] = useState(false);
+  /** 鼠标靠近栏杆上的小鸟时置位，由状态机消费（用 ref 避免闭包读到旧值） */
+  const birdStartledRef = useRef(false);
+  const birdStandingRef = useRef(false);
 
   // 进场：OPEN 吊牌轻晃一两下后停
   useEffect(() => {
@@ -126,131 +237,262 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     return () => clearTimeout(timer);
   }, [reducedMotion, signControls]);
 
-  // 小鸟：不定期从右侧飞过，偶尔落在屋顶栏杆上歇一会
-  // 三帧姿态：fly 巡航 → brake 展翅减速 → stand 站立，起飞时反过来
+  // 小鸟：不定期从右往左飞过，飞行途中扇翅膀 + 轻微起伏
   useEffect(() => {
     if (reducedMotion) return;
     let alive = true;
+    let flapTimer: ReturnType<typeof setInterval> | undefined;
+
+    const startFlap = () => {
+      let i = 0;
+      flapTimer = setInterval(() => {
+        i = (i + 1) % BIRD_FLAP_SEQ.length;
+        setBirdFlapIdx(BIRD_FLAP_SEQ[i]);
+      }, BIRD_FLAP_MS);
+    };
+    const stopFlap = () => clearInterval(flapTimer);
 
     (async () => {
       while (alive) {
         await sleep(rand(4000, 12000));
         if (!alive) break;
 
-        const cruiseTop = rand(10, 18);
-        setBirdFrame("fly");
+        // 起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"
+        const cruiseTop = rand(9, 19);
+        setBirdStanding(false);
+        birdStandingRef.current = false;
         birdControls.set({
-          left: "106%",
+          left: "135%",
           top: `${cruiseTop}%`,
           opacity: 1,
           y: 0,
         });
+        startFlap();
 
-        if (Math.random() < 0.45) {
-          // 巡航接近栏杆上方
+        if (Math.random() < 0.5) {
+          // 飞到房顶中间（带节奏起伏），落在栏杆上歇一会
           await birdControls.start({
-            left: ["106%", "70%"],
-            top: [`${cruiseTop}%`, "13.5%"],
-            transition: { duration: 4.2, ease: "easeOut" },
+            left: ["135%", "72%"],
+            top: [
+              `${cruiseTop}%`,
+              `${cruiseTop - 2}%`,
+              `${cruiseTop + 1.5}%`,
+              "24%",
+            ],
+            transition: { duration: 2.6, ease: "easeOut" },
           });
           if (!alive) break;
 
-          // 展翅刹车，缓缓降到栏杆上
-          setBirdFrame("brake");
+          // 边扇翅膀边缓缓降到栏杆上
           await birdControls.start({
-            left: ["70%", PERCH.left],
-            top: ["13.5%", PERCH.top],
+            left: ["72%", PERCH.left],
+            top: ["24%", PERCH.top],
             transition: { duration: 1.1, ease: "easeOut" },
           });
           if (!alive) break;
 
-          // 落地缓冲：轻轻下沉一下
-          setBirdFrame("stand");
+          // 收翅站定，轻轻下沉一下作落地缓冲
+          stopFlap();
+          setBirdStanding(true);
+          birdStartledRef.current = false;
+          birdStandingRef.current = true;
           await birdControls.start({
             y: [-3, 1, 0],
             transition: { duration: 0.35, ease: "easeOut" },
           });
           if (!alive) break;
 
-          // 站着歇一会，偶尔轻微起伏
-          await birdControls.start({
+          // 站着歇一会（轻微起伏持续播放）；鼠标靠近会提前惊飞
+          birdControls.start({
             y: [0, -2, 0],
-            transition: {
-              duration: 1.6,
-              repeat: Math.floor(rand(2, 5)),
-              ease: "easeInOut",
-            },
+            transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" },
           });
-          if (!alive) break;
-          await sleep(rand(1000, 3000));
+          const stayUntil = Date.now() + rand(4000, 9000);
+          while (alive && Date.now() < stayUntil && !birdStartledRef.current) {
+            await sleep(120);
+          }
+          birdControls.stop();
+          const startled = birdStartledRef.current;
+          birdStandingRef.current = false;
           if (!alive) break;
 
-          // 起飞：先展翅向上一蹬，再切回飞行姿态飞走
-          setBirdFrame("brake");
+          // 起飞：展翅向上一蹬，扇着翅膀飞走（被惊飞时更急）
+          setBirdStanding(false);
+          startFlap();
           await birdControls.start({
-            y: [0, -14],
-            transition: { duration: 0.35, ease: "easeOut" },
+            y: [0, startled ? -20 : -14],
+            transition: { duration: startled ? 0.22 : 0.3, ease: "easeOut" },
           });
           if (!alive) break;
-          setBirdFrame("fly");
           await birdControls.start({
-            left: [PERCH.left, "-12%"],
-            top: [PERCH.top, `${rand(8, 13)}%`],
+            left: [PERCH.left, "-40%"],
+            top: [PERCH.top, `${rand(6, 11)}%`],
             y: 0,
-            transition: { duration: 6, ease: "easeIn" },
+            transition: {
+              duration: startled ? 2.6 : 4.2,
+              ease: startled ? "easeOut" : "easeIn",
+            },
           });
         } else {
-          // 直接横穿画面
+          // 直接横穿画面：带扇翅节奏的波浪路线
+          const c = cruiseTop;
           await birdControls.start({
-            left: ["106%", "-12%"],
+            left: ["135%", "-40%"],
             top: [
-              `${cruiseTop}%`,
-              `${cruiseTop + rand(-4, 2)}%`,
-              `${cruiseTop + rand(-2, 4)}%`,
+              `${c}%`,
+              `${c - 2.2}%`,
+              `${c + 1.6}%`,
+              `${c - 2.4}%`,
+              `${c + 1.2}%`,
+              `${c - 1.8}%`,
+              `${c + rand(-1, 2)}%`,
             ],
-            transition: { duration: rand(11, 15), ease: "linear" },
+            transition: { duration: rand(6.5, 9), ease: "linear" },
           });
         }
+        stopFlap();
         birdControls.set({ opacity: 0 });
       }
     })();
 
     return () => {
       alive = false;
+      stopFlap();
     };
   }, [reducedMotion, birdControls]);
 
   // 悬停玻璃门时，OPEN 吊牌再晃一次
   useEffect(() => {
-    if (hovered === "about" && !reducedMotion) signControls.start(SIGN_SWING);
+    if (hovered === "life" && !reducedMotion) signControls.start(SIGN_SWING);
   }, [hovered, reducedMotion, signControls]);
 
+  /**
+   * 点击大门：门板向两侧滑开露出屋内暖光，
+   * 镜头随即推进门里，画面被暖光填满后进入「小羊的生活」。
+   */
+  const enterLife = async () => {
+    if (enteringRef.current) return;
+    enteringRef.current = true;
+
+    if (reducedMotion) {
+      playNavigate();
+      navigate("/life");
+      return;
+    }
+
+    setEntering(true);
+    setHovered(null);
+    // 收回热区上的焦点，避免浏览器在缩放时自动滚动容器去追焦点元素
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    playDoorSlide();
+
+    // 独立的 OPEN 吊牌立即隐藏，由门板裁剪容器里的副本接替（跟左门板一起滑走）
+    signControls.stop();
+
+    // 等门开到大半，再起镜头往门里推
+    await sleep(380);
+    playNavigate();
+    // 6.5 倍时门洞（画板宽 236px）正好铺满整个视口
+    await zoomControls.start({
+      scale: 6.5,
+      transition: { duration: 0.95, ease: [0.55, 0.05, 0.75, 0.5] },
+    });
+    navigate("/life");
+  };
+
+  /** 悬停进入/离开热区：更新状态 + 对应音效 */
+  const enterHotspot = (id: string) => {
+    if (enteringRef.current) return;
+    setHovered(id);
+    // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
+    if (id === "about" || id === "life") playLightOn();
+    else if (id === "contact") playMailboxOpen();
+    else if (id === "sheep")
+      setGreetKey(SHEEP_GREETS[Math.floor(Math.random() * SHEEP_GREETS.length)]);
+  };
+  const leaveHotspot = (id: string) => {
+    setHovered(null);
+    if (id === "about" || id === "life") playLightOff();
+    else if (id === "contact") playMailboxClose();
+  };
+
+  /** 点击/回车激活热区：小羊弹身份卡，大门走开门过场，其余直接跳转 */
+  const activateHotspot = (id: string, path: string) => {
+    if (enteringRef.current) return;
+    if (id === "sheep") {
+      playMailboxOpen();
+      setCardOpen(true);
+      return;
+    }
+    if (id === "life") {
+      void enterLife();
+      return;
+    }
+    playNavigate();
+    navigate(path);
+  };
+
+  /** 树丛的摇摆：以根部为轴小幅左右摆 + 极轻微的横向压缩，像被风拂过 */
+  const bushSway = (amp: number, duration: number, delay: number) =>
+    reducedMotion
+      ? undefined
+      : {
+          rotate: [0, amp, 0, -amp * 0.6, 0],
+          scaleX: [1, 1.006, 1, 0.996, 1],
+          transition: {
+            duration,
+            repeat: Infinity,
+            ease: "easeInOut" as const,
+            delay,
+          },
+        };
+
+  /** 云的漂移：水平缓慢往复 + 极轻微的上下浮动 */
   const drift = (amount: number, duration: number) =>
     reducedMotion
       ? undefined
       : {
           x: [0, amount, 0, -amount, 0],
+          y: [0, -amount * 0.3, 0, amount * 0.3, 0],
           transition: { duration, repeat: Infinity, ease: "easeInOut" as const },
         };
 
   return (
     <div
+      ref={stageRef}
       className={`relative overflow-hidden ${
-        cover ? "flex h-full items-center justify-center" : ""
+        // 屏幕比画板（16:10）更扁时画面会超出高度：贴底对齐，
+        // 只裁天空，保证地面和场景物件完整
+        cover ? "flex h-full items-end justify-center" : ""
       }`}
       style={{ background: SKY_GRADIENT }}
     >
-      {/* 场景本体：保持原图比例，桌面端等效 object-cover 铺满视口 */}
-      <div
+      {/* 场景本体：按视口高度完整显示（上下不裁）；
+          屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
+          比画板窄时左右对称裁切。进门时整体向门洞推近 */}
+      <motion.div
         className="relative shrink-0"
-        style={
-          cover
+        animate={zoomControls}
+        style={{
+          transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
+          willChange: entering ? "transform" : undefined,
+          ...(cover
             ? {
                 aspectRatio: `${HERO_RATIO}`,
-                width: `max(100vw, calc(100vh * ${HERO_RATIO}))`,
+                width: `calc(100vh * ${HERO_RATIO})`,
               }
-            : { aspectRatio: `${HERO_RATIO}`, width: "100%" }
-        }
+            : { aspectRatio: `${HERO_RATIO}`, width: "100%" }),
+        }}
+        onMouseMove={(e) => {
+          // 鼠标靠近栏杆上的小鸟 → 惊飞
+          if (!birdStandingRef.current || birdStartledRef.current) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const dx = (e.clientX - rect.left) / rect.width - PERCH_CENTER.x;
+          const dy = (e.clientY - rect.top) / rect.height - PERCH_CENTER.y;
+          // dy 按画板宽高比折算，让触发范围是圆形而不是被拉扁的椭圆
+          const dist = Math.hypot(dx, dy / HERO_RATIO);
+          if (dist < STARTLE_RADIUS) birdStartledRef.current = true;
+        }}
       >
         {/* 云层（在建筑后面缓慢漂移） */}
         <motion.img
@@ -263,43 +505,67 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             width: "103%",
             maxWidth: "none",
           }}
-          animate={drift(9, 90)}
-          draggable={false}
-        />
-        <motion.img
-          src={SPRITES.cloud1.src}
-          alt=""
-          className="pointer-events-none absolute select-none"
-          style={{
-            left: px(SPRITES.cloud1.x),
-            top: py(SPRITES.cloud1.y),
-            width: px(SPRITES.cloud1.w),
-          }}
-          animate={drift(-22, 64)}
-          draggable={false}
-        />
-        <motion.img
-          src={SPRITES.cloud2.src}
-          alt=""
-          className="pointer-events-none absolute select-none"
-          style={{
-            left: px(SPRITES.cloud2.x),
-            top: py(SPRITES.cloud2.y),
-            width: px(SPRITES.cloud2.w),
-          }}
-          animate={drift(-14, 48)}
+          animate={drift(16, 46)}
           draggable={false}
         />
 
-        {/* 建筑与地面（静止底图） */}
+        {/* 建筑与地面（静止底图，不含树丛）；两侧接边缘延伸条补满宽屏 */}
         <img
           src={SPRITES.base.src}
           alt=""
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
           draggable={false}
         />
+        <img
+          src="/assets/hero-base-edge-l.png"
+          alt=""
+          className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+          style={{ right: "100%" }}
+          draggable={false}
+        />
+        <img
+          src="/assets/hero-base-edge-r.png"
+          alt=""
+          className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+          style={{ left: "100%" }}
+          draggable={false}
+        />
 
-        {/* OPEN 吊牌：以挂点为轴摆动 */}
+        {/* 左右树丛：以根部为轴被风吹得轻轻摇 */}
+        <motion.img
+          src={SPRITES.bushLeft.src}
+          alt=""
+          className="pointer-events-none absolute select-none"
+          style={{
+            left: px(SPRITES.bushLeft.x),
+            top: py(SPRITES.bushLeft.y),
+            width: px(SPRITES.bushLeft.w),
+            transformOrigin: "50% 100%",
+          }}
+          animate={bushSway(1, 4.6, 0)}
+          draggable={false}
+        />
+        <motion.img
+          src={SPRITES.bushRight.src}
+          alt=""
+          className="pointer-events-none absolute select-none"
+          style={{
+            left: px(SPRITES.bushRight.x),
+            top: py(SPRITES.bushRight.y),
+            width: px(SPRITES.bushRight.w),
+            transformOrigin: "50% 100%",
+          }}
+          animate={bushSway(0.8, 5.4, 1.2)}
+          draggable={false}
+        />
+
+        {/* 点击大门后才挂载：门框 + 屋内暖光 + 向两侧滑开的门板 */}
+        {entering && <DoorOpenSprite />}
+
+        {/* 大门：悬停时屋内亮灯（在 OPEN 吊牌下层） */}
+        <DoorGlowSprite lit={hovered === "life" && !entering} />
+
+        {/* OPEN 吊牌：以挂点为轴摆动；开门过场时隐藏，由门板裁剪容器里的副本接替 */}
         <motion.img
           src={SPRITES.openSign.src}
           alt=""
@@ -309,19 +575,41 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             top: py(SPRITES.openSign.y),
             width: px(SPRITES.openSign.w),
             transformOrigin: "50% 8%",
+            visibility: entering ? "hidden" : "visible",
           }}
           animate={signControls}
           draggable={false}
         />
 
         {/* 四个热区元素：悬停时各自轻轻动一下 */}
-        <HotspotSprite sprite={SPRITES.woolabSign} active={hovered === "lab"} motionSpec={HOVER_MOTION.lab} origin="50% 50%" />
-        <HotspotSprite sprite={SPRITES.board} active={hovered === "downloads"} motionSpec={HOVER_MOTION.downloads} origin="50% 100%" />
-        <HotspotSprite sprite={SPRITES.sheep} active={hovered === "characters"} motionSpec={HOVER_MOTION.characters} origin="50% 100%" />
-        <HotspotSprite sprite={SPRITES.mailbox} active={hovered === "contact"} motionSpec={HOVER_MOTION.contact} origin="50% 100%" />
-
-        {/* 邮箱前的灌木（盖在邮箱杆前面） */}
+        <WoolabSprite lit={hovered === "about"} />
+        <HotspotSprite sprite={SPRITES.board} active={hovered === "lab"} motionSpec={HOVER_MOTION.lab} origin="50% 100%" />
         <img
+          src={SPRITES.sheepShadow.src}
+          alt=""
+          className="pointer-events-none absolute select-none"
+          style={{
+            left: px(SPRITES.sheepShadow.x),
+            top: py(SPRITES.sheepShadow.y),
+            width: px(SPRITES.sheepShadow.w),
+          }}
+          draggable={false}
+        />
+        <img
+          src={SPRITES.sheep.src}
+          alt=""
+          className="pointer-events-none absolute select-none"
+          style={{
+            left: px(SPRITES.sheep.x),
+            top: py(SPRITES.sheep.y),
+            width: px(SPRITES.sheep.w),
+          }}
+          draggable={false}
+        />
+        <MailboxSprite open={hovered === "contact"} />
+
+        {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
+        <motion.img
           src={SPRITES.bush.src}
           alt=""
           className="pointer-events-none absolute select-none"
@@ -329,31 +617,46 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             left: px(SPRITES.bush.x),
             top: py(SPRITES.bush.y),
             width: px(SPRITES.bush.w),
+            transformOrigin: "50% 100%",
           }}
+          animate={bushSway(0.8, 5.4, 1.2)}
           draggable={false}
         />
 
-        {/* 小鸟：三帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
+        {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
         <motion.div
           className="pointer-events-none absolute select-none"
           style={{ width: px(BIRD_BOX.w), height: py(BIRD_BOX.h) }}
-          initial={{ left: "106%", top: "14%", opacity: 0 }}
+          initial={{ left: "135%", top: "14%", opacity: 0 }}
           animate={birdControls}
         >
-          {(Object.keys(BIRD_FRAMES) as BirdFrame[]).map((k) => (
+          {BIRD_FLAP_FRAMES.map((src, i) => (
             <img
-              key={k}
-              src={BIRD_FRAMES[k].src}
+              key={src}
+              src={src}
               alt=""
               draggable={false}
               className="absolute bottom-0 left-1/2 -translate-x-1/2"
               style={{
-                width: `${(BIRD_FRAMES[k].w / BIRD_BOX.w) * 100}%`,
-                display: birdFrame === k ? "block" : "none",
+                width: `${(BIRD_FLAP_SIZE.w / BIRD_BOX.w) * 100}%`,
+                display: !birdStanding && birdFlapIdx === i ? "block" : "none",
               }}
             />
           ))}
+          <img
+            src={BIRD_STAND.src}
+            alt=""
+            draggable={false}
+            className="absolute bottom-0 left-1/2 -translate-x-1/2"
+            style={{
+              width: `${(BIRD_STAND.w / BIRD_BOX.w) * 100}%`,
+              display: birdStanding ? "block" : "none",
+            }}
+          />
         </motion.div>
+
+        {/* 随风飘过的叶子 */}
+        <WindLeaves />
 
         {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
         {heroHotspots.map((h) => (
@@ -362,36 +665,225 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             role="link"
             tabIndex={0}
             aria-label={t(h.labelKey)}
-            className="group absolute z-20 cursor-pointer outline-none"
+            className={`group absolute z-20 cursor-pointer outline-none ${
+              entering ? "pointer-events-none" : ""
+            }`}
             style={{
               left: `${h.left}%`,
               top: `${h.top}%`,
               width: `${h.width}%`,
               height: `${h.height}%`,
             }}
-            onMouseEnter={() => setHovered(h.id)}
-            onMouseLeave={() => setHovered(null)}
-            onFocus={() => setHovered(h.id)}
-            onBlur={() => setHovered(null)}
-            onClick={() => navigate(h.path)}
+            onMouseEnter={() => enterHotspot(h.id)}
+            onMouseLeave={() => leaveHotspot(h.id)}
+            onFocus={() => enterHotspot(h.id)}
+            onBlur={() => leaveHotspot(h.id)}
+            onClick={() => activateHotspot(h.id, h.path)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") navigate(h.path);
+              if (e.key === "Enter" || e.key === " ") {
+                activateHotspot(h.id, h.path);
+              }
             }}
           >
-            {/* 名称标签：悬停时淡入 */}
+            {/* 名称标签：悬停时淡入；小羊显示打招呼而不是栏目名 */}
             <span
-              className={`absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-3 py-1 text-sm font-semibold text-neutral-800 shadow-md transition-opacity duration-300 ${
+              className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300 ${
                 hovered === h.id
                   ? "opacity-100"
                   : "pointer-events-none opacity-0"
               }`}
             >
-              {t(h.labelKey)}
+              {h.id === "sheep" ? t(greetKey) : t(h.labelKey)}
             </span>
           </div>
         ))}
-      </div>
+      </motion.div>
+
+      {/* 小羊的身份卡：点击小羊弹出，「去它家看看」直接接开门过场 */}
+      <IdentityCard
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        onVisit={() => {
+          setCardOpen(false);
+          void enterLife();
+        }}
+      />
+
+      {/* 推进门里时，画面被屋内暖光渐渐填满，再切到内页 */}
+      {entering && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-40"
+          style={{
+            background:
+              "radial-gradient(circle at 50% 60%, #FBEBB8 0%, #F6D26B 70%)",
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7, duration: 0.5, ease: "easeIn" }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 开门状态的门：底层是门框 + 屋内暖光（盖住底图里画死的关门状态），
+ * 两扇门板挂载后立即向两侧滑开，被裁剪框裁掉，看起来像滑进了墙里。
+ * 门板容器里叠着亮灯的暖玻璃（保持悬停时的灯光，不回到熄灯的蓝色）
+ * 和 OPEN 吊牌副本（挂在左门板上），都跟着门板一起滑、一起被裁掉。
+ */
+function DoorOpenSprite() {
+  const d = SPRITES.doorOpen;
+  const p = d.panels;
+  const lit = SPRITES.doorLit;
+  const sign = SPRITES.openSign;
+  const slide = {
+    duration: DOOR_SLIDE_DURATION,
+    delay: 0.05,
+    ease: DOOR_SLIDE_EASE,
+  };
+
+  /** 把画板坐标换算成相对某扇门板（宽 p.single，高 p.h）的百分比 */
+  const inPanel = (panelX: number, x: number, y: number, w: number) => ({
+    left: `${((x - panelX) / p.single) * 100}%`,
+    top: `${((y - p.y) / p.h) * 100}%`,
+    width: `${(w / p.single) * 100}%`,
+    maxWidth: "none" as const,
+  });
+  const leftX = p.x;
+  const rightX = p.x + p.w - p.single;
+
+  const panel = (side: "left" | "right") => {
+    const panelX = side === "left" ? leftX : rightX;
+    return (
+      <motion.div
+        className={`absolute top-0 h-full overflow-hidden ${
+          side === "left" ? "left-0" : "right-0"
+        }`}
+        style={{ width: `${(p.single / p.w) * 100}%` }}
+        initial={{ x: 0 }}
+        animate={{ x: side === "left" ? "-104%" : "104%" }}
+        transition={slide}
+      >
+        <img
+          src={side === "left" ? d.left.src : d.right.src}
+          alt=""
+          draggable={false}
+          className="absolute left-0 top-0 w-full select-none"
+        />
+        {/* 亮灯的暖玻璃：整张亮灯帧按原位对齐，超出门板的部分被裁掉 */}
+        <img
+          src={lit.src}
+          alt=""
+          draggable={false}
+          className="absolute select-none"
+          style={inPanel(panelX, lit.x, lit.y, lit.w)}
+        />
+        {side === "left" && (
+          <img
+            src={sign.src}
+            alt=""
+            draggable={false}
+            className="absolute select-none"
+            style={inPanel(panelX, sign.x, sign.y, sign.w)}
+          />
+        )}
+      </motion.div>
+    );
+  };
+
+  return (
+    <>
+      <img
+        src={d.back.src}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute select-none"
+        style={{
+          left: px(d.back.x),
+          top: py(d.back.y),
+          width: px(d.back.w),
+        }}
+      />
+      <div
+        className="pointer-events-none absolute overflow-hidden"
+        style={{
+          left: px(p.x),
+          top: py(p.y),
+          width: px(p.w),
+          height: py(p.h),
+        }}
+      >
+        {panel("left")}
+        {panel("right")}
+      </div>
+    </>
+  );
+}
+
+/**
+ * 随风飘过的叶子：沿固定风道飘动 ——
+ * 从左上角进入，斜着掠过 WOOLAB 招牌，再拉平飘向右侧邮箱方向出画。
+ * 每片叶子在这条轨迹上做少量随机偏移，出现间隔较长，保持稀疏。
+ */
+const LEAF_PATH = {
+  left: ["-4%", "22%", "46%", "70%", "105%"],
+  top: [16, 36, 52, 62, 66], // 单位：画面高度百分比
+} as const;
+
+function WindLeaves() {
+  const reducedMotion = useReducedMotion();
+
+  const leaves = useMemo(
+    () =>
+      Array.from({ length: 2 }, (_, i) => ({
+        src: LEAF_IMGS[i % LEAF_IMGS.length],
+        w: rand(1.4, 2), // 显示宽度（占画板宽度百分比）
+        offset: rand(-3, 3), // 整条轨迹的垂直偏移，让两片叶子不完全重叠
+        spin: (Math.random() < 0.5 ? 1 : -1) * rand(300, 480),
+        duration: rand(7, 9),
+        delay: rand(0, 6) + i * 5,
+        repeatDelay: rand(8, 16),
+      })),
+    []
+  );
+
+  if (reducedMotion) return null;
+
+  return (
+    <>
+      {leaves.map((leaf, i) => (
+        <motion.img
+          key={i}
+          src={leaf.src}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute select-none"
+          style={{ width: `${leaf.w}%`, maxWidth: "none" }}
+          initial={{
+            left: "-4%",
+            top: `${LEAF_PATH.top[0] + leaf.offset}%`,
+            rotate: 0,
+            opacity: 0,
+          }}
+          animate={{
+            left: [...LEAF_PATH.left],
+            top: LEAF_PATH.top.map((t) => `${t + leaf.offset}%`),
+            rotate: [0, leaf.spin * 0.5, leaf.spin],
+            // 首尾淡入淡出：等待下一轮时叶子停在轨迹端点，不能被看见
+            // （宽屏两侧的延伸区会露出场景边界外的位置）
+            opacity: [0, 1, 1, 1, 0],
+          }}
+          transition={{
+            duration: leaf.duration,
+            delay: leaf.delay,
+            repeat: Infinity,
+            repeatDelay: leaf.repeatDelay,
+            ease: "linear",
+          }}
+        />
+      ))}
+    </>
   );
 }
 
@@ -399,14 +891,19 @@ function HotspotSprite({
   sprite,
   active,
   motionSpec,
+  idleSpec,
   origin,
 }: {
   sprite: { src: string; x: number; y: number; w: number };
   active: boolean;
   motionSpec: TargetAndTransition;
+  /** 非悬停时的待机动画（如小羊的呼吸感），不传则静止 */
+  idleSpec?: TargetAndTransition;
   origin: string;
 }) {
   const reducedMotion = useReducedMotion();
+
+  const idle: TargetAndTransition = idleSpec ?? { y: 0, rotate: 0, scale: 1 };
 
   return (
     <motion.img
@@ -419,9 +916,133 @@ function HotspotSprite({
         width: px(sprite.w),
         transformOrigin: origin,
       }}
-      animate={active && !reducedMotion ? motionSpec : { y: 0, rotate: 0, scale: 1 }}
+      animate={reducedMotion ? undefined : active ? motionSpec : idle}
       draggable={false}
     />
+  );
+}
+
+/**
+ * 大门玻璃亮灯：悬停玻璃门时，屋内的灯"啪嗒"亮起——
+ * 暖黄玻璃帧带一点闪烁地淡入；移开时灯光快速熄灭。
+ */
+function DoorGlowSprite({ lit }: { lit: boolean }) {
+  const d = SPRITES.doorLit;
+
+  return (
+    <motion.img
+      src={d.src}
+      alt=""
+      draggable={false}
+      className="pointer-events-none absolute select-none"
+      style={{
+        left: px(d.x),
+        top: py(d.y),
+        width: px(d.w),
+      }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: lit ? [0, 0.55, 0.35, 1] : 0 }}
+      transition={
+        lit
+          ? { duration: 0.45, times: [0, 0.3, 0.5, 1], ease: "easeOut" }
+          : { duration: 0.12, ease: "easeIn" }
+      }
+    />
+  );
+}
+
+/**
+ * WOOLAB 吊灯：悬停时开灯——灯罩发亮、黄色光锥洒下、字变成暖橙色。
+ * 两帧按灯罩对齐；开灯帧快速淡入，关灯瞬间熄灭。
+ */
+function WoolabSprite({ lit }: { lit: boolean }) {
+  const w = SPRITES.woolab;
+
+  return (
+    <>
+      <img
+        src={w.off.src}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute select-none"
+        style={{
+          left: px(w.off.x),
+          top: py(w.off.y),
+          width: px(w.off.w),
+          visibility: lit ? "hidden" : "visible",
+        }}
+      />
+      <motion.img
+        src={w.on.src}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute select-none"
+        style={{
+          left: px(w.on.x),
+          top: py(w.on.y),
+          width: px(w.on.w),
+          maxWidth: "none",
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: lit ? 1 : 0 }}
+        transition={{ duration: lit ? 0.18 : 0.05, ease: "easeOut" }}
+      />
+    </>
+  );
+}
+
+/**
+ * 邮箱：杆是静止图层；邮筒头悬停时从闭合切换到打开，
+ * 并带一个微小的"弹开"缩放（以头部后侧为轴心）。
+ * 开盖帧和闭合帧按右上角对齐（拱顶不动，盖子朝左下翻开）。
+ */
+function MailboxSprite({ open }: { open: boolean }) {
+  const m = SPRITES.mailbox;
+  const headRight = `${((FRAME_W - (m.headX + m.headW)) / FRAME_W) * 100}%`;
+  const headTop = py(m.headY);
+
+  return (
+    <>
+      {/* 邮筒杆（静止） */}
+      <img
+        src={m.post}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute select-none"
+        style={{ left: px(m.postX), top: py(m.postY), width: px(m.postW) }}
+      />
+
+      {/* 邮筒头（悬停开盖 + 微弹） */}
+      <motion.div
+        className="pointer-events-none absolute"
+        style={{
+          right: headRight,
+          top: headTop,
+          width: px(m.headOpenW),
+          transformOrigin: "70% 30%",
+        }}
+        animate={open ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+      >
+        <img
+          src={m.headClosed}
+          alt=""
+          draggable={false}
+          className="absolute right-0 top-0 select-none"
+          style={{
+            width: `${(m.headW / m.headOpenW) * 100}%`,
+            visibility: open ? "hidden" : "visible",
+          }}
+        />
+        <img
+          src={m.headOpen}
+          alt=""
+          draggable={false}
+          className="absolute right-0 top-0 w-full select-none"
+          style={{ visibility: open ? "visible" : "hidden" }}
+        />
+      </motion.div>
+    </>
   );
 }
 
@@ -430,13 +1051,15 @@ function HotspotList() {
 
   return (
     <ul className="flex flex-1 flex-col gap-3 bg-[#FFF6E9] px-4 py-5">
-      {heroHotspots.map((h) => (
+      {/* 小羊不跳页（在场景里点它弹身份卡），列表里只放页面入口 */}
+      {heroHotspots.filter((h) => h.path).map((h) => (
         <li key={h.id}>
           <Link
             to={h.path}
+            onClick={() => playNavigate()}
             className="flex items-center justify-between rounded-xl border border-[#F0E2CC] bg-white px-4 py-4 shadow-sm transition active:scale-[0.98]"
           >
-            <span className="font-medium">{t(h.labelKey)}</span>
+            <span className="font-hand text-lg">{t(h.labelKey)}</span>
             <span aria-hidden className="text-neutral-400">
               →
             </span>
