@@ -29,11 +29,10 @@ export interface LifeStation {
 }
 
 /**
- * 长卷总宽（vh）：已接入的段落（衣帽区到起居区，约 335vh）+ 后续段落的预留区。
- * 每段画板左右都带大片留白，所以段落是按实际画到的内容首尾相接的，
- * 不按画板宽度累加——接新段时看它最右元素的位置再加预留。
+ * 长卷总宽（vh）：衣帽区 → 起居区 → 厨房/蜡烛角/LAB 门，
+ * 到段03 最右侧的白沙发为止（舞台 12322px / 18 ≈ 685vh）。
  */
-export const ROOM_TOTAL_VH = 595;
+export const ROOM_TOTAL_VH = 684;
 
 export const lifeStations: LifeStation[] = [
   {
@@ -57,8 +56,8 @@ export const lifeStations: LifeStation[] = [
       en: "Placeholder: the sticker set and the old photo's story.",
     },
     result: { zh: "相片补好了", en: "Photo restored" },
-    // 段02 软木板上的那张海报（素材坐标 x4598 y407, 512x590）
-    left: 255.4, top: 22.6, width: 28.4, height: 32.8,
+    // 段02 软木板上的那张海报（新版设计稿上移后：素材坐标 x4600 y309, 512x590）
+    left: 255.6, top: 17.2, width: 28.4, height: 32.8,
   },
   {
     id: "drink",
@@ -69,8 +68,8 @@ export const lifeStations: LifeStation[] = [
       en: "Placeholder: three drinks and the 'One Sip Baa' cup.",
     },
     result: { zh: "调好的一杯", en: "A drink, ready" },
-    // 起居区之后的预留区，等对应段落素材到位再对位
-    left: 335, top: 52, width: 28, height: 30,
+    // 段03 厨房的大圆桌：砧板柠檬、冰桶、玻璃杯都在桌上（舞台 8170,1139 起）
+    left: 454, top: 63, width: 86, height: 35,
   },
   {
     id: "candle",
@@ -81,9 +80,10 @@ export const lifeStations: LifeStation[] = [
       en: "Placeholder: the sheep candle's scent and making.",
     },
     result: { zh: "一直亮着", en: "Still burning" },
-    left: 445, top: 46, width: 20, height: 30,
+    // 段03 蜡烛角的置物板：白蜡烛 + 小羊香薰蜡烛（舞台 10288,450 起）
+    left: 570, top: 24, width: 21, height: 18,
   },
 ];
 
-/** 夜晚出现的 LAB 入口（长卷尽头的门），坐标单位同站点（vh） */
-export const LAB_DOOR = { left: 530, top: 28, width: 36, height: 58 };
+/** 夜晚出现的 LAB 入口（段03 的绿门），坐标单位同站点（vh） */
+export const LAB_DOOR = { left: 600, top: 17.7, width: 39, height: 61.5 };

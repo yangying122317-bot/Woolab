@@ -7,6 +7,7 @@ import type { LifeStation } from "../../data/lifeStations";
 import { seg01Layers } from "../../data/seg01Layers";
 import type { SceneLayer } from "../../data/seg01Layers";
 import { seg02Layers } from "../../data/seg02Layers";
+import { seg03Layers } from "../../data/seg03Layers";
 import { isStationDone } from "../../state/roomState";
 import type { RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -385,6 +386,51 @@ function PendulumSprite({
       }}
       animate={controls}
     />
+  );
+}
+
+/**
+ * 布帘：鼠标碰到就被撩起来（以顶部固定边为轴向上收拢），
+ * 露出柜子里的碗碟，移开后弹落回来。感应区固定在布帘
+ * 原本盖住的位置，撩起后 hover 状态不会跟着抖。
+ */
+function LiftSprite({
+  layer,
+  interactive,
+}: {
+  layer: SceneLayer;
+  interactive: boolean;
+}) {
+  const [lifted, setLifted] = useState(false);
+  const rect = {
+    left: vh(layer.x),
+    top: vh(layer.y),
+    width: vh(layer.w),
+    height: vh(layer.h),
+  };
+  return (
+    <>
+      <motion.img
+        src={layerUrl(layer)}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={{ ...rect, transformOrigin: "50% 2%" }}
+        initial={false}
+        animate={{ scaleY: lifted ? 0.24 : 1 }}
+        transition={
+          lifted
+            ? { type: "spring", stiffness: 320, damping: 22 }
+            : { type: "spring", stiffness: 170, damping: 15 }
+        }
+      />
+      <div
+        className="absolute"
+        style={{ ...rect, pointerEvents: interactive ? "auto" : "none" }}
+        onMouseEnter={() => setLifted(true)}
+        onMouseLeave={() => setLifted(false)}
+      />
+    </>
   );
 }
 
@@ -1002,6 +1048,40 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
           <SceneSprite key={`s2-${layer.src}`} layer={layer} />
         ),
       )}
+
+      {/* 段03 · 厨房 + 蜡烛角 + LAB 门：
+          吊挂的（橙吊灯、厨具、CHEERS 牌、LAB 灯牌）鼠标碰到会荡两下；
+          厨房柜的布帘碰到会被撩起来 */}
+      {seg03Layers.map((layer) =>
+        layer.hoverPendulum ? (
+          <PendulumSprite key={`s3-${layer.src}`} layer={layer} />
+        ) : layer.hoverLift ? (
+          <LiftSprite key={`s3-${layer.src}`} layer={layer} interactive={interactive} />
+        ) : (
+          <SceneSprite key={`s3-${layer.src}`} layer={layer} />
+        ),
+      )}
+
+      {/* 白蜡烛常亮的火苗（默认态）；「点蜡烛」任务的完成态视觉等素材补齐后再做 */}
+      <motion.img
+        src="/assets/life/seg03/candle-flame.webp"
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={{
+          left: vh(10320),
+          top: vh(450),
+          width: vh(56),
+          height: vh(97),
+          transformOrigin: "50% 90%",
+        }}
+        animate={{
+          rotate: [0, 3, -2, 2, 0],
+          scaleY: [1, 1.05, 0.97, 1.03, 1],
+          transition: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
+        }}
+      />
+
 
       {/* 换装彩蛋：播放中放帧序列，播完定格最后一帧（穿好白T牛仔裤照镜子） */}
       {dressPlaying && (

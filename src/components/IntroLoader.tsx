@@ -3,7 +3,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { config } from "../config";
 import { useLanguage } from "../i18n/LanguageContext";
 
-const SESSION_KEY = "intro-played";
+export const INTRO_SESSION_KEY = "intro-played";
+const SESSION_KEY = INTRO_SESSION_KEY;
+
+/** 开屏结束（自动或点跳过）时广播，首页场景的出场动画接棒 */
+export const INTRO_DISMISSED_EVENT = "woolab:intro-dismissed";
 
 /**
  * 开场动画挂载点。
@@ -27,6 +31,7 @@ export default function IntroLoader() {
   function dismiss() {
     sessionStorage.setItem(SESSION_KEY, "1");
     setVisible(false);
+    window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
   }
 
   return (

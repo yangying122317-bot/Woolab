@@ -22,7 +22,7 @@ export interface SceneLayer {
   /** public/assets/life/<dir>/ 下的文件名（不含扩展名） */
   src: string;
   /** 素材所在的段目录，默认 seg01 */
-  dir?: "seg01" | "seg02";
+  dir?: "seg01" | "seg02" | "seg03";
   x: number;
   y: number;
   w: number;
@@ -34,6 +34,8 @@ export interface SceneLayer {
   hoverSwing?: boolean;
   /** 鼠标碰到时以图钉为轴荡几下再停回（钉在墙上的纸张） */
   hoverPendulum?: boolean;
+  /** 鼠标碰到时向上撩起，移开落回（厨房柜的布帘） */
+  hoverLift?: boolean;
   /** 摆动轴位置（CSS transform-origin），默认 "50% 3%"；图钉不在顶部中心时用 */
   pivot?: string;
 }
@@ -52,9 +54,10 @@ export const seg01Layers: SceneLayer[] = [
   // 挂杆上的空衣挂、六件衣服、台面上叠着的蓝裤子和地上的衣服堆
   // 都由 RoomStage 里的 HangClothes 组件渲染（挂衣服互动）
   { src: "hat", x: 2060, y: 664, w: 164, h: 268, anim: "static" },
-  { src: "sheep-rug", x: 2822, y: 1544, w: 487, h: 219, anim: "static" },
+  // 小羊地毯和右侧拖鞋整体左移 195px，避开段02 起居区的黄色椭圆地毯
+  { src: "sheep-rug", x: 2627, y: 1544, w: 487, h: 219, anim: "static" },
   { src: "slippers-1", x: 548, y: 1594, w: 206, h: 120, anim: "static" },
-  { src: "slippers-2", x: 3099, y: 1540, w: 206, h: 120, anim: "static" },
+  { src: "slippers-2", x: 2904, y: 1540, w: 206, h: 120, anim: "static" },
   { src: "sheep-shadow", x: 2249, y: 1620, w: 279, h: 61, anim: "static" },
   { src: "mirror", x: 2321, y: 491, w: 692, h: 1068, anim: "static" },
   { src: "sheep", x: 2178, y: 1078, w: 424, h: 597, anim: "static" },
