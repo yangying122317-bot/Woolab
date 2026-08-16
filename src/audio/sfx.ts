@@ -219,6 +219,13 @@ export function playMailboxClose() {
   tone("sine", 420, 260, 0.08, 0.14);
 }
 
+/** 纸片按上软木板：轻轻的"啪嗒" */
+export function playPaperSnap() {
+  if (!ready()) return;
+  click(0.35);
+  tone("sine", 230, 150, 0.09, 0.18, 0.006);
+}
+
 /** 玻璃门滑开：轻柔的"唰——" */
 export function playDoorSlide() {
   if (!ready()) return;
@@ -250,4 +257,72 @@ export function playNavigate() {
   if (!ready()) return;
   tone("triangle", 520, 780, 0.12, 0.2);
   tone("triangle", 780, 1040, 0.14, 0.16, 0.09);
+}
+
+/** 切柠檬：刀落在木板上的"咚咔" */
+export function playKnifeChop() {
+  if (!ready()) return;
+  click(0.5);
+  tone("triangle", 170, 90, 0.09, 0.3, 0.004);
+  tone("square", 950, 620, 0.03, 0.07);
+}
+
+/** 冰块进杯：两声清脆的"叮" */
+export function playIceClink() {
+  if (!ready()) return;
+  tone("triangle", 2400, 1900, 0.07, 0.13);
+  tone("triangle", 2900, 2250, 0.06, 0.1, 0.13);
+}
+
+/** 倒饮料：一段带气泡感的"咕嘟"水声 */
+export function playPour() {
+  if (!ready()) return;
+  if (!ctx || !master) return;
+  const t = ctx.currentTime;
+  const dur = 1.3;
+  const len = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.sin((i / len) * Math.PI);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1500, t);
+  filter.frequency.exponentialRampToValueAtTime(650, t + dur);
+  const gain = ctx.createGain();
+  gain.gain.value = 0.2;
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t);
+  // 几声咕嘟气泡
+  tone("sine", 320, 520, 0.12, 0.07, 0.15);
+  tone("sine", 280, 470, 0.12, 0.06, 0.55);
+  tone("sine", 350, 560, 0.12, 0.06, 0.95);
+}
+
+/** 浇水：一小股水声 */
+export function playWater() {
+  if (!ready()) return;
+  if (!ctx || !master) return;
+  const t = ctx.currentTime;
+  const dur = 0.55;
+  const len = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.sin((i / len) * Math.PI);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1800, t);
+  filter.frequency.exponentialRampToValueAtTime(700, t + dur);
+  const gain = ctx.createGain();
+  gain.gain.value = 0.22;
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t);
+  tone("sine", 480, 340, 0.2, 0.06);
 }

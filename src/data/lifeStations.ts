@@ -32,7 +32,7 @@ export interface LifeStation {
  * 长卷总宽（vh）：衣帽区 → 起居区 → 厨房/蜡烛角/LAB 门，
  * 到段03 最右侧的白沙发为止（舞台 12322px / 18 ≈ 685vh）。
  */
-export const ROOM_TOTAL_VH = 684;
+export const ROOM_TOTAL_VH = 733;
 
 export const lifeStations: LifeStation[] = [
   {
@@ -56,8 +56,8 @@ export const lifeStations: LifeStation[] = [
       en: "Placeholder: the sticker set and the old photo's story.",
     },
     result: { zh: "相片补好了", en: "Photo restored" },
-    // 段02 软木板上的那张海报（新版设计稿上移后：素材坐标 x4600 y309, 512x590）
-    left: 255.6, top: 17.2, width: 28.4, height: 32.8,
+    // 段02 软木板：拼图前散落的碎片区（舞台 4527,224 起，约 740x800）
+    left: 251.5, top: 12.4, width: 41, height: 46,
   },
   {
     id: "drink",
@@ -68,22 +68,25 @@ export const lifeStations: LifeStation[] = [
       en: "Placeholder: three drinks and the 'One Sip Baa' cup.",
     },
     result: { zh: "调好的一杯", en: "A drink, ready" },
-    // 段03 厨房的大圆桌：砧板柠檬、冰桶、玻璃杯都在桌上（舞台 8170,1139 起）
-    left: 454, top: 63, width: 86, height: 35,
+    // 段03 厨房的白圆桌：酱瓶汽水、一口咩、面包板柠檬盘都在桌上（舞台 8560,1120 起）
+    left: 475.5, top: 62.2, width: 79, height: 33.5,
   },
   {
     id: "candle",
     name: { zh: "床头的蜡烛", en: "The bedside candle" },
-    hint: { zh: "屋里有点暗了。", en: "It's getting a bit dim." },
+    hint: {
+      zh: "借白蜡烛的火，点亮小羊蜡烛。",
+      en: "Borrow the white candle's flame to light the sheep candle.",
+    },
     intro: {
       zh: "占位：小羊香薰蜡烛的香型与制作。",
       en: "Placeholder: the sheep candle's scent and making.",
     },
     result: { zh: "一直亮着", en: "Still burning" },
-    // 段03 蜡烛角的置物板：白蜡烛 + 小羊香薰蜡烛（舞台 10288,450 起）
-    left: 570, top: 24, width: 21, height: 18,
+    // 段03 蜡烛角的置物板：白蜡烛 + 小羊香薰蜡烛（舞台 11090,430 起）
+    left: 616, top: 24, width: 22, height: 18,
   },
 ];
 
 /** 夜晚出现的 LAB 入口（段03 的绿门），坐标单位同站点（vh） */
-export const LAB_DOOR = { left: 600, top: 17.7, width: 39, height: 61.5 };
+export const LAB_DOOR = { left: 647.5, top: 17.7, width: 39, height: 61.5 };

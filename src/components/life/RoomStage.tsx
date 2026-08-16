@@ -1,17 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { MotionValue, TargetAndTransition } from "framer-motion";
 import { Link } from "react-router-dom";
-import { LAB_DOOR, lifeStations } from "../../data/lifeStations";
+import { lifeStations } from "../../data/lifeStations";
 import type { LifeStation } from "../../data/lifeStations";
 import { seg01Layers } from "../../data/seg01Layers";
 import type { SceneLayer } from "../../data/seg01Layers";
 import { seg02Layers } from "../../data/seg02Layers";
 import { seg03Layers } from "../../data/seg03Layers";
+import PhotoPuzzle from "./PhotoPuzzle";
+import DrinkMixer from "./DrinkMixer";
+import CandleLight from "./CandleLight";
+import HintPing from "./HintPing";
 import { isStationDone } from "../../state/roomState";
-import type { RoomState } from "../../state/roomState";
+import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
-import { playNavigate } from "../../audio/sfx";
+import {
+  playLightOff,
+  playLightOn,
+  playMailboxClose,
+  playMailboxOpen,
+  playNavigate,
+  playWater,
+} from "../../audio/sfx";
 
 interface Props {
   room: RoomState;
@@ -23,11 +34,41 @@ interface Props {
   onChecklist: () => void;
   /** 六件衣服都挂上挂杆 → tee 任务完成 */
   onTeeDone: () => void;
+  /** 镜头已推近软木板 → 拼图碎片可拖 */
+  photoActive: boolean;
+  /** 11 片碎片拼完、化形动画播完 → photo 任务完成 */
+  onPhotoDone: () => void;
+  /** 镜头已推近白圆桌 → 调酒互动可用（含完成后回看时的 hover 名字） */
+  drinkActive: boolean;
+  /** 倒完饮料、名字浮现后 → drink 任务完成 */
+  onDrinkDone: (choice: DrinkChoice) => void;
+  /** 镜头已推近蜡烛角 → 点蜡烛互动可用 */
+  candleActive: boolean;
+  /** 小羊蜡烛点亮、白蜡烛回正后 → candle 任务完成 */
+  onCandleDone: () => void;
   /** 彩蛋：换装动画播完，小羊穿上了白T牛仔裤 */
   onDressed: () => void;
+  /** 作画动画阶段（拼图完成 → 拉回 → 原位播小羊作画） */
+  paint: PaintPhase;
+  /** 作画动画播完 → 弹清单盖章 */
+  onPaintEnd: () => void;
 }
 
 const candleStation = lifeStations.find((s) => s.id === "candle")!;
+
+/** 敞开的 LAB 门（门打开素材，横楣与关门图对齐：关门 x11654 - 素材内偏移 390） */
+const LAB_OPEN = { x: 11264, y: 319, w: 1093, h: 1229 };
+
+/** 白圆桌上交给 DrinkMixer 渲染的图层（调酒互动的道具） */
+const DRINK_TAKEN = new Set([
+  "sauce-bottle",
+  "soda-white",
+  "soda-pink",
+  "paper-cup",
+  "fruit-knife",
+  // 案板换成含柠檬和刀的两状态素材（整颗→切开），由 DrinkMixer 渲染
+  "bread-board",
+]);
 
 /** 场景上的文字提示（玄关便签、站点标签、完成文字）。先隐藏，需要时改回 true */
 const SHOW_SCENE_TEXT = false;
@@ -434,6 +475,36 @@ function LiftSprite({
   );
 }
 
+/**
+ * 冰箱：鼠标碰到就打开门（换成 fridge-open 素材，门朝右开），
+ * 移开后关上。两张素材左对齐、同高，直接同位换图。
+ */
+function FridgeHover({ layer }: { layer: SceneLayer }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <img
+      src={`/assets/life/seg03/${open ? "fridge-open" : "fridge"}.webp`}
+      alt=""
+      draggable={false}
+      className="absolute max-w-none select-none"
+      style={{
+        left: vh(layer.x),
+        top: vh(layer.y),
+        width: vh(open ? 887 : layer.w),
+        height: vh(layer.h),
+      }}
+      onMouseEnter={() => {
+        setOpen(true);
+        playMailboxOpen();
+      }}
+      onMouseLeave={() => {
+        setOpen(false);
+        playMailboxClose();
+      }}
+    />
+  );
+}
+
 function SceneSprite({ layer }: { layer: SceneLayer }) {
   const { animate, transformOrigin } = layerMotion(layer);
   return (
@@ -496,6 +567,58 @@ function DressAnim({ onEnd }: { onEnd: () => void }) {
         <img
           key={i}
           src={dressFrameSrc(i)}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full max-w-none"
+          style={{ opacity: i === frame ? 1 : 0 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 作画动画（photo 任务的收尾）：拼图完成、镜头拉回后，
+ * 画家小羊在原位把画布上的瓶花画出来。帧覆盖 小羊+画架 两个图层
+ * （模板匹配定位：小羊按 0.985 缩放精确锚定；画架在视频里比场景略小，
+ * 切换瞬间的微跳属素材构图差异）。播完定格最后一帧（画好的橙色瓶花
+ * 成为 photo 任务的持久痕迹，刷新仍在）。
+ */
+const PAINT_RECT = { x: 4490, y: 914.3, w: 1073, h: 828.3 };
+const PAINT_FRAMES = 42;
+const PAINT_FPS = 12;
+const paintFrameSrc = (i: number) =>
+  `/assets/life/seg02/paint-anim/f${String(i).padStart(2, "0")}.webp`;
+/** 作画动画的阶段：wait = 已完成拼图、镜头拉回中（静态层先留着） */
+export type PaintPhase = "idle" | "wait" | "play";
+
+function PaintAnim({ onEnd }: { onEnd: () => void }) {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (frame >= PAINT_FRAMES - 1) {
+      const t = window.setTimeout(onEnd, 400);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setFrame(frame + 1), 1000 / PAINT_FPS);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame]);
+
+  return (
+    <div
+      className="pointer-events-none absolute select-none"
+      style={{
+        left: vh(PAINT_RECT.x),
+        top: vh(PAINT_RECT.y),
+        width: vh(PAINT_RECT.w),
+        height: vh(PAINT_RECT.h),
+      }}
+    >
+      {Array.from({ length: PAINT_FRAMES }, (_, i) => (
+        <img
+          key={i}
+          src={paintFrameSrc(i)}
           alt=""
           draggable={false}
           className="absolute inset-0 h-full w-full max-w-none"
@@ -940,21 +1063,131 @@ function HangClothes({
           }}
           onPointerDown={startDrag}
         >
+          {/* 光点指引：挂在地上衣服堆的中心，拖起衣服时先熄灭 */}
           {nextPiece >= 0 && !drag && (
-            <motion.div
-              className="absolute rounded-2xl border-2 border-dashed border-neutral-600/40 bg-white/10"
-              style={{
-                left: 0,
-                top: vh(1410 - PILE.y),
-                width: "100%",
-                height: vh(310),
-              }}
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-            />
+            <div
+              className="absolute"
+              style={{ left: "50%", top: vh(1565 - PILE.y) }}
+            >
+              <HintPing />
+            </div>
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/* ---------------- 浇水彩蛋（hover 水壶，它自己飞去浇花） ---------------- */
+
+const KETTLE = { x: 11007, y: 1462, w: 332, h: 186 };
+/** 浇水位：蓝凳盆栽的左上方，壶嘴正对着叶子（按用户示意图定位） */
+const KETTLE_POUR = { x: 11056, y: 861 };
+
+/** 从壶嘴落下的一小串水珠（跟着水壶一起转） */
+function WaterStream() {
+  return (
+    <>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <motion.span
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            left: `${82 + (i % 3) * 4}%`,
+            top: "16%",
+            width: vh(8 + (i % 3) * 3),
+            height: vh(12 + (i % 2) * 4),
+            background: "rgba(140, 205, 230, 0.9)",
+            boxShadow: "0 0 5px rgba(170, 225, 245, 0.7)",
+          }}
+          animate={{
+            x: [0, 14, 26],
+            y: [0, 36, 88],
+            opacity: [0, 1, 0],
+            scaleY: [0.5, 1.15, 1.4],
+          }}
+          transition={{
+            duration: 0.5,
+            delay: i * 0.07,
+            repeat: Infinity,
+            ease: "easeIn",
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * 隐藏彩蛋，无任何指引：鼠标碰到地上的水壶，它自己飞到
+ * 蓝凳盆栽的左上方，倾一倾壶身浇一小股水，浇完飞回原位。
+ * 绿植本体不动。
+ */
+function Watering({ interactive }: { interactive: boolean }) {
+  const [phase, setPhase] = useState<"rest" | "up" | "pour" | "back">("rest");
+
+  // 到位后开始倒水，一小会儿后收工回家
+  useEffect(() => {
+    if (phase !== "pour") return;
+    playWater();
+    const t = window.setTimeout(() => setPhase("back"), 1400);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+
+  const atPour = phase === "up" || phase === "pour";
+
+  return (
+    <>
+      <motion.div
+        className="pointer-events-none absolute select-none"
+        style={{
+          left: 0,
+          top: 0,
+          width: vh(KETTLE.w),
+          height: vh(KETTLE.h),
+          // 以壶身中后部为轴倾斜，壶嘴朝下倒
+          transformOrigin: "40% 55%",
+          zIndex: 5,
+        }}
+        initial={false}
+        animate={{
+          x: vh(atPour ? KETTLE_POUR.x : KETTLE.x),
+          y: vh(atPour ? KETTLE_POUR.y : KETTLE.y),
+          rotate: phase === "pour" ? 20 : 0,
+        }}
+        transition={
+          phase === "up"
+            ? { duration: 0.6, ease: [0.33, 1, 0.68, 1] }
+            : phase === "back"
+              ? { duration: 0.55, ease: [0.45, 0, 0.55, 1] }
+              : { type: "spring", stiffness: 240, damping: 18 }
+        }
+        onAnimationComplete={() => {
+          if (phase === "up") setPhase("pour");
+          else if (phase === "back") setPhase("rest");
+        }}
+      >
+        <img
+          src="/assets/life/seg03/kettle.webp"
+          alt=""
+          draggable={false}
+          className="h-full w-full max-w-none"
+        />
+        {phase === "pour" && <WaterStream />}
+      </motion.div>
+
+      {/* 触发区：钉在水壶原位，飞走期间失效，回来后可再摸 */}
+      <div
+        className="absolute"
+        style={{
+          left: vh(KETTLE.x),
+          top: vh(KETTLE.y),
+          width: vh(KETTLE.w),
+          height: vh(KETTLE.h),
+          pointerEvents: interactive && phase === "rest" ? "auto" : "none",
+        }}
+        onMouseEnter={() => interactive && phase === "rest" && setPhase("up")}
+      />
     </>
   );
 }
@@ -964,10 +1197,13 @@ function HangClothes({
  * 当前已接入段01（衣帽区）；后续段落到位后按同样方式往右拼。
  * 互动物件的分层素材没到之前，站点仍用虚线框叠在画面上示意。
  */
-export default function RoomStage({ room, night, interactive, onOpen, onChecklist, onTeeDone, onDressed }: Props) {
+export default function RoomStage({ room, night, interactive, onOpen, onChecklist, onTeeDone, photoActive, onPhotoDone, drinkActive, onDrinkDone, candleActive, onCandleDone, onDressed, paint, onPaintEnd }: Props) {
   const { t, pick } = useLanguage();
   // 挂杆感应区内的鼠标位置（素材像素坐标），离开时归位到远处
   const swingMouseX = useMotionValue(MOUSE_AWAY);
+
+  /* CHEERS 吊灯：hover 灯体时亮起（光锥淡入），移开熄灭 */
+  const [cheersLit, setCheersLit] = useState(false);
 
   /* 换装彩蛋：播放中 / 已换装时，镜子+小羊+影子由动画帧或定格接管 */
   const [dressPlaying, setDressPlaying] = useState(false);
@@ -984,6 +1220,21 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
       im.decode?.().catch(() => {});
     }
   }, [canDress]);
+
+  /* 作画动画：play 时帧接管小羊+画架；photo 完成后定格最后一帧 */
+  const paintStill = isStationDone(room, "photo") && paint === "idle";
+  const paintHidden = paint === "play" || paintStill;
+
+  // 推近软木板开拼时预热作画帧，拉回后播放不卡顿
+  useEffect(() => {
+    if (!photoActive || isStationDone(room, "photo")) return;
+    for (let i = 0; i < PAINT_FRAMES; i++) {
+      const im = new Image();
+      im.src = paintFrameSrc(i);
+      im.decode?.().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoActive]);
 
   return (
     <>
@@ -1040,47 +1291,188 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
         )}
 
       {/* 段02 · 起居区：软木板、单人沙发、小圆桌、吊灯、落地植物。
-          挂着的（吊灯、帆布袋）和钉着的（相片、贴纸）鼠标碰到会荡两下 */}
-      {seg02Layers.map((layer) =>
-        layer.hoverPendulum ? (
-          <PendulumSprite key={`s2-${layer.src}`} layer={layer} />
+          挂着的（吊灯、帆布袋）和钉着的（相片、贴纸）鼠标碰到会荡两下。
+          海报碎片由 PhotoPuzzle 接管（紧贴软木板之上，保持原叠放层级） */}
+      {seg02Layers.map((layer, i) =>
+        layer.src === "board" ? (
+          <Fragment key={`s2-${layer.src}-${i}`}>
+            <SceneSprite layer={layer} />
+            <PhotoPuzzle
+              done={isStationDone(room, "photo")}
+              active={photoActive}
+              onDone={onPhotoDone}
+            />
+          </Fragment>
+        ) : layer.src === "tape-photo-b" && isStationDone(room, "photo") ? (
+          // 拼图完成后这条胶带由 PhotoPuzzle 贴到海报前面（70% 透明度）
+          null
+        ) : (layer.src === "painter-sheep" || layer.src === "easel") &&
+          paintHidden ? (
+          // 作画动画播放中/定格后，小羊+画架由帧序列接管
+          null
+        ) : layer.hoverPendulum ? (
+          <PendulumSprite key={`s2-${layer.src}-${i}`} layer={layer} />
         ) : (
-          <SceneSprite key={`s2-${layer.src}`} layer={layer} />
+          <SceneSprite key={`s2-${layer.src}-${i}`} layer={layer} />
         ),
+      )}
+
+      {/* 作画动画：拼图完成拉回后，小羊原位画出瓶花；播完定格（刷新仍在） */}
+      {paint === "play" && <PaintAnim onEnd={onPaintEnd} />}
+      {paintStill && (
+        <img
+          src={paintFrameSrc(PAINT_FRAMES - 1)}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none select-none"
+          style={{
+            left: vh(PAINT_RECT.x),
+            top: vh(PAINT_RECT.y),
+            width: vh(PAINT_RECT.w),
+            height: vh(PAINT_RECT.h),
+          }}
+        />
       )}
 
       {/* 段03 · 厨房 + 蜡烛角 + LAB 门：
           吊挂的（橙吊灯、厨具、CHEERS 牌、LAB 灯牌）鼠标碰到会荡两下；
-          厨房柜的布帘碰到会被撩起来 */}
-      {seg03Layers.map((layer) =>
-        layer.hoverPendulum ? (
-          <PendulumSprite key={`s3-${layer.src}`} layer={layer} />
+          厨房柜的布帘碰到会被撩起来；
+          白圆桌上的三瓶/纸杯/水果刀由 DrinkMixer 接管（调酒互动） */}
+      {seg03Layers.map((layer, i) =>
+        layer.src === "kettle" ||
+        DRINK_TAKEN.has(layer.src) ? null : layer.src === "lemon-plate" ? (
+          <Fragment key={`s3-${layer.src}-${i}`}>
+            <SceneSprite layer={layer} />
+            <DrinkMixer
+              drink={room.drink}
+              active={drinkActive}
+              onDone={onDrinkDone}
+            />
+          </Fragment>
+        ) : layer.src === "pendant-light" ? (
+          // CHEERS 吊灯的光锥：hover 灯体时淡入
+          <motion.img
+            key={`s3-${layer.src}`}
+            src={layerUrl(layer)}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute max-w-none select-none"
+            style={{
+              left: vh(layer.x),
+              top: vh(layer.y),
+              width: vh(layer.w),
+              height: vh(layer.h),
+            }}
+            initial={false}
+            animate={{ opacity: cheersLit ? 1 : 0 }}
+            transition={{ duration: cheersLit ? 0.25 : 0.5 }}
+          />
+        ) : layer.src === "pendant-cheers" ? (
+          // 灯体不摇摆，只负责 hover 亮灯
+          <img
+            key={`s3-${layer.src}`}
+            src={layerUrl(layer)}
+            alt=""
+            draggable={false}
+            className="absolute max-w-none select-none"
+            style={{
+              left: vh(layer.x),
+              top: vh(layer.y),
+              width: vh(layer.w),
+              height: vh(layer.h),
+            }}
+            onMouseEnter={() => {
+              setCheersLit(true);
+              playLightOn();
+            }}
+            onMouseLeave={() => {
+              setCheersLit(false);
+              playLightOff();
+            }}
+          />
+        ) : layer.src === "fridge" ? (
+          <FridgeHover key={`s3-${layer.src}`} layer={layer} />
+        ) : layer.src === "candle-wax" ? (
+          // 白蜡烛（火苗+蜡+烛台）与点蜡烛互动整组交给 CandleLight
+          <CandleLight
+            key="s3-candle-light"
+            lit={isStationDone(room, "candle")}
+            active={candleActive}
+            onDone={onCandleDone}
+          />
+        ) : layer.src === "candle-holder" || layer.src === "aroma-candle" ? null : layer.src === "lab-sign" ? (
+          // LAB 灯牌：点蜡烛后亮灯（不摇摆）
+          <div
+            key="s3-lab-sign"
+            className="pointer-events-none absolute select-none"
+            style={{
+              left: vh(layer.x),
+              top: vh(layer.y),
+              width: vh(layer.w),
+              height: vh(layer.h),
+            }}
+          >
+            <img
+              src={layerUrl(layer)}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 h-full w-full max-w-none"
+            />
+            <motion.img
+              src="/assets/life/seg03/lab-sign-lit.webp"
+              alt=""
+              draggable={false}
+              className="absolute inset-0 h-full w-full max-w-none"
+              initial={false}
+              animate={{ opacity: room.candle ? 1 : 0 }}
+              transition={{
+                delay: room.candle ? 1.2 : 0,
+                duration: 0.5,
+              }}
+            />
+          </div>
+        ) : layer.src === "lab-door" ? (
+          // LAB 门：点蜡烛后换成敞开的门（带门后暖光），点门进 LAB
+          <Fragment key="s3-lab-door">
+            <motion.img
+              src={layerUrl(layer)}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute max-w-none select-none"
+              style={{
+                left: vh(layer.x),
+                top: vh(layer.y),
+                width: vh(layer.w),
+                height: vh(layer.h),
+              }}
+              initial={false}
+              animate={{ opacity: room.candle ? 0 : 1 }}
+              transition={{ delay: room.candle ? 1.6 : 0, duration: 0.45 }}
+            />
+            <motion.img
+              src="/assets/life/seg03/lab-door-open.webp"
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute max-w-none select-none"
+              style={{
+                left: vh(LAB_OPEN.x),
+                top: vh(LAB_OPEN.y),
+                width: vh(LAB_OPEN.w),
+                height: vh(LAB_OPEN.h),
+              }}
+              initial={false}
+              animate={{ opacity: room.candle ? 1 : 0 }}
+              transition={{ delay: room.candle ? 1.6 : 0, duration: 0.45 }}
+            />
+          </Fragment>
+        ) : layer.hoverPendulum ? (
+          <PendulumSprite key={`s3-${layer.src}-${i}`} layer={layer} />
         ) : layer.hoverLift ? (
-          <LiftSprite key={`s3-${layer.src}`} layer={layer} interactive={interactive} />
+          <LiftSprite key={`s3-${layer.src}-${i}`} layer={layer} interactive={interactive} />
         ) : (
-          <SceneSprite key={`s3-${layer.src}`} layer={layer} />
+          <SceneSprite key={`s3-${layer.src}-${i}`} layer={layer} />
         ),
       )}
-
-      {/* 白蜡烛常亮的火苗（默认态）；「点蜡烛」任务的完成态视觉等素材补齐后再做 */}
-      <motion.img
-        src="/assets/life/seg03/candle-flame.webp"
-        alt=""
-        draggable={false}
-        className="pointer-events-none absolute max-w-none select-none"
-        style={{
-          left: vh(10320),
-          top: vh(450),
-          width: vh(56),
-          height: vh(97),
-          transformOrigin: "50% 90%",
-        }}
-        animate={{
-          rotate: [0, 3, -2, 2, 0],
-          scaleY: [1, 1.05, 0.97, 1.03, 1],
-          transition: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
-        }}
-      />
 
 
       {/* 换装彩蛋：播放中放帧序列，播完定格最后一帧（穿好白T牛仔裤照镜子） */}
@@ -1125,6 +1517,9 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
       {/* 柜子的推拉门：可以拖着左右滑 */}
       <CabinetDoor interactive={interactive} />
 
+      {/* 浇水彩蛋：鼠标碰到地上的水壶，它自己飞去给蓝凳上的绿植浇水 */}
+      <Watering interactive={interactive} />
+
       {/* 挂杆感应区：鼠标划过时拨动衣服/衣挂 */}
       <div
         className="absolute"
@@ -1159,7 +1554,7 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
         </div>
       )}
 
-      {/* 蜡烛光晕：点亮后常驻，入夜后成为主光源 */}
+      {/* 蜡烛光晕：只在入夜后出现，作为主光源（白天不加光晕） */}
       {room.candle && (
         <motion.div
           className="pointer-events-none absolute"
@@ -1172,7 +1567,7 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
               "radial-gradient(closest-side, rgba(255,255,255,0.75), rgba(255,255,255,0) 72%)",
           }}
           initial={{ opacity: 0 }}
-          animate={{ opacity: night ? 1 : 0.5 }}
+          animate={{ opacity: night ? 1 : 0 }}
           transition={{ duration: 1.6 }}
         />
       )}
@@ -1203,27 +1598,16 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
               }
             }}
           >
-            {/* 站点占位框：未完成时轻微呼吸提示 */}
-            <motion.div
-              className={`h-full w-full rounded-2xl border-2 ${
-                done
-                  ? "border-neutral-500/50 bg-white/25"
-                  : "border-dashed border-neutral-600/40 bg-white/10"
-              }`}
-              animate={done ? { opacity: 1 } : { opacity: [0.5, 1, 0.5] }}
-              transition={
-                done
-                  ? { duration: 0.3 }
-                  : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
-              }
-            />
+            {/* 未完成：呼吸光点指引（完成后熄灭；专注态时先藏起来） */}
+            {!done && interactive && <HintPing />}
 
-            {/* 站点名标签 */}
-            {SHOW_SCENE_TEXT && (
-              <span className="font-hand absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 text-base text-neutral-700 shadow-sm">
-                {pick(s.name)}
-              </span>
-            )}
+            {/* 悬停：手写体名称气泡（完成的带勾） */}
+            <span
+              className="font-hand pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-[5.5vh] whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 opacity-0 shadow-md transition-opacity duration-300 group-hover:opacity-100"
+            >
+              {done ? "✓ " : ""}
+              {pick(s.name)}
+            </span>
 
             {/* 完成痕迹：结果物占位 + 小印章 */}
             {SHOW_SCENE_TEXT && done && (
@@ -1243,32 +1627,31 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
         );
       })}
 
-      {/* 长卷尽头的 WOOLAB 入口：入夜后亮起 */}
+      {/* LAB 入口：点蜡烛后门开着，点门进 LAB */}
       <AnimatePresence>
-        {night && (
+        {room.candle && (
           <motion.div
-            className="absolute"
+            className="group absolute"
             style={{
-              left: `${LAB_DOOR.left}vh`,
-              top: `${LAB_DOOR.top}vh`,
-              width: `${LAB_DOOR.width}vh`,
-              height: `${LAB_DOOR.height}vh`,
+              left: vh(11654),
+              top: vh(319),
+              width: vh(704),
+              height: vh(1106),
+              zIndex: 10,
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ delay: 1.6, duration: 1.4 }}
+            transition={{ delay: 2.1, duration: 0.4 }}
           >
             <Link
               to="/lab"
               onClick={() => playNavigate()}
-              className="relative flex h-full w-full flex-col items-center justify-center rounded-t-[40%] border-2 border-white/90 bg-gradient-to-b from-white/70 to-white/40 shadow-[0_0_50px_rgba(255,255,255,0.6)] transition hover:shadow-[0_0_70px_rgba(255,255,255,0.85)]"
+              aria-label={t("life.lab.door")}
+              className="block h-full w-full cursor-pointer"
             >
-              <span className="font-hand text-center text-lg leading-snug text-neutral-800">
-                {t("life.lab.door")}
-              </span>
-              <span aria-hidden className="mt-1 text-neutral-800">
-                →
+              <span className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 opacity-0 shadow-md transition-opacity duration-300 group-hover:opacity-100">
+                {t("life.lab.door")} →
               </span>
             </Link>
           </motion.div>

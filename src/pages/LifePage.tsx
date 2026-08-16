@@ -11,9 +11,9 @@ import {
 import LangSwitcher from "../components/LangSwitcher";
 import SoundToggle from "../components/SoundToggle";
 import Checklist from "../components/life/Checklist";
-import RoomStage from "../components/life/RoomStage";
+import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import StationFocus from "../components/life/StationFocus";
-import { ROOM_TOTAL_VH } from "../data/lifeStations";
+import { ROOM_TOTAL_VH, lifeStations } from "../data/lifeStations";
 import type { LifeStation } from "../data/lifeStations";
 import { seg01Layers } from "../data/seg01Layers";
 import {
@@ -27,6 +27,8 @@ import type { DrinkChoice, RoomState } from "../state/roomState";
 import { playNavigate } from "../audio/sfx";
 import { useLanguage } from "../i18n/LanguageContext";
 
+const photoStation = lifeStations.find((s) => s.id === "photo")!;
+
 /**
  * 小羊的生活：横向滚动的房间剖面（交互原型骨架）。
  *
@@ -38,7 +40,7 @@ import { useLanguage } from "../i18n/LanguageContext";
  * 完成痕迹存 localStorage（见 src/state/roomState.ts），下次进来还在。
  */
 export default function LifePage() {
-  const { t } = useLanguage();
+  const { t, pick } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
@@ -91,6 +93,8 @@ export default function LifePage() {
   const collapseTimer = useRef<number | undefined>(undefined);
   /** 专注态里刚完成了一项，拉回后要弹清单盖章 */
   const pendingStamp = useRef(false);
+  /** 作画动画阶段：拼图完成 → wait（拉回中）→ play（原位作画）→ idle */
+  const [paint, setPaint] = useState<PaintPhase>("idle");
 
   const openChecklist = () => {
     window.clearTimeout(collapseTimer.current);
@@ -187,6 +191,55 @@ export default function LifePage() {
     });
   };
 
+  /** 拼图进行中：推近软木板但没有面板，互动就在画面里 */
+  const photoFocus = focus?.id === "photo" && !isStationDone(room, "photo");
+
+  /** 调酒进行中：推近白圆桌但没有面板，互动就在画面里 */
+  const drinkFocus = focus?.id === "drink" && !isStationDone(room, "drink");
+  /** 点蜡烛进行中：推近蜡烛角但没有面板，互动就在画面里 */
+  const candleFocus = focus?.id === "candle" && !isStationDone(room, "candle");
+  /** 场景内互动的专注态（底部只留提示句 + 先离开） */
+  const sceneFocus = photoFocus
+    ? photoStation
+    : drinkFocus || candleFocus
+      ? focus
+      : null;
+
+  /** 拼图完成（化形动画播完）：镜头拉回 → 画家小羊原位播作画动画 → 播完盖章 */
+  const completePhoto = () => {
+    playNavigate();
+    setRoom((r) => ({ ...r, photo: true }));
+    setPaint("wait");
+    void closeFocus().then(() => setPaint("play"));
+  };
+
+  /** 作画动画播完：定格 + 弹清单盖章 */
+  const finishPaint = () => {
+    setPaint("idle");
+    window.clearTimeout(collapseTimer.current);
+    setChecklistOpen(true);
+    collapseTimer.current = window.setTimeout(
+      () => setChecklistOpen(false),
+      2800,
+    );
+  };
+
+  /** 调酒完成（名字浮现后）：盖章 + 镜头拉回 + 弹清单 */
+  const completeDrink = (choice: DrinkChoice) => {
+    playNavigate();
+    pendingStamp.current = true;
+    setRoom((r) => ({ ...r, drink: choice }));
+    void closeFocus();
+  };
+
+  /** 点蜡烛完成（白蜡烛回正后）：盖章 + 镜头拉回 + 弹清单 */
+  const completeCandle = () => {
+    playNavigate();
+    pendingStamp.current = true;
+    setRoom((r) => ({ ...r, candle: true }));
+    void closeFocus();
+  };
+
   /** 挂衣互动完成（场景内直接完成，不经过专注态）：盖章 + 弹清单 */
   const completeTee = () => {
     playNavigate();
@@ -205,6 +258,7 @@ export default function LifePage() {
     bornAtNight.current = false;
     setNightLine(false);
     setChecklistOpen(false);
+    setPaint("idle");
   };
 
   return (
@@ -226,6 +280,11 @@ export default function LifePage() {
             className="relative h-full"
             style={{ x, width: `${ROOM_TOTAL_VH}vh` }}
           >
+            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白 */}
+            <div
+              className="absolute left-0 w-full"
+              style={{ top: "100%", height: "60vh", background: "#43A0CC" }}
+            />
             <RoomStage
               room={room}
               night={night}
@@ -233,9 +292,17 @@ export default function LifePage() {
               onOpen={openStation}
               onChecklist={openChecklist}
               onTeeDone={completeTee}
+              photoActive={photoFocus}
+              onPhotoDone={completePhoto}
+              drinkActive={focus?.id === "drink"}
+              onDrinkDone={completeDrink}
+              candleActive={focus?.id === "candle"}
+              onCandleDone={completeCandle}
               onDressed={() =>
                 setRoom((r) => ({ ...r, dressed: true }))
               }
+              paint={paint}
+              onPaintEnd={finishPaint}
             />
           </motion.div>
         </motion.div>
@@ -329,9 +396,33 @@ export default function LifePage() {
           onReset={resetRoom}
         />
 
-        {/* 专注态互动面板 */}
+        {/* 场景内互动模式（拼图/调酒）：一句提示 + 「先离开」 */}
+        <AnimatePresence>
+          {sceneFocus && (
+            <motion.div
+              key={`scene-ui-${sceneFocus.id}`}
+              className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex flex-col items-center gap-3"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.4, delay: 0.5 }}
+            >
+              <p className="font-hand rounded-full bg-white/90 px-5 py-1.5 text-xl text-neutral-700 shadow-md">
+                {pick(sceneFocus.hint)}
+              </p>
+              <button
+                onClick={() => void closeFocus()}
+                className="pointer-events-auto rounded-full border border-neutral-300 bg-white/95 px-4 py-1 text-sm text-neutral-500 shadow-sm transition hover:bg-white"
+              >
+                {t("life.focus.back")}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 专注态互动面板（拼图/调酒站不用面板，互动在画面里） */}
         <StationFocus
-          station={focus}
+          station={sceneFocus ? null : focus}
           done={focus ? isStationDone(room, focus.id) : false}
           onComplete={completeStation}
           onClose={() => void closeFocus()}
