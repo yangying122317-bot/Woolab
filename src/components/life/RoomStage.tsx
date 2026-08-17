@@ -592,10 +592,11 @@ const paintFrameSrc = (i: number) =>
 /** 作画动画的阶段：wait = 已完成拼图、镜头拉回中（静态层先留着） */
 export type PaintPhase = "idle" | "wait" | "play";
 
-function PaintAnim({ onEnd }: { onEnd: () => void }) {
+function PaintAnim({ playing, onEnd }: { playing: boolean; onEnd: () => void }) {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
+    if (!playing) return;
     if (frame >= PAINT_FRAMES - 1) {
       const t = window.setTimeout(onEnd, 400);
       return () => window.clearTimeout(t);
@@ -603,7 +604,7 @@ function PaintAnim({ onEnd }: { onEnd: () => void }) {
     const t = window.setTimeout(() => setFrame(frame + 1), 1000 / PAINT_FPS);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame]);
+  }, [frame, playing]);
 
   return (
     <div
@@ -613,6 +614,8 @@ function PaintAnim({ onEnd }: { onEnd: () => void }) {
         top: vh(PAINT_RECT.y),
         width: vh(PAINT_RECT.w),
         height: vh(PAINT_RECT.h),
+        // wait 阶段隐藏挂载：42 帧先进 DOM 解码，play 时切换不闪帧
+        visibility: playing ? "visible" : "hidden",
       }}
     >
       {Array.from({ length: PAINT_FRAMES }, (_, i) => (
@@ -635,7 +638,7 @@ function PaintAnim({ onEnd }: { onEnd: () => void }) {
  * 六件衣服，每件两种形态：flat（叠着放在堆里 / 拖拽时）和
  * hung（挂在衣架上，含衣架）。数组顺序 = 拿的顺序（堆顶先拿）；
  * pile 是它叠着时的位置（素材像素坐标）——蓝裤子单独叠在
- * 衣架底箱的台面上，其余五件堆在地上。
+ * 衣架底箱的台面上，紫裤子默认已挂在杆上，其余四件堆在地上。
  * hung.hook 是挂钩中心距贴图左边的像素，对位到槽位中心。
  */
 const HANG_PIECES = [
@@ -735,10 +738,11 @@ function HangClothes({
   dressActive: boolean;
   onDress: () => void;
 }) {
-  const EMPTY: (number | null)[] = [null, null, null, null, null, null];
-  /** 每个槽位挂的是哪件（衣服下标），初始为空；已完成时按示意图排布 */
+  /** 初始态：紫裤子默认挂在最右槽位，其余五件待挂 */
+  const INIT: (number | null)[] = [null, null, null, null, null, 5];
+  /** 每个槽位挂的是哪件（衣服下标）；已完成时按示意图排布 */
   const [hung, setHung] = useState<(number | null)[]>(() =>
-    done ? [...DONE_ORDER] : [...EMPTY],
+    done ? [...DONE_ORDER] : [...INIT],
   );
   /** 刚落位的槽位（落点坐标，驱动入位动画） */
   const landing = useRef<{ slot: number; x: number; y: number } | null>(null);
@@ -748,10 +752,12 @@ function HangClothes({
   const [dressDrag, setDressDrag] = useState<{ x: number; y: number } | null>(null);
   const pileRef = useRef<HTMLDivElement>(null);
 
-  // 重新过一晚：衣服全部回到堆里
+  // 重新过一晚：衣服回到初始态（紫裤子留在挂杆上）
   useEffect(() => {
     if (!done) {
-      setHung((h) => (h.every((v) => v === null) ? h : [...EMPTY]));
+      setHung((h) =>
+        h.every((v, i) => v === INIT[i]) ? h : [...INIT],
+      );
       landing.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1318,7 +1324,9 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
       )}
 
       {/* 作画动画：拼图完成拉回后，小羊原位画出瓶花；播完定格（刷新仍在） */}
-      {paint === "play" && <PaintAnim onEnd={onPaintEnd} />}
+      {(paint === "wait" || paint === "play") && (
+        <PaintAnim playing={paint === "play"} onEnd={onPaintEnd} />
+      )}
       {paintStill && (
         <img
           src={paintFrameSrc(PAINT_FRAMES - 1)}
