@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { MotionValue, TargetAndTransition } from "framer-motion";
-import { Link } from "react-router-dom";
 import { lifeStations } from "../../data/lifeStations";
 import type { LifeStation } from "../../data/lifeStations";
 import { seg01Layers } from "../../data/seg01Layers";
@@ -20,7 +19,6 @@ import {
   playLightOn,
   playMailboxClose,
   playMailboxOpen,
-  playNavigate,
   playWater,
 } from "../../audio/sfx";
 
@@ -52,6 +50,8 @@ interface Props {
   paint: PaintPhase;
   /** 作画动画播完 → 弹清单盖章 */
   onPaintEnd: () => void;
+  /** 走进 LAB 门：门已开好，交给页面推镜头进门洞并跳转（传门洞屏幕矩形） */
+  onEnterLab: (doorRect: DOMRect) => void;
 }
 
 const candleStation = lifeStations.find((s) => s.id === "candle")!;
@@ -1203,13 +1203,31 @@ function Watering({ interactive }: { interactive: boolean }) {
  * 当前已接入段01（衣帽区）；后续段落到位后按同样方式往右拼。
  * 互动物件的分层素材没到之前，站点仍用虚线框叠在画面上示意。
  */
-export default function RoomStage({ room, night, interactive, onOpen, onChecklist, onTeeDone, photoActive, onPhotoDone, drinkActive, onDrinkDone, candleActive, onCandleDone, onDressed, paint, onPaintEnd }: Props) {
+export default function RoomStage({ room, night, interactive, onOpen, onChecklist, onTeeDone, photoActive, onPhotoDone, drinkActive, onDrinkDone, candleActive, onCandleDone, onDressed, paint, onPaintEnd, onEnterLab }: Props) {
   const { t, pick } = useLanguage();
   // 挂杆感应区内的鼠标位置（素材像素坐标），离开时归位到远处
   const swingMouseX = useMotionValue(MOUSE_AWAY);
 
   /* CHEERS 吊灯：hover 灯体时亮起（光锥淡入），移开熄灭 */
   const [cheersLit, setCheersLit] = useState(false);
+
+  /* LAB 门直通：任务没完成也能点门——灯牌亮、门开，镜头推进门洞进 LAB。
+     瞬时状态不持久化，从 LAB 返回时门恢复关闭，任务进度不受影响 */
+  const [doorOpen, setDoorOpen] = useState(false);
+  /** 门热区悬停（气泡显隐；项目里 group-hover 变体失效，改状态驱动） */
+  const [labHover, setLabHover] = useState(false);
+  const labOpened = room.candle || doorOpen;
+  const labNavTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(labNavTimer.current), []);
+  const enterLab = (e: React.MouseEvent) => {
+    if (doorOpen) return;
+    // 热区点击后立刻卸载，位置要在此刻取好（之后元素就不在文档里了）
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    playLightOn();
+    setDoorOpen(true);
+    // 等灯牌亮、门开完（0.25s 延迟 + 0.45s 开门），再交给镜头推进门洞
+    labNavTimer.current = window.setTimeout(() => onEnterLab(rect), 820);
+  };
 
   /* 换装彩蛋：播放中 / 已换装时，镜子+小羊+影子由动画帧或定格接管 */
   const [dressPlaying, setDressPlaying] = useState(false);
@@ -1432,8 +1450,9 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
               draggable={false}
               className="absolute inset-0 h-full w-full max-w-none"
               initial={false}
-              animate={{ opacity: room.candle ? 1 : 0 }}
+              animate={{ opacity: labOpened ? 1 : 0 }}
               transition={{
+                // 蜡烛流程等演完再亮；点门直通则立即亮
                 delay: room.candle ? 1.2 : 0,
                 duration: 0.5,
               }}
@@ -1454,8 +1473,8 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
                 height: vh(layer.h),
               }}
               initial={false}
-              animate={{ opacity: room.candle ? 0 : 1 }}
-              transition={{ delay: room.candle ? 1.6 : 0, duration: 0.45 }}
+              animate={{ opacity: labOpened ? 0 : 1 }}
+              transition={{ delay: room.candle ? 1.6 : doorOpen ? 0.25 : 0, duration: 0.45 }}
             />
             <motion.img
               src="/assets/life/seg03/lab-door-open.webp"
@@ -1469,8 +1488,8 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
                 height: vh(LAB_OPEN.h),
               }}
               initial={false}
-              animate={{ opacity: room.candle ? 1 : 0 }}
-              transition={{ delay: room.candle ? 1.6 : 0, duration: 0.45 }}
+              animate={{ opacity: labOpened ? 1 : 0 }}
+              transition={{ delay: room.candle ? 1.6 : doorOpen ? 0.25 : 0, duration: 0.45 }}
             />
           </Fragment>
         ) : layer.hoverPendulum ? (
@@ -1635,11 +1654,41 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
         );
       })}
 
+      {/* LAB 门直通：任务没完成时点关着的门，也会亮灯牌开门进 LAB */}
+      {!room.candle && !doorOpen && interactive && (
+        <div
+          className="absolute"
+          style={{
+            left: vh(11654),
+            top: vh(319),
+            width: vh(704),
+            height: vh(1106),
+            zIndex: 10,
+          }}
+        >
+          <button
+            type="button"
+            onClick={enterLab}
+            onMouseEnter={() => setLabHover(true)}
+            onMouseLeave={() => setLabHover(false)}
+            aria-label={t("life.lab.door")}
+            className="block h-full w-full cursor-pointer"
+          >
+            <span
+              className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300"
+              style={{ opacity: labHover ? 1 : 0 }}
+            >
+              {t("life.lab.door")} →
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* LAB 入口：点蜡烛后门开着，点门进 LAB */}
       <AnimatePresence>
         {room.candle && (
           <motion.div
-            className="group absolute"
+            className="absolute"
             style={{
               left: vh(11654),
               top: vh(319),
@@ -1652,16 +1701,24 @@ export default function RoomStage({ room, night, interactive, onOpen, onChecklis
             exit={{ opacity: 0 }}
             transition={{ delay: 2.1, duration: 0.4 }}
           >
-            <Link
-              to="/lab"
-              onClick={() => playNavigate()}
+            <button
+              type="button"
+              onClick={(e) => {
+                setLabHover(false); // 推镜头时气泡别跟着放大
+                onEnterLab(e.currentTarget.getBoundingClientRect());
+              }}
+              onMouseEnter={() => setLabHover(true)}
+              onMouseLeave={() => setLabHover(false)}
               aria-label={t("life.lab.door")}
               className="block h-full w-full cursor-pointer"
             >
-              <span className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 opacity-0 shadow-md transition-opacity duration-300 group-hover:opacity-100">
+              <span
+                className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300"
+                style={{ opacity: labHover ? 1 : 0 }}
+              >
                 {t("life.lab.door")} →
               </span>
-            </Link>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

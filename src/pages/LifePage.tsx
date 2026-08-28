@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AnimatePresence,
   motion,
@@ -148,6 +148,34 @@ export default function LifePage() {
       y: window.innerHeight / 2 - cy,
       transition: { duration: 0.6, ease: [0.33, 1, 0.68, 1] },
     });
+  };
+
+  /** 走进 LAB 门：镜头推进门洞 + 暖光漫满 → 跳转 /lab（Lab 页从同色暖光淡出） */
+  const navigate = useNavigate();
+  const [labEntry, setLabEntry] = useState<{ cx: number; cy: number } | null>(null);
+  const labGoTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(labGoTimer.current), []);
+  const enterLab = (r: DOMRect) => {
+    if (focus || labEntry) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const wr = wrap.getBoundingClientRect();
+    // 推进目标是门后的黄色门洞：开门后洞口在门框热区的左缘
+    const cx = r.left + r.width * 0.1;
+    const cy = r.top + r.height * 0.5;
+    setZoomOrigin(`${cx - wr.left}px ${cy - wr.top}px`);
+    document.documentElement.style.overflow = "hidden";
+    setLabEntry({ cx, cy });
+    void zoomControls.start({
+      scale: 3,
+      x: window.innerWidth / 2 - cx,
+      y: window.innerHeight / 2 - cy,
+      transition: { duration: 1.15, ease: [0.55, 0, 0.68, 0.4] },
+    });
+    labGoTimer.current = window.setTimeout(() => {
+      playNavigate();
+      navigate("/lab");
+    }, 1300);
   };
 
   /** 退出专注态：镜头拉回；若刚完成一项，弹开清单盖章 */
@@ -303,9 +331,23 @@ export default function LifePage() {
               }
               paint={paint}
               onPaintEnd={finishPaint}
+              onEnterLab={enterLab}
             />
           </motion.div>
         </motion.div>
+
+        {/* 走进 LAB：门后的暖光从门洞漫满全屏，盖住切页瞬间 */}
+        {labEntry && (
+          <motion.div
+            className="pointer-events-none fixed inset-0 z-50"
+            style={{
+              background: `radial-gradient(circle at ${labEntry.cx}px ${labEntry.cy}px, #FFE9B8 0%, #FBE3AC 55%, #F2EDE3 100%)`,
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.55, duration: 0.65, ease: "easeIn" }}
+          />
+        )}
 
         {/* 夜色：四件小事集齐后整间屋子暗下来 */}
         <motion.div
