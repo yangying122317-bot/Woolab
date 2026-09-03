@@ -45,7 +45,7 @@ export default function IntroLoader() {
           <motion.img
             src="/assets/logo.svg"
             alt=""
-            className="h-24 w-24"
+            className="h-24 w-auto"
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1 }}

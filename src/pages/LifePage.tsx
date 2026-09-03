@@ -383,7 +383,7 @@ export default function LifePage() {
         {/* 轻顶栏：回首页 + 声音/语言 */}
         <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/assets/logo.svg" alt="logo" className="h-8 w-8" />
+            <img src="/assets/logo.svg" alt="logo" className="h-8 w-auto" />
             <span
               className={`font-hand text-lg ${
                 night ? "text-white" : "text-neutral-700"

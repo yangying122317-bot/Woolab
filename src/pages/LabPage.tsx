@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   animate,
   motion,
@@ -17,103 +17,23 @@ import { playNavigate } from "../audio/sfx";
 /**
  * 实验室 · 画展。
  *
- * 一条滚动、两个阶段、同一个 3D 场景：
- * 1. 横向：沿入口墙往右走（招牌 → 欢迎语 → 拱门）
- * 2. 纵深：拱门居中后往里走，一面面展墙迎面而来
- *
- * 新视觉元素先用灰块占位，Figma 素材到位后按坐标替换。
+ * 一条滚动、一个假透视走廊（纯 2D 多层缩放，所有东西共用一个消失点）：
+ * 1. 第一屏：一整面墙横在走廊入口左侧，珍珠小羊挂在墙上、两座小羊雕像
+ *    立在墙前；墙右缘是转角，转过去就是走廊
+ * 2. 往下滚：人先沿墙向右平移到走廊中轴、再往前走，一站站看展
  */
 
-const ENTRY = 1400;
-const GAP = 1500;
-const EXIT = 900;
-const WALL_X = 760;
-const FLOOR_Y = 340;
-const CEIL_Y = -420;
-const PERSPECTIVE = 1050;
-
+/** 走廊四站 */
 const N = labProjects.length;
-/** NO.01 挂在入口墙上，走廊里只放剩下的项目 */
-const N_WALLS = N - 1;
-const WALL_Z = ENTRY + (N_WALLS - 1) * GAP + EXIT;
-const CAM_END = WALL_Z - 620;
-const DEPTH = WALL_Z + 400;
 
-const WALL_W = WALL_X * 2; // 1520
-const WALL_H = FLOOR_Y - CEIL_Y; // 760
-/** 墙面向上延伸量：画面顶部不露出天花，与设计稿"满墙"一致 */
-const WALL_EXT = 320;
-const WALL_TOP_Y = -(WALL_H / 2 + WALL_EXT); // -700
-const WALL_RUST = "#B26128"; // 墙面锈棕（切图噪点的平均色）
-const SIDE_RUST = "#9C5322"; // 侧墙略深
-const FLOOR_CREAM = "#F0CA7E"; // 地板暖黄（与砖纹瓦片底色一致）
-const ghost =
-  "border-2 border-dashed border-neutral-400/80 bg-white/45 text-neutral-500";
+/** 滚动总长（px）：沿墙平移 + 进走廊 + 四站节拍 + 出口 */
+const SCROLL_LEN = 7000;
+/** 点画框翻转看详情：详情页视觉还没做，上线先关掉（hover 效果保留） */
+const DETAIL_ENABLED = false;
 
-/* 走廊墙切图（含拱门洞，洞已抠透明）：显示高 760，黑色墙脚线正好落在地板线上
-   注：Figma 导出按画板裁切，内容实际 720 设计宽（高 365.75），按高度等比得显示宽 1496 */
-const ARCH_IMG_W = 1496;
-const ARCH_IMG_H = 760;
-const ARCH_TOP = -40; // 切图顶部相对内层(0..760)的 y
-const ARCH_HOLE_CX = 1037; // 拱门洞中心在切图内的 x
-const SKIRT_Y = 714; // 墙脚黑线（内层坐标）
-const SKIRT_H = 5;
-
-/* 入口墙：宽于走廊，拱门洞对准走廊中线（世界 x=0） */
-const ENTRANCE_W = 5200;
-const ENTRANCE_Z = 180; // 入口墙离相机的初始距离
-const PAN = 1777; // 横向段：起点墙左端贴屏，终点拱门居中
-const SCROLL_LEN = PAN + CAM_END;
-const PAN_RATIO = PAN / SCROLL_LEN;
-
-const FRAME = { x: 251, y: 252, w: 226, h: 279 };
-const LAMP = { x: 231, y: 152, w: 266, h: 167 };
-const PLAQUE = { x: 324, y: 520, w: 147, h: 131 };
-
-/* 第一屏"假 3D"地板条：设计稿手绘斜砖，贴在入口墙同一平面上（非真 3D 地面）。
-   三段入口墙各铺一条，backgroundPosition 按段起点偏移保证砖纹连续 */
-const STRIP_W = 1806;
-const STRIP_H = 489;
-const STRIP_TOP = 1070; // 容器坐标：墙脚线正下方
-/* 入口墙相对设计稿整体下移量：墙脚线从容器 1034 落到设计稿位置 1067 */
-const WALL_SHIFT = 33;
-
-function FloorStrip({ offset, width }: { offset: number; width: number }) {
-  return (
-    <div
-      className="pointer-events-none absolute"
-      style={{
-        left: 0,
-        top: STRIP_TOP,
-        width,
-        height: STRIP_H,
-        background: "url(/assets/lab/gallery-floor-strip.webp) repeat-x",
-        backgroundSize: `${STRIP_W}px ${STRIP_H}px`,
-        backgroundPosition: `${-offset}px 0`,
-      }}
-    />
-  );
-}
-
-/* ---------------- 灰块：号码牌 / 壁灯 ---------------- */
-
-function GhostNumber({ n }: { n: number }) {
-  const label = `NO.${String(n).padStart(2, "0")}`;
-  return (
-    <div
-      className={`font-hand flex items-center justify-center ${ghost}`}
-      style={{
-        width: 88,
-        height: 64,
-        borderRadius: "50%",
-      }}
-    >
-      {label}
-    </div>
-  );
-}
-
-/** 壁灯：两态手绘切图交叉淡入淡出（灭灯/亮灯同画布对位） */
+/** 壁灯：灭灯态为蓝罩台灯（与第一屏同款），亮灯态为暖罩+光锥，
+    交叉淡入淡出。蓝灯按亮灯画布里灯具的位置对位（灯具同尺寸：
+    亮灯画布 616x347、灯具在 x218 起 178x209，蓝灯画布 179x210） */
 function WallLamp({
   hover,
   width,
@@ -123,14 +43,22 @@ function WallLamp({
   width: number;
   height: number;
 }) {
+  const k = width / 616;
   return (
     <div className="absolute" style={{ width, height }}>
       <img
-        src="/assets/lab/gallery-lamp-off.webp"
+        src="/assets/lab/gallery-lamp-entrance.webp"
         alt=""
         draggable={false}
-        className="absolute inset-0 h-full w-full select-none object-contain"
-        style={{ opacity: hover ? 0 : 1, transition: "opacity 0.35s ease" }}
+        className="absolute select-none"
+        style={{
+          left: 218 * k,
+          top: (height - 347 * k) / 2,
+          width: 179 * k,
+          height: 210 * k,
+          opacity: hover ? 0 : 1,
+          transition: "opacity 0.35s ease",
+        }}
       />
       <img
         src="/assets/lab/gallery-lamp-on.webp"
@@ -143,19 +71,24 @@ function WallLamp({
   );
 }
 
-/* ---------------- 入口墙（横向段） ---------------- */
+/* ---------------- 入口：一面墙 + 两座小羊雕像 ---------------- */
 
 /**
  * 珍珠小羊油画：复刻参考站邮票的 hover 手感——
  * 悬停缓动放大 1.02 并朝鼠标所在方向轻微 3D 倾斜（约 ±1.2°），移开弹回。
  * 开场动画播放期间隐藏（透明但可测量），避免与飞行中的大图重影。
+ * 坐标单位为墙面局部 px（外层已按深度缩放）。
  */
 function EntrancePainting({
   hidden,
+  rect,
   pe,
+  onHover,
 }: {
   hidden: boolean;
+  rect: { left: number; top: number; width: number; height: number };
   pe: MotionValue<"auto" | "none">;
+  onHover: (h: boolean) => void;
 }) {
   const spring = { stiffness: 160, damping: 19 };
   const rotateX = useSpring(0, spring);
@@ -170,10 +103,7 @@ function EntrancePainting({
       draggable={false}
       className="absolute max-w-none cursor-pointer select-none"
       style={{
-        left: 645,
-        top: 166,
-        width: 361,
-        height: 394,
+        ...rect,
         opacity: hidden ? 0 : 1,
         pointerEvents: pe,
         rotateX,
@@ -188,474 +118,1133 @@ function EntrancePainting({
         rotateX.set(-dy * 3.6);
         rotateY.set(dx * 3.6);
         scale.set(1.02);
+        onHover(true);
       }}
       onPointerLeave={() => {
         rotateX.set(0);
         rotateY.set(0);
         scale.set(1);
+        onHover(false);
       }}
     />
   );
 }
 
+/** 入口墙：一块世界物件，墙上挂画和壁灯一起随相机缩放/平移 */
 function EntranceWall({
-  camZ,
-  onOpen,
+  camDepth,
+  camX,
+  frame,
   paintingHidden,
 }: {
-  camZ: MotionValue<number>;
-  onOpen: (project: LabProject) => void;
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  frame: ShellFrame;
   paintingHidden: boolean;
 }) {
-  const opacity = useTransform(camZ, [40, 160], [1, 0]);
+  const u = frame.g;
+  const [lampOn, setLampOn] = useState(false);
+  const { x, scale, opacity } = usePieceMotion(
+    camDepth,
+    camX,
+    ENT_Z,
+    ENT_CX,
+    frame,
+    "cut",
+  );
+  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
+  /* 主墙脚线落在该深度的地脚线上；切图里转角条比主墙脚再往下伸一截 */
+  const top = useMotionTemplate`${useTransform(
+    scale,
+    (s) => frame.vpY + (CO_WALL_H + ENT_H * (1 - ENT_FOOT)) * u * s,
+  )}px`;
+  /* 墙过身后虽然透明，但已被放大到盖住整屏——必须连指针一起关掉，
+     否则会挡住后面展板的 hover/点击 */
   const pe = useTransform(opacity, (o) =>
-    o > 0.4 ? ("auto" as const) : ("none" as const),
+    o > 0 ? ("auto" as const) : ("none" as const),
   );
-  const [artHover, setArtHover] = useState(false);
-  const first = labProjects[0];
-  /* 拱门切图摆放：洞中心对准墙中心（走廊轴线 x=0） */
-  const archLeft = ENTRANCE_W / 2 - ARCH_HOLE_CX;
-  const archRight = archLeft + ARCH_IMG_W;
-  const archOuterTop = WALL_EXT + ARCH_TOP;
-
-  /* 入口墙拆成三块并排图层：整面 5200px 超出 Chrome 单层光栅上限，
-     滚动中整块墙会被随机丢弃；三段各自 ≤2150px，安全渲染 */
-  const seg = (x0: number, w: number) => ({
-    width: w,
-    height: WALL_H + WALL_EXT,
-    transform: `translate3d(${-ENTRANCE_W / 2 + x0}px, ${WALL_TOP_Y}px, ${-ENTRANCE_Z}px)`,
-  });
-
-  return (
-    <>
-      {/* 左段：转角 + 居中陈列的珍珠小羊油画（向左扩 120 容纳转角侧面） */}
-      <motion.div
-        className="pointer-events-none absolute left-1/2 top-1/2"
-        style={{ opacity, ...seg(-120, archLeft + 122) }}
-      >
-        <div className="absolute inset-0" style={{ background: WALL_RUST }} />
-        {/* 假 3D 地板条：先铺砖纹，墙切图后画，墙脚自带投影会压在砖上 */}
-        <FloorStrip offset={0} width={archLeft + 122} />
-        {/* 第一屏整面墙切图（含左转角侧面、双转角线、墙脚线、墙脚投影）：
-            按设计稿对位：回墙面几乎完整露出（屏幕上约 56px），
-            转角双线落在屏幕 x≈56–91；右缘溢出段边界的部分被拱门段盖住；
-            墙脚线落在容器 y≈1067（缩放 0.627） */}
-        <img
-          src="/assets/lab/gallery-wall-seg1.webp"
-          alt=""
-          draggable={false}
-          className="absolute max-w-none select-none"
-          style={{ left: 93, top: 124 + WALL_SHIFT, width: 1677, height: 978 }}
-        />
-      {/* 内层内容（0..760 坐标系，底边即墙脚）：
-          屏幕中心对应内层 x=823，油画/壁灯/陈列文字都以它为轴居中 */}
-      <div
-        className="absolute"
-        style={{ left: 120, top: WALL_EXT, width: archLeft + 2, height: WALL_H }}
-      >
-        {/* 壁灯（蓝罩，画上方居中，灯座支架朝下几乎贴着画框顶） */}
-        <img
-          src="/assets/lab/gallery-lamp-entrance.webp"
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute select-none"
-          style={{ left: 770, top: 11, width: 112, height: 132 }}
-        />
-        {/* 珍珠小羊油画（透明底原生投影）：开场动画的落位目标；
-            切图含右/下投影边距，框体位置尺寸按设计稿校准 */}
-        <EntrancePainting hidden={paintingHidden} pe={pe} />
-        {/* 陈列铭牌文字 */}
-        <span
-          className="font-title absolute text-center"
-          style={{
-            left: 523,
-            top: 573,
-            width: 600,
-            fontSize: 38,
-            letterSpacing: "0.06em",
-            color: "#823804",
-          }}
-        >
-          WOOLAB COLLECTION
-        </span>
-      </div>
-      </motion.div>
-
-      {/* 拱门段：拱门切图（洞是透明的）+ NO.01 集群 */}
-      <motion.div
-        className="pointer-events-none absolute left-1/2 top-1/2"
-        style={{ opacity, ...seg(archLeft, ARCH_IMG_W) }}
-      >
-        <div
-          className="absolute left-0 right-0 top-0"
-          style={{ height: archOuterTop + WALL_SHIFT + 1, background: WALL_RUST }}
-        />
-        {/* 假 3D 地板条：与左段砖纹连续 */}
-        <FloorStrip offset={archLeft + 120} width={ARCH_IMG_W} />
-        <img
-          src="/assets/lab/gallery-arch.webp"
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute select-none"
-          style={{
-            left: 0,
-            top: archOuterTop + WALL_SHIFT,
-            width: ARCH_IMG_W,
-            height: ARCH_IMG_H,
-          }}
-        />
-        {/* 内层内容（相对拱门段左缘，即全墙坐标 - archLeft），随墙整体下移 */}
-        <div
-          className="absolute left-0"
-          style={{ top: WALL_EXT + WALL_SHIFT, width: ARCH_IMG_W, height: WALL_H }}
-        >
-        {/* 中间花瓶（欢迎语和 NO.01 之间） */}
-        <img
-          src="/assets/lab/gallery-vase.webp"
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute select-none object-contain"
-          style={{ left: 1820 - archLeft, top: 479, width: 168, height: 247 }}
-        />
-
-        {/* NO.01 号码牌（挂在画框左上方） */}
-        <div className="absolute" style={{ left: 1910 - archLeft, top: 140 }}>
-          <GhostNumber n={1} />
-        </div>
-
-        {/* NO.01 作品集群：壁灯 + 金框 + 说明牌，可点开详情 */}
-        <motion.div
-          className="absolute"
-          style={{
-            pointerEvents: pe,
-            left: 2000 - archLeft,
-            top: 120,
-            width: FRAME.w + 60,
-            height: 520,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              playNavigate();
-              onOpen(first);
-            }}
-            onMouseEnter={() => setArtHover(true)}
-            onMouseLeave={() => setArtHover(false)}
-            aria-label={`${first.title.zh} / ${first.title.en}`}
-            className="absolute inset-0 block cursor-pointer"
-            style={{
-              transform: artHover ? "scale(1.025)" : "scale(1)",
-              transition: "transform 0.35s ease",
-            }}
-          >
-          <img
-            src="/assets/lab/gallery-frame-01.webp"
-            alt=""
-            draggable={false}
-            className="absolute select-none"
-            style={{
-              left: 40,
-              top: 112,
-              width: FRAME.w,
-              height: FRAME.h,
-              filter: artHover ? "brightness(1.08)" : "brightness(1)",
-              transition: "filter 0.35s ease",
-            }}
-          />
-          <div
-            className="absolute"
-            style={{ left: 20, top: 12, width: LAMP.w, height: LAMP.h }}
-          >
-            <WallLamp hover={artHover} width={LAMP.w} height={LAMP.h} />
-          </div>
-          <img
-            src="/assets/lab/gallery-plaque-01.webp"
-            alt=""
-            draggable={false}
-            className="absolute select-none"
-            style={{ left: 113, top: 380, width: PLAQUE.w, height: PLAQUE.h }}
-          />
-        </button>
-        </motion.div>
-      </div>
-      </motion.div>
-
-      {/* 右段：拱门右侧补墙 */}
-      <motion.div
-        className="pointer-events-none absolute left-1/2 top-1/2"
-        style={{ opacity, ...seg(archRight - 2, ENTRANCE_W - archRight + 2) }}
-      >
-        <div className="absolute inset-0" style={{ background: WALL_RUST }} />
-        {/* 假 3D 地板条：与拱门段砖纹连续 */}
-        <FloorStrip offset={archRight - 2 + 120} width={ENTRANCE_W - archRight + 2} />
-        <div
-          className="absolute left-0 right-0 bg-black"
-          style={{ top: WALL_EXT + WALL_SHIFT + SKIRT_Y, height: SKIRT_H }}
-        />
-      </motion.div>
-    </>
-  );
-}
-
-/* ---------------- 单面展墙 ---------------- */
-
-function GalleryWall({
-  camZ,
-  order,
-  project,
-  onOpen,
-}: {
-  camZ: MotionValue<number>;
-  /** 走廊里第几面墙（0 起），对应项目 labProjects[order + 1] */
-  order: number;
-  project: LabProject;
-  onOpen: (project: LabProject) => void;
-}) {
-  const z = ENTRY + order * GAP;
-  const opacity = useTransform(
-    camZ,
-    [z - 4200, z - 2000, z - 170, z - 70],
-    [0, 1, 1, 0],
-  );
-  const pe = useTransform(opacity, (o) =>
-    o > 0.5 ? ("auto" as const) : ("none" as const),
-  );
-  const [hover, setHover] = useState(false);
+  /* 局部坐标（世界 px）：画挂在相机起点正前方 → 局部 x = 起点相对墙左缘；
+     画心在视线上方 55 */
+  const floorL = ENT_H * ENT_FOOT; // 主墙脚线
+  const axisL = ENT_CAM_X0 - (ENT_CX - ENT_W / 2);
+  const paintL = axisL - ENT_PAINT_W / 2;
+  const paintT = floorL - CO_WALL_H - 55 - ENT_PAINT_H / 2;
+  /* 壁灯：WallLamp 画布 616 宽里灯具 179 宽，灯具要 44 世界px → 画布 152×86，
+     灯具顶正好在画布顶，灯具底离画框顶 8 */
+  const lampW = 152;
+  const lampH = (lampW * 347) / 616;
+  const lampFixH = (lampW / 616) * 210;
+  const lampL = axisL - lampW / 2;
+  const lampT = paintT - 8 - lampFixH;
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const px = (v: number) => v * u;
 
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 top-1/2"
+      className="pointer-events-none absolute"
       style={{
+        left: "50%",
+        top,
+        width: px(ENT_W),
+        height: px(ENT_H),
         opacity,
-        width: WALL_W,
-        height: WALL_H + WALL_EXT,
-        transform: `translate3d(-50%, ${WALL_TOP_Y}px, ${-z}px)`,
+        transform: tf,
+        transformOrigin: "50% 100%",
       }}
     >
-      {/* 顶部延伸补墙 */}
-      <div
-        className="pointer-events-none absolute left-0 right-0 top-0"
-        style={{ height: WALL_EXT + ARCH_TOP + 1, background: WALL_RUST }}
-      />
-      {/* 切图右侧补墙 + 墙脚黑线（切图洞中心对准走廊轴线后右端差一截） */}
-      <div
-        className="pointer-events-none absolute"
-        style={{
-          left: WALL_W / 2 - ARCH_HOLE_CX + ARCH_IMG_W - 2,
-          right: 0,
-          top: WALL_EXT + ARCH_TOP,
-          bottom: 0,
-          background: WALL_RUST,
-        }}
-      />
-      <div
-        className="pointer-events-none absolute bg-black"
-        style={{
-          left: WALL_W / 2 - ARCH_HOLE_CX + ARCH_IMG_W - 2,
-          right: 0,
-          top: WALL_EXT + SKIRT_Y,
-          height: SKIRT_H,
-        }}
-      />
       <img
-        src="/assets/lab/gallery-arch.webp"
+        src="/assets/lab/entrance-wall.webp"
         alt=""
         draggable={false}
-        className="pointer-events-none absolute select-none"
+        className="absolute inset-0 h-full w-full select-none"
+      />
+      {/* 壁灯：hover 油画时点亮 */}
+      <div
+        className="absolute"
+        style={{ left: px(lampL), top: px(lampT), width: px(lampW), height: px(lampH) }}
+      >
+        <WallLamp hover={lampOn} width={px(lampW)} height={px(lampH)} />
+      </div>
+      {/* 珍珠小羊油画：开场动画的落位目标（按 id 量取屏幕矩形） */}
+      <EntrancePainting
+        hidden={paintingHidden}
+        rect={{
+          left: px(paintL),
+          top: px(paintT),
+          width: px(ENT_PAINT_W),
+          height: px(ENT_PAINT_H),
+        }}
+        pe={pe}
+        onHover={setLampOn}
+      />
+      {/* 滚动提示：手绘小箭头（切图朝下，转 -90° 朝右，呼应先向右平移）+ ( Scroll )，
+          整组在画下方居中；箭头轻轻向右点 */}
+      <motion.img
+        src="/assets/lab/scroll-arrow.svg"
+        alt=""
+        draggable={false}
+        className="absolute select-none"
         style={{
-          left: WALL_W / 2 - ARCH_HOLE_CX,
-          top: WALL_EXT + ARCH_TOP,
-          width: ARCH_IMG_W,
-          height: ARCH_IMG_H,
+          left: px(axisL - 34 - 7),
+          top: px(paintT + ENT_PAINT_H + 29 - 9.25),
+          width: px(14),
+          height: px(18.5),
+          rotate: -90,
+        }}
+        animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
+        transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+      />
+      <span
+        className="font-scroll absolute whitespace-nowrap"
+        style={{
+          left: px(axisL - 19),
+          top: px(paintT + ENT_PAINT_H + 20),
+          fontSize: px(14),
+          color: "#7E4218",
+          WebkitTextStroke: `${px(1)}px #7E4218`,
+        }}
+      >
+        ( Scroll )
+      </span>
+    </motion.div>
+  );
+}
+
+/** 小羊雕像（side -1 左 / 1 右）：独立世界物件，站在墙前一步的地板上，
+    对称立在画的两侧；右边那座水平镜像，两座对称朝外 */
+function EntranceStatue({
+  camDepth,
+  camX,
+  side,
+  frame,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  side: 1 | -1;
+  frame: ShellFrame;
+}) {
+  const u = frame.g;
+  const { x, scale, opacity } = usePieceMotion(
+    camDepth,
+    camX,
+    STATUE_Z,
+    ENT_CAM_X0 + side * STATUE_DX,
+    frame,
+    "cut",
+  );
+  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
+  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: "50%",
+        top,
+        width: STATUE_W * u,
+        height: STATUE_H * u,
+        opacity,
+        transform: tf,
+        transformOrigin: "50% 100%",
+      }}
+    >
+      <img
+        src="/assets/lab/prop-statue.webp"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none"
+        style={{ transform: side === 1 ? "scaleX(-1)" : undefined }}
+      />
+    </motion.div>
+  );
+}
+
+/* ---------------- 假透视节拍走廊 ---------------- */
+
+/** 节拍：走-停-走。d 到达停留、de 离开停留（相机深度在这段持平） */
+type Beat = { d: number; de: number };
+const BEATS: Beat[] = [
+  { d: 0.24, de: 0.32 },
+  { d: 0.44, de: 0.52 },
+  { d: 0.64, de: 0.72 },
+  { d: 0.84, de: 0.91 },
+];
+
+/** 假透视：所有东西共用一个消失点。画面大小 = FOCAL / (物体深度 − 相机深度) */
+const FOCAL = 400;
+
+/* —— 走廊（第一视角）——
+   世界里什么都不动，只有相机沿走廊中轴往前走：眼前的柱子越来越大、
+   从画面两边滑出去，远处的尽头墙一点点变大，展板贴在两侧墙上被走过。
+   世界单位 = 设计稿 px（720×450 = 16:10），消失点在画面 55.5% 高度。 */
+const CO_VP_D = 249.9; // 消失点距画布顶（设计稿 px）
+const CO_WALL_X = 280; // 墙面到走廊轴的距离（地脚线/天花线所在）
+/** 尽头墙切图 293×151：四角正好落在天花线/地脚线上 → 两条线的斜率 = 75.35/145.25 */
+const CO_SLOPE = 75.35 / 145.25;
+const CO_END_W = 293.25;
+const CO_END_H = 151.5;
+/** 天花/地面在墙面处相对消失点的高度（同一深度处水平不变） */
+const CO_WALL_H = CO_WALL_X * CO_SLOPE;
+/** 角线描边粗细（设计稿 px）：画面边缘处 / 消失点处，中间线性收细 */
+const CO_LINE_T = 3;
+const CO_LINE_T_FAR = 0.9;
+
+/** 展板：贴墙立着、朝走廊里探出的隔断，左右交替 */
+const PANEL_W = 245; // 板宽（设计稿 px）
+/** 板子离墙立在走廊里，外侧和墙线留一条缝。
+    约束：内缘离中轴 ≥ 20，路过时（深度钳位 20）板才能整块滑出画面 */
+const PANEL_INSET = 15;
+/** 板中心离走廊轴的距离 */
+const PANEL_CX = CO_WALL_X - PANEL_W / 2 - PANEL_INSET;
+const STATION_SIDE: (1 | -1)[] = [-1, 1, -1, 1];
+/** 相机走到展板旁停下时，与展板的深度差（越小板越大）。340 → 板约占 40vw 宽、58vh 高，
+    板脚和脚边摆件都落在画面里；停得稍远，到站转头的幅度也小一点 */
+const DWELL_DIST = 340;
+const STATION_GAP = 380;
+/** 第一站放在进走廊之后 */
+const STATION_Z = STATION_SIDE.map((_, i) => 980 + i * STATION_GAP);
+/** 每站的停留相机深度 */
+const VIEW_Z = STATION_Z.map((z) => z - DWELL_DIST);
+/** 走完最后一站再往前一段，尽头墙迎面放大到填满画面中央 */
+const CAM_END = VIEW_Z[3] + STATION_GAP;
+const EXIT_Z = CAM_END + 230;
+
+/* —— 入口 ——
+   一整面墙（切图 3194×1730，带转角条）横在走廊入口左侧，右缘的转角接走廊左墙：
+   走廊的角线从这个深度往里画。相机起步时在墙前偏左，画正对镜头，
+   整屏都是墙（转角在画面右缘之外）；先沿墙向右平移到走廊中轴，再往前进走廊。 */
+const ENT_Z = 487; // 墙的深度：主墙脚落在画面 82% 高
+/** 墙宽：进场迈步起点（相机在 -60、墙缩到 0.73）时也要盖满整屏宽 */
+const ENT_W = 1200;
+const ENT_H = ENT_W / (3194 / 1730);
+/** 切图里主墙脚线在 93.5% 高，右侧转角条再往下伸到底 */
+const ENT_FOOT = 0.935;
+/** 墙块右缘（转角条外侧）接在走廊左墙线上 */
+const ENT_CX = -CO_WALL_X - ENT_W / 2;
+/** 相机起点横向（世界 px）：整个转角条（切图右侧 12.8%，≈154 世界 px）都在画面右缘外——
+    进场迈步起点时转角条内缘也至少在 377（半屏 360 之外） */
+const ENT_CAM_X0 = -CO_WALL_X - 650;
+const ENT_PAINT_W = 160; // 珍珠小羊（切图 557×610）
+const ENT_PAINT_H = ENT_PAINT_W * (610 / 557);
+/** 小羊雕像（切图 293×620）：两座对称立在画两侧、墙前一步的地板上 */
+const STATUE_Z = ENT_Z - 70;
+const STATUE_H = 150;
+const STATUE_W = STATUE_H * (293 / 620);
+const STATUE_DX = 175;
+
+/** 圆柱成对、每 190 一对，从入口一路排到尽头，与展板深度错开半格（95）：
+    每块展板前后各夹一对柱子，不会和板撞在同一深度 */
+const CO_COL_GAP = 190;
+const CO_COLUMN_Z = Array.from(
+  { length: 10 },
+  (_, i) => STATION_Z[0] - 95 - CO_COL_GAP + i * CO_COL_GAP, // 695 … 2405，最后一对贴着尽头墙拐角
+);
+/** 天窗：三盏等距铺满走廊（比展板稀，避免远处叠成一串） */
+const CO_OVAL_Z = [0, 1, 2].map((i) => STATION_Z[0] + 60 + i * 570);
+
+/** 走廊零散摆件：{深度, 侧, 素材, 世界高} —— 靠墙立着，和展板错开 */
+type PropSpec = { z: number; side: 1 | -1; kind: PropKind };
+type PropKind = "chair" | "plant" | "amphora" | "vase";
+const PROP_ASSET: Record<PropKind, { src: string; ratio: number; h: number }> = {
+  chair: { src: "prop-chair", ratio: 183 / 371, h: 118 },
+  plant: { src: "prop-plant", ratio: 178 / 330, h: 105 },
+  amphora: { src: "prop-amphora", ratio: 114 / 300, h: 88 },
+  vase: { src: "door-vase", ratio: 156 / 226, h: 70 },
+};
+/** 每站脚边轮放的摆件（贴板子靠墙那一角） */
+const STATION_PROP: PropKind[] = ["chair", "plant", "amphora", "vase"];
+const CO_PROPS: PropSpec[] = [
+  { z: STATION_Z[0] + 190, side: 1, kind: "amphora" },
+  { z: STATION_Z[1] + 190, side: -1, kind: "vase" },
+  { z: STATION_Z[2] + 190, side: 1, kind: "plant" },
+  { z: STATION_Z[3] + 190, side: -1, kind: "amphora" },
+];
+
+/** q → 相机横向：开头一段沿墙向右平移到走廊中轴，之后一直在中轴上 */
+const CAM_X_KEYS = [0, 0.15];
+const CAM_X_VALS = [ENT_CAM_X0, 0];
+/** q → 相机深度：平移快结束时起步往前走到第一站，随后平台对应停留、斜坡对应前进 */
+const CAM_Z_KEYS = [0, 0.12, 0.24, 0.32, 0.44, 0.52, 0.64, 0.72, 0.84, 0.91, 1];
+const CAM_Z_VALS = [
+  0,
+  0,
+  VIEW_Z[0],
+  VIEW_Z[0],
+  VIEW_Z[1],
+  VIEW_Z[1],
+  VIEW_Z[2],
+  VIEW_Z[2],
+  VIEW_Z[3],
+  VIEW_Z[3],
+  CAM_END,
+];
+
+/** 到站时"转头"看展板：整幅画面（连消失点）朝展板那侧平移——
+    小角度转头在透视上就等于整幅画面平移。转头量 = 停留时板中心离走廊轴的屏距，
+    转完展品正好停在页面水平正中。两站之间不"回正—直走—再转"，
+    而是从上一站离开到下一站到达，用一条贯穿全程的平滑曲线从一侧过渡到另一侧，
+    像人边走边自然转头，中途不停顿 */
+const TURN_D = PANEL_CX * (FOCAL / DWELL_DIST); // 设计稿 px
+const TURN_RAMP = 150;
+const smooth = (t: number) => {
+  const k = t < 0 ? 0 : t > 1 ? 1 : t;
+  return k * k * (3 - 2 * k);
+};
+/** 返回设计稿 px（调用方乘 frame.g） */
+function camTurnOf(cz: number) {
+  const turnAt = (i: number) => -STATION_SIDE[i] * TURN_D;
+  const last = VIEW_Z.length - 1;
+  /* 进走廊：到第一站前 TURN_RAMP 内转向第一块板 */
+  if (cz <= VIEW_Z[0]) return turnAt(0) * smooth((cz - (VIEW_Z[0] - TURN_RAMP)) / TURN_RAMP);
+  /* 出走廊：离开最后一站后在 TURN_RAMP 内回正，正对尽头墙 */
+  if (cz >= VIEW_Z[last]) return turnAt(last) * (1 - smooth((cz - VIEW_Z[last]) / TURN_RAMP));
+  for (let i = 0; i < last; i++) {
+    if (cz < VIEW_Z[i + 1]) {
+      const t = smooth((cz - VIEW_Z[i]) / (VIEW_Z[i + 1] - VIEW_Z[i]));
+      return turnAt(i) + (turnAt(i + 1) - turnAt(i)) * t;
+    }
+  }
+  return 0;
+}
+
+type ShellFrame = { g: number; vpX: number; vpY: number };
+/** 走廊画布坐标系：cover 铺满视口后 设计稿 px → 屏幕 px 的比例和消失点屏幕位置 */
+function shellFrame(vw: number, vh: number): ShellFrame {
+  const g = Math.max(vw / 720, vh / 450);
+  return { g, vpX: vw / 2, vpY: (vh - 450 * g) / 2 + CO_VP_D * g };
+}
+
+/** 相机贴脸时深度钳位：钳得越低，路过的东西能放得越大、越保证滑出画面 */
+function depthOf(z: number, camZ: number) {
+  return Math.max(z - camZ, 20);
+}
+function scaleOf(z: number, camZ: number) {
+  return FOCAL / depthOf(z, camZ);
+}
+
+/** 隔断板统一用一张高板（切图 1486×1354，板内坐标按 1/2 计）；
+    侧棱画在左边，右墙的站水平镜像。展品尺寸各站按素材等比 */
+const PANEL_PW = 743;
+const PANEL_PH = 677;
+/* 板内排版（按设计稿比例）：壁灯灯具顶贴板顶（1%），灯具高 16%，
+   画框顶在 21.5%、高 50%、水平居中；号码牌在画框下方居中（顶 75.5%） */
+const ART_TOP = Math.round(PANEL_PH * 0.215);
+const ART_H = Math.round(PANEL_PH * 0.5);
+const LAMP_FIX_H = Math.round(PANEL_PH * 0.16);
+const LAMP_TOP = Math.round(PANEL_PH * 0.01);
+const BADGE_TOP = Math.round(PANEL_PH * 0.755);
+type StationCfg = { art: string; ratio: number };
+const STATION_CFG: StationCfg[] = [
+  { art: "art-tee", ratio: 286 / 352 },
+  { art: "art-sticker", ratio: 555 / 666 },
+  { art: "art-drink", ratio: 661 / 694 },
+  { art: "art-candle", ratio: 615 / 725 },
+];
+
+/** 到站时顺带"低头"一点：板子立在地上、画框比视线略低，整幅画面往上抬，
+    让画框中心正好落在屏幕竖直正中。抬升量 = 消失点离屏中的距离 + 画框中心低于视线的屏距。
+    四站抬升量相同：进走廊时抬起来、走廊里保持、出走廊回正，路上不跳 */
+const PANEL_WORLD_H = PANEL_PH * (PANEL_W / PANEL_PW);
+const ART_CENTER_ABOVE_FLOOR = PANEL_WORLD_H * (1 - (ART_TOP + ART_H / 2) / PANEL_PH);
+const TILT_D =
+  CO_VP_D - 225 + (CO_WALL_H - ART_CENTER_ABOVE_FLOOR) * (FOCAL / DWELL_DIST); // 设计稿 px
+/** 返回设计稿 px（画面上抬为正，调用方乘 frame.g） */
+function camTiltOf(cz: number) {
+  const last = VIEW_Z.length - 1;
+  if (cz <= VIEW_Z[0]) return TILT_D * smooth((cz - (VIEW_Z[0] - TURN_RAMP)) / TURN_RAMP);
+  if (cz >= VIEW_Z[last]) return TILT_D * (1 - smooth((cz - VIEW_Z[last]) / TURN_RAMP));
+  return TILT_D;
+}
+
+/** 单站展位：世界坐标固定，画面姿态由「它和相机的深度差」统一换算 */
+function CorridorStation({
+  camDepth,
+  camX,
+  sizeK,
+  frame,
+  index,
+  project,
+  enabled,
+  artHidden,
+  onOpen,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  sizeK: number;
+  frame: ShellFrame;
+  index: number;
+  project: LabProject;
+  enabled: boolean;
+  /** 画框正被翻出去看详情：墙上的原画隐藏，避免和翻转层重影 */
+  artHidden: boolean;
+  onOpen: (project: LabProject, rect: DOMRect) => void;
+}) {
+  const cfg = STATION_CFG[index];
+  const pw = PANEL_PW;
+  const ph = PANEL_PH;
+  const z = STATION_Z[index];
+  const side = STATION_SIDE[index];
+  const flip = side === 1;
+  const [hover, setHover] = useState(false);
+  const scale = useTransform(camDepth, (cz) => scaleOf(z, cz) * sizeK);
+  /* 板子离墙一条缝立在走廊里（中心在 PANEL_CX）；随相机靠近沿自己那侧滑出画面 */
+  const worldXd = side * PANEL_CX;
+  const x = useTransform([camDepth, camX], (v: number[]) => {
+    const [cz, cx] = v;
+    return (worldXd - cx) * frame.g * scaleOf(z, cz);
+  });
+  /* 板脚落在该深度的地脚线上 */
+  const feetY = useTransform(
+    camDepth,
+    (cz) => frame.vpY + CO_WALL_H * frame.g * scaleOf(z, cz),
+  );
+  /* 不做淡出：相机走到板子跟前之前（深度 ≈22）它的内缘就已经滑出画面。
+     深度触到钳位后直接隐藏——否则冻结在屏幕外的巨大板体，
+     会在下一站转头时被整幅平移带回画面边缘 */
+  const visible = useTransform(camDepth, (cz) => (z - cz > 21 ? 1 : 0));
+  const transform = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
+  const top = useMotionTemplate`${feetY}px`;
+  /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微 3D 倾斜 */
+  const tiltSpring = { stiffness: 160, damping: 19 };
+  const artRX = useSpring(0, tiltSpring);
+  const artRY = useSpring(0, tiltSpring);
+  const artScale = useSpring(1, { stiffness: 180, damping: 20 });
+
+  /* 板内排版：画框水平居中、顶在 21.5%；壁灯灯具顶贴板顶、灯具高 16%；
+     号码牌在画框下方居中 */
+  const ah = ART_H;
+  const aw = Math.round(ah * cfg.ratio);
+  const artLeft = (pw - aw) / 2;
+  const artTop = ART_TOP;
+  /* WallLamp 画布 616×347，灯具 179×210 在画布里；按灯具高 LAMP_FIX_H 反推画布尺寸，
+     灯具顶恰在画布顶 */
+  const lampW = Math.round((LAMP_FIX_H / 210) * 616);
+  const lampH = Math.round((lampW * 347) / 616);
+  const lampTop = LAMP_TOP;
+  /* 脚边摆件（每站轮放）：立在板子靠墙那一角的地上，比板脚略低（在板前面） */
+  const prop = PROP_ASSET[STATION_PROP[index % STATION_PROP.length]];
+  const propH = Math.round(prop.h * (PANEL_PW / PANEL_W)); // 世界 px → 板内 px
+  const propW = Math.round(propH * prop.ratio);
+  const propInset = Math.round(pw * 0.1);
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: "50%",
+        top,
+        width: pw,
+        height: ph,
+        opacity: visible,
+        transform,
+        transformOrigin: "50% 100%",
+      }}
+    >
+      {/* 隔断板 */}
+      <img
+        src="/assets/lab/panel-tall.webp"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none"
+        style={{ transform: flip ? "scaleX(-1)" : undefined }}
+      />
+      {/* 号码牌：画框下方居中 */}
+      <img
+        src={`/assets/lab/badge-0${index + 1}.webp`}
+        alt=""
+        draggable={false}
+        className="absolute select-none"
+        style={{
+          top: BADGE_TOP,
+          left: (pw - 112) / 2,
+          width: 112,
+          height: 73,
         }}
       />
-
-      {/* 内层内容（0..760 坐标系） */}
-      <div
-        className="absolute left-0"
-        style={{ top: WALL_EXT, width: WALL_W, height: WALL_H }}
+      {/* 可点击的作品集群：壁灯 + 带框展品（hover 亮灯 + 缓动放大 + 3D 倾斜） */}
+      <button
+        type="button"
+        onClick={(ev) => {
+          if (!DETAIL_ENABLED) return;
+          const img = ev.currentTarget.querySelector<HTMLElement>("[data-art]");
+          if (!img) return;
+          /* 量画框在屏幕上的矩形；hover 放大 1.02 的那点要扣掉，翻回来落位才严丝合缝 */
+          const r = img.getBoundingClientRect();
+          const k = artScale.get();
+          const w = r.width / k;
+          const h = r.height / k;
+          const rect = new DOMRect(r.left + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h);
+          playNavigate();
+          onOpen(project, rect);
+        }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onPointerMove={(ev) => {
+          const r = ev.currentTarget.getBoundingClientRect();
+          const dx = (ev.clientX - r.left) / r.width - 0.5;
+          const dy = (ev.clientY - r.top) / r.height - 0.5;
+          artRX.set(-dy * 3.6);
+          artRY.set(dx * 3.6);
+          artScale.set(1.02);
+        }}
+        onPointerLeave={() => {
+          artRX.set(0);
+          artRY.set(0);
+          artScale.set(1);
+        }}
+        aria-label={`${project.title.zh} / ${project.title.en}`}
+        className={`absolute block ${DETAIL_ENABLED ? "cursor-pointer" : "cursor-default"}`}
+        style={{
+          left: artLeft - 16,
+          top: lampTop,
+          width: aw + 32,
+          height: artTop + ah - lampTop + 16,
+          pointerEvents: enabled ? "auto" : "none",
+        }}
       >
-        {/* 画框下方的花瓶 */}
-        <img
-          src="/assets/lab/gallery-vase.webp"
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute select-none object-contain"
-          style={{ left: 80, top: 479, width: 168, height: 247 }}
-        />
-
-        <motion.div
+        <div
           className="absolute"
           style={{
-            pointerEvents: pe,
-            left: LAMP.x - 20,
-            top: LAMP.y - 12,
-            width: FRAME.w + 60,
-            height: PLAQUE.y + PLAQUE.h - LAMP.y + 24,
+            left: (aw + 32 - lampW) / 2,
+            top: 0,
+            width: lampW,
+            height: lampH,
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              playNavigate();
-              onOpen(project);
-            }}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            aria-label={`${project.title.zh} / ${project.title.en}`}
-            className="absolute inset-0 block cursor-pointer"
-            style={{
-              transform: hover ? "scale(1.025)" : "scale(1)",
-              transition: "transform 0.35s ease",
-            }}
-          >
-            <img
-              src="/assets/lab/gallery-frame-01.webp"
-              alt=""
-              draggable={false}
-              className="absolute select-none"
-              style={{
-                left: FRAME.x - LAMP.x + 20,
-                top: FRAME.y - LAMP.y + 12,
-                width: FRAME.w,
-                height: FRAME.h,
-                filter: hover ? "brightness(1.08)" : "brightness(1)",
-                transition: "filter 0.35s ease",
-              }}
-            />
-            <div
-              className="absolute"
-              style={{ left: 20, top: 12, width: LAMP.w, height: LAMP.h }}
-            >
-              <WallLamp hover={hover} width={LAMP.w} height={LAMP.h} />
-            </div>
-            <img
-              src="/assets/lab/gallery-plaque-01.webp"
-              alt=""
-              draggable={false}
-              className="absolute select-none"
-              style={{
-                left: PLAQUE.x - LAMP.x + 20,
-                top: PLAQUE.y - LAMP.y + 12,
-                width: PLAQUE.w,
-                height: PLAQUE.h,
-              }}
-            />
-          </button>
-        </motion.div>
-
-        {/* NO.0X 号码牌（挂在画框左上方，同设计稿） */}
-        <div className="absolute" style={{ left: 120, top: 150 }}>
-          <GhostNumber n={order + 2} />
+          <WallLamp hover={hover} width={lampW} height={lampH} />
         </div>
+        <motion.img
+          data-art=""
+          src={`/assets/lab/${cfg.art}.webp`}
+          alt=""
+          draggable={false}
+          className="absolute select-none"
+          style={{
+            left: 16,
+            top: artTop - lampTop,
+            width: aw,
+            height: ah,
+            rotateX: artRX,
+            rotateY: artRY,
+            scale: artScale,
+            transformPerspective: 900,
+            opacity: artHidden ? 0 : 1,
+            filter: hover ? "brightness(1.08)" : "brightness(1)",
+            transition: "filter 0.35s ease",
+          }}
+        />
+      </button>
+      {/* 脚边摆件：靠墙那一角，压住板子下沿 */}
+      <img
+        src={`/assets/lab/${prop.src}.webp`}
+        alt=""
+        draggable={false}
+        className="absolute select-none"
+        style={{
+          top: ph + Math.round(ph * 0.02) - propH,
+          width: propW,
+          height: propH,
+          ...(flip ? { right: propInset } : { left: propInset }),
+          transform: flip ? "scaleX(-1)" : undefined,
+        }}
+      />
+    </motion.div>
+  );
+}
+
+/* —— 走廊建筑件（手绘切图）——
+   同一形体导出了两档描边（近看细边 / 远看粗边）：按显示大小选一张，
+   只在切换窗口里一张淡出一张淡入（透明度之和恒为 1）。窗口之外任何时刻
+   屏上只有一张图——两张图边缘即便差一两像素也不会叠出重影。 */
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** 两档切换：显示高度 h 在 [lo, hi] 之间时线性过渡，返回近看档（细边）的透明度 */
+function nearMix(h: number, lo: number, hi: number) {
+  return clamp01((h - lo) / (hi - lo));
+}
+
+/** 建筑件通用姿态：世界坐标（设计稿 px）→ 屏幕 px。
+    屏幕 x = (物体 x − 相机横向) × 缩放。
+    fade：近处渐隐（柱子/摆件，防止贴脸消失的跳变）；
+    cut：不淡出，靠自身滑出画面，深度触到钳位才隐藏（入口墙，
+         它的右缘在钳位前早就滑出画面） */
+function usePieceMotion(
+  camDepth: MotionValue<number>,
+  camX: MotionValue<number>,
+  z: number,
+  worldXd: number,
+  frame: ShellFrame,
+  mode: "fade" | "cut" = "fade",
+) {
+  const x = useTransform([camDepth, camX], (v: number[]) => {
+    const [cz, cx] = v;
+    return (worldXd - cx) * frame.g * scaleOf(z, cz);
+  });
+  const scale = useTransform(camDepth, (cz) => scaleOf(z, cz));
+  const opacity = useTransform(camDepth, (cz) => {
+    const d = z - cz;
+    if (mode === "cut") return d > 21 ? 1 : 0;
+    if (d <= 44) return 0;
+    if (d < 110) return (d - 44) / 66;
+    return 1;
+  });
+  return { x, scale, opacity };
+}
+
+/** 走廊里的零散摆件：靠墙立在地上（离墙线一条缝，和展板一样） */
+function CorridorProp({
+  camDepth,
+  camX,
+  spec,
+  frame,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  spec: PropSpec;
+  frame: ShellFrame;
+}) {
+  const u = frame.g;
+  const a = PROP_ASSET[spec.kind];
+  const H = a.h;
+  const W = H * a.ratio;
+  const { x, scale, opacity } = usePieceMotion(
+    camDepth,
+    camX,
+    spec.z,
+    spec.side * (CO_WALL_X - PANEL_INSET - W / 2),
+    frame,
+  );
+  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
+  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: "50%",
+        top,
+        width: W * u,
+        height: H * u,
+        opacity,
+        transform: tf,
+        transformOrigin: "50% 100%",
+      }}
+    >
+      <img
+        src={`/assets/lab/${a.src}.webp`}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none"
+        style={{ transform: spec.side === 1 ? "scaleX(-1)" : undefined }}
+      />
+    </motion.div>
+  );
+}
+
+/** 单根圆柱（side: -1 左墙 / 1 右墙），立在墙前的地板上
+    （圆柱左右对称，两侧共用同一张图） */
+function CorridorColumn({
+  camDepth,
+  camX,
+  z,
+  side,
+  frame,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  z: number;
+  side: 1 | -1;
+  frame: ShellFrame;
+}) {
+  const u = frame.g; // 设计稿 px → 屏幕 px
+  /* 世界尺寸（设计稿 px）：高 340，宽按切图比例 322/1793（切图无留白，底边即柱础底） */
+  const H = 340;
+  const W = H * (322 / 1793);
+  /* 独立立柱：站在墙前一个柱宽处的地板上，地脚线整条从柱身后面穿过、
+     不碰柱础，柱础清楚地立在地上。柱高 340 > 走廊墙高 290，柱头探到天花线上方 */
+  const { x, scale, opacity } = usePieceMotion(
+    camDepth,
+    camX,
+    z,
+    side * (CO_WALL_X - W),
+    frame,
+  );
+  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
+  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: "50%",
+        top,
+        width: W * u,
+        height: H * u,
+        opacity,
+        transform: tf,
+        transformOrigin: "50% 100%",
+      }}
+    >
+      <img
+        src="/assets/lab/gallery-c-col.webp"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none"
+      />
+    </motion.div>
+  );
+}
+
+/** 顶灯：悬在走廊中轴上方，锚点 = 灯体中心。大小两档描边交叉 */
+function CorridorOval({
+  camDepth,
+  camX,
+  z,
+  frame,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  z: number;
+  frame: ShellFrame;
+}) {
+  const u = frame.g;
+  const W = 181.5; // 大档原始尺寸（设计稿 px）
+  const H = 56.75;
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, z, 0, frame);
+  const tf = useMotionTemplate`translate(-50%, -50%) translateX(${x}px) scale(${scale})`;
+  /* 灯体贴在该深度的天花上 */
+  const cy = useTransform(scale, (s) => frame.vpY - CO_WALL_H * u * s);
+  const top = useMotionTemplate`${cy}px`;
+  /* 两档描边折算到显示高度 h：大档 ≈0.053h、小档 ≈0.077h；
+     同深度处角线粗细 ≈ 0.9 + 1.62·s（设计px）。两档与角线偏差相等的点在 s≈0.45、
+     h≈25.5——之前用大档、之后用小档，窄窗口内过渡，让天窗描边始终贴着角线粗细 */
+  const oBig = useTransform(scale, (s) => nearMix(H * s, 22, 29));
+  const oSmall = useTransform(oBig, (o) => 1 - o);
+  const imgCls = "absolute inset-0 h-full w-full select-none";
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: "50%",
+        top,
+        width: W * u,
+        height: H * u,
+        opacity,
+        transform: tf,
+        transformOrigin: "50% 50%",
+      }}
+    >
+      <motion.img
+        src="/assets/lab/gallery-c-oval-small.webp"
+        alt=""
+        draggable={false}
+        className={imgCls}
+        style={{ opacity: oSmall }}
+      />
+      <motion.img
+        src="/assets/lab/gallery-c-oval-big.webp"
+        alt=""
+        draggable={false}
+        className={imgCls}
+        style={{ opacity: oBig }}
+      />
+    </motion.div>
+  );
+}
+
+/** 走廊四条角线：天花线 ×2 + 地脚线 ×2，都是过消失点的直线——
+    相机沿中轴前进时它们在画面上纹丝不动。相机横向偏离中轴时，
+    每条线的方向 = atan2(±墙高, ±墙距 − 相机横向)，任何横位都成立。
+    走廊从入口墙的深度才开始：比它更近的那段线不画（线的近端夹在该深度的投影半径处），
+    相机走过入口后整条画满。用手绘黑线切图从消失点向四角拉出 */
+function CorridorLines({
+  frame,
+  camDepth,
+  camX,
+  vw,
+  vh,
+}: {
+  frame: ShellFrame;
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  vw: number;
+  vh: number;
+}) {
+  /* 角线要有远近：近处（画面边缘）粗、越靠近消失点越细，和柱子描边随距离变细一致。
+     线条图按最粗画，再用楔形 clip 从消失点端收细 */
+  const t = CO_LINE_T * frame.g; // 画面边缘处的粗细
+  const tMin = CO_LINE_T_FAR * frame.g; // 消失点处的粗细
+  const len = vw + vh; // 够长：转头平移后仍伸出屏幕
+  /* 从消失点到线离开画面左右边缘的距离：楔形在这里到达全粗 */
+  const lFull = t + frame.vpX / Math.cos(Math.atan(CO_SLOPE));
+  const halfGap = (t - tMin) / 2;
+  const edgeAt = (x: number) => Math.max(0, halfGap * (1 - x / lFull));
+  const useLine = (side: 1 | -1, vert: 1 | -1) => {
+    const rot = useTransform(camX, (cx) => {
+      const deg =
+        (Math.atan2(vert * CO_WALL_H, side * CO_WALL_X - cx) * 180) / Math.PI;
+      return `rotate(${deg}deg)`;
+    });
+    const clip = useTransform([camX, camDepth], (v: number[]) => {
+      const [cx, cz] = v;
+      const d = ENT_Z - cz;
+      let xEnd = len;
+      if (d > 1) {
+        const r = Math.hypot(side * CO_WALL_X - cx, CO_WALL_H) * (FOCAL / d) * frame.g;
+        xEnd = Math.min(len, t + r);
+      }
+      const xm = Math.min(xEnd, lFull);
+      const e1 = edgeAt(xm);
+      const e2 = edgeAt(xEnd);
+      return `polygon(0 ${halfGap}px, ${xm}px ${e1}px, ${xEnd}px ${e2}px, ${xEnd}px ${t - e2}px, ${xm}px ${t - e1}px, 0 ${t - halfGap}px)`;
+    });
+    return { rot, clip };
+  };
+  const lines = [
+    useLine(-1, -1), // 左上（天花线）
+    useLine(1, -1), // 右上
+    useLine(-1, 1), // 左下（地脚线）
+    useLine(1, 1), // 右下
+  ];
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {lines.map(({ rot, clip }, i) => (
+        <motion.img
+          key={i}
+          src="/assets/lab/gallery-c-line.webp"
+          alt=""
+          draggable={false}
+          className="absolute select-none"
+          style={{
+            left: frame.vpX - t,
+            top: frame.vpY - t / 2,
+            width: len,
+            height: t,
+            clipPath: clip,
+            transformOrigin: `${t}px 50%`,
+            transform: rot,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 走廊尽头墙：世界物件，随相机靠近从远处的小矩形一路长大；
+    四角始终落在角线上。出口文案贴在墙上一起缩放 */
+function CorridorEndWall({
+  camDepth,
+  camX,
+  frame,
+}: {
+  camDepth: MotionValue<number>;
+  camX: MotionValue<number>;
+  frame: ShellFrame;
+}) {
+  const { t } = useLanguage();
+  const g = frame.g;
+  const scale = useTransform(camDepth, (cz) => scaleOf(EXIT_Z, cz));
+  /* 尽头墙画的是走廊断面（四角在角线上）。相机横向偏离时角线会变斜率，
+     让墙随之横移 (1 − 半墙高/墙高)·cx，四角仍恰好落在角线上 */
+  const x = useTransform([scale, camX], (v: number[]) => {
+    const [s, cx] = v;
+    return -(CO_END_H / 2 / CO_WALL_H) * cx * g * s;
+  });
+  const tf = useMotionTemplate`translate(-50%, -50%) translateX(${x}px) scale(${scale})`;
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: frame.vpX,
+        top: frame.vpY,
+        width: CO_END_W * g,
+        height: CO_END_H * g,
+        transform: tf,
+        transformOrigin: "50% 50%",
+      }}
+    >
+      <img
+        src="/assets/lab/gallery-c-endwall.webp"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none"
+      />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+        <span
+          className="font-hand"
+          style={{ fontSize: 24 * g, color: "rgba(122,74,18,0.55)" }}
+        >
+          {t("lab.gallery.exit")}
+        </span>
+        <span style={{ fontSize: 13 * g, color: "rgba(122,74,18,0.38)" }}>
+          {t("lab.gallery.wip")}
+        </span>
       </div>
     </motion.div>
   );
 }
 
-/* ---------------- 页内详情浮层 ---------------- */
+/**
+ * 假透视走廊（纯 2D）：所有东西（入口墙、小羊雕像、圆柱、天窗、展板、摆件、
+ * 尽头墙）都是世界物件，按"它和相机的深度差"统一缩放、按相机横向统一平移；
+ * 从远到近排序渲染，近的盖住远的。
+ */
+function FakeCorridor({
+  q,
+  introZ,
+  active,
+  paintingHidden,
+  openId,
+  onOpen,
+}: {
+  q: MotionValue<number>;
+  introZ: MotionValue<number>;
+  active: number;
+  paintingHidden: boolean;
+  openId: string | null;
+  onOpen: (project: LabProject, rect: DOMRect) => void;
+}) {
+  const [vp, setVp] = useState(() => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () =>
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const { w: vw, h: vh } = vp;
+  /* 所有物件按走廊画布坐标系落位：任何长宽比下都贴着同一套角线 */
+  const frame = shellFrame(vw, vh);
+  /* 板内坐标 PANEL_PW 宽 → 世界里的 PANEL_W（设计稿 px） */
+  const sizeK = (PANEL_W * frame.g) / PANEL_PW;
 
-function DetailOverlay({
+  /* 相机深度 = 滚动节拍深度（过阻尼弹簧：滚轮只推目标值，相机带惯性地追——
+     推一下滑一段、稳稳停在节拍点）+ 进场时的一小段迈步（introZ 从负值回到 0） */
+  const qDepth = useTransform(q, CAM_Z_KEYS, CAM_Z_VALS);
+  const qDepthSoft = useSpring(qDepth, { stiffness: 60, damping: 20, mass: 0.9 });
+  const camDepth = useTransform(
+    [qDepthSoft, introZ],
+    (v: number[]) => v[0] + v[1],
+  );
+  /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
+  const qX = useTransform(q, CAM_X_KEYS, CAM_X_VALS);
+  const camX = useSpring(qX, { stiffness: 60, damping: 20, mass: 0.9 });
+
+  /* 到站转头：整幅走廊（角线、尽头墙、柱、灯、展板一起）平移 */
+  const turnX = useTransform(camDepth, (cz) => camTurnOf(cz) * frame.g);
+  /* 到站低头：整幅走廊上抬，画框落到竖直正中 */
+  const turnY = useTransform(camDepth, (cz) => -camTiltOf(cz) * frame.g);
+
+  /* 所有世界物件按深度从远到近排序渲染：近的永远盖住远的，遮挡关系交给一个列表管 */
+  const pieces: { z: number; key: string; el: ReactNode }[] = [
+    {
+      z: EXIT_Z,
+      key: "exit",
+      el: <CorridorEndWall camDepth={camDepth} camX={camX} frame={frame} />,
+    },
+    ...CO_OVAL_Z.map((z) => ({
+      z,
+      key: `oval-${z}`,
+      el: <CorridorOval camDepth={camDepth} camX={camX} z={z} frame={frame} />,
+    })),
+    ...CO_COLUMN_Z.flatMap((z) =>
+      ([-1, 1] as const).map((side) => ({
+        z,
+        key: `col-${z}-${side}`,
+        el: (
+          <CorridorColumn
+            camDepth={camDepth}
+            camX={camX}
+            z={z}
+            side={side}
+            frame={frame}
+          />
+        ),
+      })),
+    ),
+    ...CO_PROPS.map((spec) => ({
+      z: spec.z,
+      key: `prop-${spec.z}-${spec.side}`,
+      el: <CorridorProp camDepth={camDepth} camX={camX} spec={spec} frame={frame} />,
+    })),
+    ...labProjects.map((p, i) => ({
+      z: STATION_Z[i],
+      key: p.id,
+      el: (
+        <CorridorStation
+          camDepth={camDepth}
+          camX={camX}
+          sizeK={sizeK}
+          frame={frame}
+          index={i}
+          project={p}
+          enabled={active === i + 1}
+          artHidden={openId === p.id}
+          onOpen={onOpen}
+        />
+      ),
+    })),
+    {
+      z: ENT_Z,
+      key: "entrance",
+      el: (
+        <EntranceWall
+          camDepth={camDepth}
+          camX={camX}
+          frame={frame}
+          paintingHidden={paintingHidden}
+        />
+      ),
+    },
+    ...([-1, 1] as const).map((side) => ({
+      z: STATUE_Z,
+      key: `statue-${side}`,
+      el: (
+        <EntranceStatue camDepth={camDepth} camX={camX} side={side} frame={frame} />
+      ),
+    })),
+  ].sort((a, b) => b.z - a.z);
+
+  return (
+    <div className="absolute inset-0">
+      {/* 走廊底色：奶油黄铺满全屏（四边超采 16px，呼吸浮动时不露底），
+          取空壳边缘色，超宽/超窄窗口裁出画布时无缝续色 */}
+      <div className="absolute" style={{ inset: -16, background: "#FEF0C1" }} />
+      {/* 走廊整体（角线 + 所有世界物件）挂在一个转头平移层上 */}
+      <motion.div className="absolute inset-0" style={{ x: turnX, y: turnY }}>
+        <CorridorLines frame={frame} camDepth={camDepth} camX={camX} vw={vw} vh={vh} />
+        <div className="absolute inset-0">
+          {pieces.map(({ key, el }) => (
+            <div key={key} className="pointer-events-none absolute inset-0">
+              {el}
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ---------------- 详情：画框原地翻转 → 窗口撑满 ---------------- */
+
+/**
+ * 详情页（全屏、占位排版，视觉后补）：奶油底，顶部返回，
+ * 标题 / 简介 / 设计过程 / 实物 / 下载 往下排；可滚动。
+ * 它按整个视口尺寸铺好，翻转层只是在它前面开一扇"窗"。
+ */
+function DetailPage({
   project,
+  index,
   onClose,
 }: {
   project: LabProject;
+  index: number;
   onClose: () => void;
 }) {
   const { t, pick } = useLanguage();
-
-  const cardRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    cardRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.documentElement.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
+  const cfg = STATION_CFG[index];
   return (
-    <div className="flex h-full items-center justify-center p-4 sm:p-8">
-      <button
-        type="button"
-        aria-label={t("close")}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }}
-        className="absolute inset-0 bg-[#2A1C12]/45 backdrop-blur-[2px]"
-      />
-      <motion.article
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="lab-detail-title"
-        tabIndex={-1}
-        ref={cardRef}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
-        }}
-        className="relative z-10 max-h-[86vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-[#F7F1E6] px-6 py-8 shadow-2xl outline-none sm:px-10"
-        initial={{ opacity: 0, scale: 0.92, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.33, 1, 0.68, 1] }}
-      >
-        <button
-          type="button"
-          data-lab-detail-close=""
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose();
-          }}
-          className="absolute right-4 top-4 text-sm text-neutral-400 transition hover:text-neutral-700"
-        >
-          {t("close")}
-        </button>
-        <h1
-          id="lab-detail-title"
-          className="font-hand pr-12 text-3xl text-neutral-800"
-        >
-          {pick(project.title)}
-        </h1>
-        <p className="mt-2 text-neutral-500">{pick(project.description)}</p>
+    <div
+      className="h-full w-full overflow-y-auto"
+      style={{ background: "#FEF0C1", color: "#4A2C14" }}
+    >
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-8 pb-24 pt-8 sm:px-12">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            data-lab-detail-close=""
+            onClick={onClose}
+            className="font-hand text-lg text-[#7E4218] transition hover:opacity-70"
+          >
+            {t("lab.detail.back")}
+          </button>
+          <img
+            src={`/assets/lab/badge-0${index + 1}.webp`}
+            alt=""
+            draggable={false}
+            className="h-10 select-none"
+          />
+        </div>
+
+        {/* 头部：左文右画（占位） */}
+        <div className="mt-14 grid items-center gap-10 sm:grid-cols-[1.2fr_1fr]">
+          <div>
+            <h1 id="lab-detail-title" className="font-hand text-5xl leading-tight sm:text-6xl">
+              {pick(project.title)}
+            </h1>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-[#7E4218]/80">
+              {pick(project.description)}
+            </p>
+            <p className="mt-8 inline-block rounded-full border border-dashed border-[#7E4218]/40 px-4 py-1 text-xs text-[#7E4218]/60">
+              {t("lab.detail.wip")}
+            </p>
+          </div>
+          <img
+            src={`/assets/lab/${cfg.art}.webp`}
+            alt=""
+            draggable={false}
+            className="mx-auto w-56 select-none sm:w-64"
+          />
+        </div>
 
         {project.process && (
-          <section className="mt-10">
-            <h2 className="font-hand text-xl text-neutral-800">
-              {t("lab.process")}
-            </h2>
-            <ol className="mt-5 space-y-6">
+          <section className="mt-20">
+            <h2 className="font-hand text-2xl">{t("lab.process")}</h2>
+            <ol className="mt-6 grid gap-6 sm:grid-cols-2">
               {project.process.map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="font-hand mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-500">
-                    {i + 1}
+                <li
+                  key={i}
+                  className="rounded-2xl border border-[#7E4218]/15 bg-[#FFF6DC] p-5"
+                >
+                  <span className="font-hand text-sm text-[#7E4218]/60">
+                    {String(i + 1).padStart(2, "0")}
                   </span>
-                  <div>
-                    <h3 className="font-hand text-lg text-neutral-700">
-                      {pick(step.title)}
-                    </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-neutral-500">
-                      {pick(step.text)}
-                    </p>
-                  </div>
+                  <h3 className="font-hand mt-1 text-lg">{pick(step.title)}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#7E4218]/80">
+                    {pick(step.text)}
+                  </p>
                 </li>
               ))}
             </ol>
@@ -663,39 +1252,159 @@ function DetailOverlay({
         )}
 
         {project.product && (
-          <section className="mt-10">
-            <h2 className="font-hand text-xl text-neutral-800">
-              {t("lab.product")}
-            </h2>
-            <div className="mt-4 flex h-48 items-center justify-center rounded-xl bg-neutral-200/70">
+          <section className="mt-20">
+            <h2 className="font-hand text-2xl">{t("lab.product")}</h2>
+            <div className="mt-6 flex h-64 items-center justify-center rounded-2xl border border-dashed border-[#7E4218]/25 bg-[#FFF6DC]">
               <img
                 src={project.product.image}
                 alt=""
-                className="h-28 w-28 object-contain opacity-60"
+                className="h-32 w-32 object-contain opacity-60"
               />
             </div>
-            <p className="mt-2 text-center text-sm text-neutral-500">
+            <p className="mt-3 text-center text-sm text-[#7E4218]/70">
               {pick(project.product.caption)}
             </p>
           </section>
         )}
 
         {project.download && (
-          <section className="mt-10">
-            <h2 className="font-hand text-xl text-neutral-800">
-              {t("lab.download")}
-            </h2>
-            <div className="mt-4 rounded-xl border-2 border-dashed border-neutral-300 p-5 text-center">
-              <p className="font-hand text-lg text-neutral-700">
-                {pick(project.download.label)}
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-neutral-200 px-5 py-1.5 text-sm text-neutral-400">
+          <section className="mt-20">
+            <h2 className="font-hand text-2xl">{t("lab.download")}</h2>
+            <div className="mt-6 rounded-2xl border-2 border-dashed border-[#7E4218]/25 p-8 text-center">
+              <p className="font-hand text-xl">{pick(project.download.label)}</p>
+              <span className="mt-4 inline-block rounded-full bg-[#7E4218]/10 px-5 py-1.5 text-sm text-[#7E4218]/60">
                 {t("lab.download.cta")}
               </span>
             </div>
           </section>
         )}
-      </motion.article>
+      </div>
+    </div>
+  );
+}
+
+/** 翻转节拍（秒）：原地翻面 → 停一下 → 窗口撑满；关闭时倒放 */
+const FLIP_T = 0.6;
+const FLIP_HOLD = 0.15;
+const EXPAND_T = 0.35;
+const FLIP_EASE = [0.65, 0, 0.35, 1] as const;
+
+/**
+ * 点击画框看详情：画框就在原位绕竖轴翻 180°，翻过去的背面是一扇"窗"——
+ * 详情页按全屏尺寸铺在后面，窗口只露出正好被画框盖住的那一块；
+ * 停一下，窗口从画框矩形撑到整屏。关闭：窗口缩回画框、再翻回正面。
+ */
+function FlipDetail({
+  project,
+  index,
+  rect,
+  onClosed,
+}: {
+  project: LabProject;
+  index: number;
+  rect: DOMRect;
+  onClosed: () => void;
+}) {
+  const cfg = STATION_CFG[index];
+  const [phase, setPhase] = useState<"flip" | "expand" | "open" | "collapse" | "unflip">(
+    "flip",
+  );
+  const [vp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const timers = useRef<number[]>([]);
+  const at = (ms: number, fn: () => void) => {
+    timers.current.push(window.setTimeout(fn, ms));
+  };
+
+  useEffect(() => {
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    at((FLIP_T + FLIP_HOLD) * 1000, () => setPhase("expand"));
+    at((FLIP_T + FLIP_HOLD + EXPAND_T) * 1000, () => setPhase("open"));
+    return () => {
+      document.documentElement.style.overflow = prev;
+      timers.current.forEach(window.clearTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const close = () => {
+    if (phase !== "open") return;
+    setPhase("collapse");
+    at(EXPAND_T * 1000 + 60, () => setPhase("unflip"));
+    at(EXPAND_T * 1000 + 60 + FLIP_T * 1000, onClosed);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  /* 窗口：用 clip-path inset 从画框矩形撑到整屏（页面本身不动） */
+  const insetRect = `inset(${rect.top}px ${vp.w - rect.right}px ${vp.h - rect.bottom}px ${rect.left}px)`;
+  const insetFull = "inset(0px 0px 0px 0px)";
+  const windowOpen = phase === "expand" || phase === "open";
+  const showCard = phase === "flip" || phase === "unflip";
+  const flipped = phase !== "unflip";
+
+  return (
+    <div className="fixed inset-0 z-50" style={{ perspective: 1400 }}>
+      {/* 详情页 + 窗口遮罩：翻面阶段先藏着（那时它只从卡片背面露出来） */}
+      {!showCard && (
+        <motion.div
+          className="absolute inset-0"
+          initial={{ clipPath: insetRect }}
+          animate={{ clipPath: windowOpen ? insetFull : insetRect }}
+          transition={{ duration: EXPAND_T, ease: windowOpen ? "easeOut" : "easeIn" }}
+          style={{ pointerEvents: phase === "open" ? "auto" : "none" }}
+        >
+          <DetailPage project={project} index={index} onClose={close} />
+        </motion.div>
+      )}
+
+      {/* 翻转中的画框：正面是画、背面是一扇开在详情页上的窗 */}
+      {showCard && (
+        <motion.div
+          className="absolute"
+          style={{
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+            transformStyle: "preserve-3d",
+          }}
+          initial={{ rotateY: flipped ? 0 : 180 }}
+          animate={{ rotateY: flipped ? 180 : 0 }}
+          transition={{ duration: FLIP_T, ease: FLIP_EASE }}
+        >
+          <img
+            src={`/assets/lab/${cfg.art}.webp`}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full select-none"
+            style={{ backfaceVisibility: "hidden" }}
+          />
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+              boxShadow: "0 18px 40px rgba(60,30,0,0.25)",
+            }}
+          >
+            {/* 窗内：详情页按全屏尺寸铺、按画框位置反向偏移，露出正好在画框后面的那块 */}
+            <div
+              className="pointer-events-none absolute"
+              style={{ left: -rect.left, top: -rect.top, width: vp.w, height: vp.h }}
+            >
+              <DetailPage project={project} index={index} onClose={close} />
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -920,48 +1629,45 @@ function LabIntro({ onDone }: { onDone: () => void }) {
 /* ---------------- 页面 ---------------- */
 
 export default function LabPage() {
-  const { t } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
 
-  const camX = useTransform(scrollYProgress, [0, PAN_RATIO, 1], [PAN, 0, 0]);
-  const camZ = useTransform(
-    scrollYProgress,
-    [0, PAN_RATIO, 0.94, 1],
-    [0, 0, CAM_END, CAM_END],
-  );
-
-  const intro = useMotionValue(-160);
+  /* 进场迈步：相机从稍后一点走到起点（0.9s），叠在滚动深度上 */
+  const introZ = useMotionValue(-60);
   useEffect(() => {
     window.scrollTo(0, 0);
-    const controls = animate(intro, 0, { duration: 0.9, ease: "easeOut" });
+    const controls = animate(introZ, 0, { duration: 0.9, ease: "easeOut" });
     return () => controls.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const camAllZ = useTransform([camZ, intro], (v: number[]) => v[0] + v[1]);
-  const worldTransform = useMotionTemplate`translate3d(${camX}px, 0px, ${camAllZ}px)`;
-  /* 地板纹理贴片：抵消世界平移，让贴片固定在相机前方的地面上 */
-  const negCamX = useTransform(camX, (v) => -v);
-  const floorPatchZ = useTransform(camAllZ, (v) => 401 - v);
-  const floorPatchTransform = useMotionTemplate`translate3d(calc(-50% + ${negCamX}px), ${FLOOR_Y - 1}px, ${floorPatchZ}px) rotateX(-90deg)`;
 
-  /** 横向段隐藏走廊侧墙，避免侧墙在画面中间形成"围挡"；推进时再淡入 */
-  const sideWallOpacity = useTransform(
-    scrollYProgress,
-    [PAN_RATIO - 0.015, PAN_RATIO + 0.05],
-    [0, 1],
+  /* 镜头微呼吸 + 鼠标视差：沿墙平移时完全静止，起步进走廊的路上渐入，走廊里全量 */
+  const bobY = useMotionValue(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const controls = animate(bobY, [0, -7, 0], {
+      duration: 6.5,
+      ease: "easeInOut",
+      repeat: Infinity,
+    });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const parallaxX = useSpring(0, { stiffness: 40, damping: 15 });
+  const headGain = useTransform(scrollYProgress, [0.12, 0.22], [0, 1]);
+  const headY = useTransform([bobY, headGain], (v: number[]) => v[0] * v[1]);
+  const headX = useTransform(
+    [parallaxX, headGain],
+    (v: number[]) => v[0] * v[1],
   );
-  /** 横向段用入口墙上的"假 3D"地板条（与设计稿一致），真 3D 地面藏起；
-      穿过拱门推进时两者交叉淡化 */
-  const floorOpacity = useTransform(camZ, [10, 140], [0, 1]);
 
   const [active, setActive] = useState(0);
   const [introPlaying, setIntroPlaying] = useState(true);
-  const [open, setOpen] = useState<LabProject | null>(null);
+  const [open, setOpen] = useState<{ project: LabProject; rect: DOMRect } | null>(null);
   const blockOpen = useRef(false);
-  const openProject = (project: LabProject) => {
-    if (blockOpen.current) return;
-    setOpen(project);
+  const openProject = (project: LabProject, rect: DOMRect) => {
+    if (blockOpen.current || open) return;
+    setOpen({ project, rect });
   };
   const closeProject = () => {
     blockOpen.current = true;
@@ -972,142 +1678,43 @@ export default function LabPage() {
   };
 
   useMotionValueEvent(scrollYProgress, "change", (p) => {
-    if (p < PAN_RATIO) {
-      setActive(0);
-      return;
-    }
-    const z = ((p - PAN_RATIO) / (1 - PAN_RATIO)) * CAM_END;
-    const i = Math.min(
-      N_WALLS - 1,
-      Math.max(0, Math.round((z - ENTRY + 500) / GAP)),
-    );
-    setActive(i + 1);
+    /* 按"停留位附近"判定当前站 */
+    let idx = 0;
+    BEATS.forEach((b, i) => {
+      if (p >= b.d - 0.05) idx = i + 1;
+    });
+    setActive(idx);
   });
 
   return (
     <div
       ref={scrollRef}
       className="relative"
-      data-lab-open={open ? open.id : ""}
+      data-lab-open={open ? open.project.id : ""}
       style={{ height: `calc(${SCROLL_LEN}px + 100vh)` }}
     >
       <div
         className="sticky top-0 h-screen overflow-hidden"
-        style={{
-          perspective: `${PERSPECTIVE}px`,
-          perspectiveOrigin: "50% 46%",
-          background: FLOOR_CREAM,
+        style={{ background: "#FEF0C1" }}
+        onPointerMove={(e) => {
+          parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
         }}
+        onPointerLeave={() => parallaxX.set(0)}
       >
-        <motion.div
-          className="absolute inset-0"
-          style={{
-            transformStyle: "preserve-3d",
-            transform: worldTransform,
-          }}
-        >
-          <motion.div
-            className="absolute left-1/2 top-1/2"
-            style={{
-              opacity: sideWallOpacity,
-              width: DEPTH,
-              height: FLOOR_Y - WALL_TOP_Y,
-              transform: `translate3d(${-WALL_X}px, ${WALL_TOP_Y}px, 400px) rotateY(90deg)`,
-              transformOrigin: "left center",
-              background: SIDE_RUST,
-            }}
-          />
-          <motion.div
-            className="absolute left-1/2 top-1/2"
-            style={{
-              opacity: sideWallOpacity,
-              width: DEPTH,
-              height: FLOOR_Y - WALL_TOP_Y,
-              transform: `translate3d(${WALL_X}px, ${WALL_TOP_Y}px, 400px) rotateY(90deg)`,
-              transformOrigin: "left center",
-              background: SIDE_RUST,
-            }}
-          />
-          {/* 真 3D 地面从入口墙之后才开始：横向段地面由墙上的"假 3D"砖纹条呈现，
-              门洞里则透出这块真地面的透视 */}
-          <div
-            className="absolute left-1/2 top-1/2"
-            style={{
-              width: Math.max(WALL_W, ENTRANCE_W),
-              height: DEPTH + 14,
-              transform: `translate3d(-50%, ${FLOOR_Y}px, ${-ENTRANCE_Z - 6}px) rotateX(-90deg)`,
-              transformOrigin: "center top",
-              background: FLOOR_CREAM,
-            }}
-          />
-          <div
-            className="absolute left-1/2 top-1/2"
-            style={{
-              width: Math.max(WALL_W, ENTRANCE_W),
-              height: DEPTH + 600,
-              transform: `translate3d(-50%, ${WALL_TOP_Y}px, 400px) rotateX(-90deg)`,
-              transformOrigin: "center top",
-              background: "#F4EDDE",
-            }}
-          />
-
-          <div
-            className="absolute left-1/2 top-1/2 flex flex-col items-center justify-center"
-            style={{
-              width: WALL_W,
-              height: FLOOR_Y - WALL_TOP_Y + 40,
-              transform: `translate3d(-50%, ${WALL_TOP_Y}px, ${-WALL_Z}px)`,
-              background: "#CBC9C2",
-            }}
-          >
-            <div className="flex h-64 w-44 items-center justify-center rounded-t-full border-2 border-dashed border-neutral-400/70 bg-white/40">
-              <span className="font-hand text-xl text-neutral-500">
-                {t("lab.gallery.exit")}
-              </span>
-            </div>
-            <p className="mt-4 text-xs text-neutral-400">
-              {t("lab.gallery.wip")}
-            </p>
-          </div>
-
-          {labProjects.slice(1).map((p, i) => (
-            <GalleryWall
-              key={p.id}
-              camZ={camZ}
-              order={i}
-              project={p}
-              onOpen={openProject}
-            />
-          ))}
-          {/* 相机附近的地板纹理贴片：大地板保持纯色（纯色层无光栅成本），
-              纹理只铺近处并向四周渐隐——整条走廊铺纹理会撑爆 GPU 瓦片内存导致墙面丢块。
-              在世界容器内用相机量反向补偿，使贴片始终跟随相机并被墙体正确遮挡；
-              噪点无方向特征，纹理不随行走滚动也无法察觉 */}
-          <motion.div
-            className="pointer-events-none absolute left-1/2 top-1/2"
-            style={{
-              opacity: floorOpacity,
-              width: 2600,
-              height: 2600,
-              transform: floorPatchTransform,
-              transformOrigin: "center top",
-              background: "url(/assets/lab/gallery-floor.webp) repeat",
-              maskImage:
-                "radial-gradient(ellipse 70% 75% at 50% 12%, black 55%, transparent 96%)",
-              WebkitMaskImage:
-                "radial-gradient(ellipse 70% 75% at 50% 12%, black 55%, transparent 96%)",
-            }}
-          />
-          {/* 入口墙后画：横向段盖住走廊，门洞才透出后面的展墙 */}
-          <EntranceWall
-            camZ={camZ}
-            onOpen={openProject}
+        {/* 假透视走廊（含入口墙）；外层套呼吸/视差偏移 */}
+        <motion.div className="absolute inset-0" style={{ x: headX, y: headY }}>
+          <FakeCorridor
+            q={scrollYProgress}
+            introZ={introZ}
+            active={active}
             paintingHidden={introPlaying}
+            openId={open ? open.project.id : null}
+            onOpen={openProject}
           />
         </motion.div>
 
         <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-          {Array.from({ length: N_WALLS + 1 }).map((_, i) => (
+          {Array.from({ length: N + 1 }).map((_, i) => (
             <span
               key={i}
               className={`h-2.5 w-2.5 rounded-full border border-white/50 transition ${
@@ -1121,9 +1728,13 @@ export default function LabPage() {
       {introPlaying && <LabIntro onDone={() => setIntroPlaying(false)} />}
 
       {open && (
-        <div className="fixed inset-0 z-50">
-          <DetailOverlay project={open} onClose={closeProject} />
-        </div>
+        <FlipDetail
+          key={open.project.id}
+          project={open.project}
+          index={labProjects.findIndex((p) => p.id === open.project.id)}
+          rect={open.rect}
+          onClosed={closeProject}
+        />
       )}
     </div>
   );

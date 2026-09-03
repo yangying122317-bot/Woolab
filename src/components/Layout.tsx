@@ -18,7 +18,7 @@ export default function Layout() {
     <div className="relative min-h-full bg-[#F4F4F4] text-neutral-800">
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between px-4 py-3 sm:px-6">
         <Link to="/" className="pointer-events-auto flex items-center gap-2">
-          <img src="/assets/logo.svg" alt="logo" className="h-8 w-8" />
+          <img src="/assets/logo.svg" alt="logo" className="h-8 w-auto" />
           <span className="font-hand hidden text-lg text-neutral-700 sm:inline">
             {t("siteName")}
           </span>
