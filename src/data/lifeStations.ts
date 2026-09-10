@@ -11,6 +11,8 @@ export interface LifeStation {
   id: StationId;
   /** 站点名（漫游态的标签） */
   name: Localized;
+  /** 「今晚的小事」清单上写的那一行 */
+  task: Localized;
   /** 小羊口吻的邀请语（专注态里未完成时显示） */
   hint: Localized;
   /** 完成后解锁的项目简介（占位文案） */
@@ -38,6 +40,7 @@ export const lifeStations: LifeStation[] = [
   {
     id: "tee",
     name: { zh: "衣服堆", en: "The clothes pile" },
+    task: { zh: "挂起来，穿上白 T 恤。", en: "Hang it up. Put on the white tee." },
     hint: { zh: "衣服堆里好像埋着什么……", en: "Something's buried in the pile…" },
     intro: {
       zh: "占位：这件 T 恤的印花、面料和它的来历。",
@@ -50,6 +53,7 @@ export const lifeStations: LifeStation[] = [
   {
     id: "photo",
     name: { zh: "墙上的相片", en: "The photo on the wall" },
+    task: { zh: "帮 Meelo 画完那张海报。", en: "Help Meelo finish the poster." },
     hint: { zh: "相片缺了几块。", en: "The photo is missing a few pieces." },
     intro: {
       zh: "占位：贴纸产品和这张旧相片的故事。",
@@ -62,6 +66,7 @@ export const lifeStations: LifeStation[] = [
   {
     id: "drink",
     name: { zh: "小桌与饮料", en: "The little table" },
+    task: { zh: "调一杯一口咩。", en: "Make a One Sip" },
     hint: { zh: "给它调一杯今晚的饮料？", en: "Mix it a drink for tonight?" },
     intro: {
       zh: "占位：三种饮料和「一口咩」小酒杯的介绍。",
@@ -74,6 +79,7 @@ export const lifeStations: LifeStation[] = [
   {
     id: "candle",
     name: { zh: "床头的蜡烛", en: "The bedside candle" },
+    task: { zh: "点亮蜡烛。", en: "Light the candle" },
     hint: {
       zh: "借白蜡烛的火，点亮小羊蜡烛。",
       en: "Borrow the white candle's flame to light the sheep candle.",

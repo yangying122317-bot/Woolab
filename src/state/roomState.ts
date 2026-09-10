@@ -49,13 +49,18 @@ export function isStationDone(state: RoomState, id: StationId): boolean {
   return state[id];
 }
 
-export function doneCount(state: RoomState): number {
-  return (["tee", "photo", "drink", "candle"] as StationId[]).filter((id) =>
-    isStationDone(state, id),
-  ).length;
+/**
+ * 清单上那一行算不算划掉：第一行写的是"挂起来、穿上白T"，
+ * 所以衣服挂完还不算，要等小羊真的换上（dressed）；其余三行和站点状态一致。
+ */
+export function isListDone(state: RoomState, id: StationId): boolean {
+  if (id === "tee") return state.tee && state.dressed;
+  return isStationDone(state, id);
 }
 
-/** 四件小事全部完成 → 房间入夜 */
-export function isNight(state: RoomState): boolean {
-  return doneCount(state) === 4;
+/** 清单四行全划掉 → 和 Meelo 成了朋友（清单底下浮出那段话 + 去 Lab 的入口） */
+export function isAllDone(state: RoomState): boolean {
+  return (["tee", "photo", "drink", "candle"] as StationId[]).every((id) =>
+    isListDone(state, id),
+  );
 }

@@ -1,0 +1,62 @@
+import { useEffect, useSyncExternalStore } from "react";
+
+/**
+ * 页面外壳的一点全局状态：Lab 详情页此刻是不是盖在画廊上。
+ * 详情是 LabPage 里的一层 fixed 覆盖（不走路由），顶栏在路由外面看不到它，
+ * 所以由详情页挂载时来这里报个到，顶栏据此换成"压在详情上"的样子（去掉 logo，让位给返回按钮）。
+ */
+let detailOpen = false;
+const subs = new Set<() => void>();
+const emit = () => subs.forEach((fn) => fn());
+
+const subscribe = (fn: () => void) => {
+  subs.add(fn);
+  return () => subs.delete(fn);
+};
+
+export function useDetailOpen(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => detailOpen,
+    () => false,
+  );
+}
+
+/** 详情页挂着的这段时间登记为"打开" */
+export function useReportDetailOpen() {
+  useEffect(() => {
+    detailOpen = true;
+    emit();
+    return () => {
+      detailOpen = false;
+      emit();
+    };
+  }, []);
+}
+
+/**
+ * 另一件事：左上角 logo 要不要脱离 difference 混合、直接画纯白。
+ * Life 页的清单抽屉是牛皮色，白字 difference 上去会变成蓝的，抽屉开着时登记一下。
+ */
+let plainLogo = false;
+
+export function usePlainLogo(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => plainLogo,
+    () => false,
+  );
+}
+
+/** active 为真的这段时间，logo 画成纯白 */
+export function useReportPlainLogo(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    plainLogo = true;
+    emit();
+    return () => {
+      plainLogo = false;
+      emit();
+    };
+  }, [active]);
+}

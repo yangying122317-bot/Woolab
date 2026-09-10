@@ -11,11 +11,13 @@ import {
 } from "../audio/sfx";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  AnimatePresence,
   motion,
   useAnimationControls,
   useReducedMotion,
   type TargetAndTransition,
 } from "framer-motion";
+import { useTimeOfDay, type TimePhase } from "../timeOfDay";
 import { heroHotspots } from "../data/heroHotspots";
 import { config } from "../config";
 import {
@@ -31,8 +33,70 @@ const FRAME_W = 1440;
 const FRAME_H = 900;
 const HERO_RATIO = FRAME_W / FRAME_H;
 
-/** Figma 画板的天空渐变背景 */
-const SKY_GRADIENT = "linear-gradient(to bottom, #0E8DD9, #BFEFFD 117%)";
+/**
+ * 四个时段的"零素材"换景：只换天空渐变、整体盖一层 multiply 调色、
+ * 该亮的灯默认亮起来、夜里加星星月亮。白天 = 原设计稿。
+ */
+const TIME_THEMES: Record<
+  TimePhase,
+  {
+    /** 天空渐变（原稿是 #0E8DD9 → #BFEFFD 117%） */
+    sky: string;
+    /** 调色层颜色 + 透明度（multiply 叠在整个场景上） */
+    tint: string;
+    tintAlpha: number;
+    /** 吊灯和门玻璃默认亮着 */
+    lights: boolean;
+    /** 星星 + 月亮 */
+    stars: boolean;
+  }
+> = {
+  dawn: {
+    sky: "linear-gradient(to bottom, #7C8EC9 0%, #F4C6A2 68%, #FFE6BE 117%)",
+    tint: "#F3B58F",
+    tintAlpha: 0.16,
+    lights: false,
+    stars: false,
+  },
+  day: {
+    sky: "linear-gradient(to bottom, #0E8DD9, #BFEFFD 117%)",
+    tint: "#000000",
+    tintAlpha: 0,
+    lights: false,
+    stars: false,
+  },
+  dusk: {
+    sky: "linear-gradient(to bottom, #45489A 0%, #C77A8C 52%, #F8B46C 117%)",
+    tint: "#E48A5E",
+    tintAlpha: 0.28,
+    lights: true,
+    stars: false,
+  },
+  night: {
+    sky: "linear-gradient(to bottom, #0A1030 0%, #1B2A5E 68%, #34508A 117%)",
+    tint: "#3A4B8E",
+    tintAlpha: 0.58,
+    lights: true,
+    stars: true,
+  },
+};
+/** 换景的过渡时长（秒）：天空交叉淡化、调色层、灯光都用它 */
+const TIME_FADE = 1.6;
+
+/** 夜空里的星星：固定的伪随机布点（只落在画面上半部，避开建筑） */
+const STARS = Array.from({ length: 46 }, (_, i) => {
+  const r = (n: number) => {
+    const x = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  return {
+    left: r(1) * 100,
+    top: 2 + r(2) * 40,
+    size: 1.5 + r(3) * 2,
+    dur: 2.2 + r(4) * 3,
+    delay: r(5) * 4,
+  };
+});
 
 const px = (x: number) => `${(x / FRAME_W) * 100}%`;
 const py = (y: number) => `${(y / FRAME_H) * 100}%`;
@@ -235,11 +299,12 @@ const LEAF_IMGS = [
 ] as const;
 
 export default function HeroScene() {
-  // 白天场景的自然环境背景音，离开首页时淡出
+  // 场景环境背景音（白天/夜晚两条），离开首页时淡出
+  const { phase } = useTimeOfDay();
   useEffect(() => {
-    startAmbient("day");
-    return () => stopAmbient();
-  }, []);
+    startAmbient(phase === "night" ? "night" : "day");
+  }, [phase]);
+  useEffect(() => () => stopAmbient(), []);
 
   return (
     <>
@@ -262,6 +327,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
   const [hovered, setHovered] = useState<string | null>(null);
+  const { phase } = useTimeOfDay();
+  const theme = TIME_THEMES[phase];
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
   // 首次进入主页（本次会话内）才播出场动画，之后进来直接呈现完整场景
   const [intro] = useState(
@@ -343,6 +412,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       while (alive) {
         await sleep(rand(4000, 12000));
         if (!alive) break;
+        // 夜里小鸟不出来
+        if (phaseRef.current === "night") continue;
 
         // 起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"
         const cruiseTop = rand(9, 19);
@@ -552,8 +623,23 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         // 只裁天空，保证地面和场景物件完整
         cover ? "flex h-full items-end justify-center" : ""
       }`}
-      style={{ background: SKY_GRADIENT }}
+      style={{ background: theme.sky }}
     >
+      {/* 天空：按时段换渐变，新旧两层交叉淡化（渐变本身没法过渡） */}
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={phase}
+          className="pointer-events-none absolute inset-0"
+          style={{ background: theme.sky }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: TIME_FADE, ease: "easeInOut" }}
+        >
+          {theme.stars && <NightSky reducedMotion={!!reducedMotion} />}
+        </motion.div>
+      </AnimatePresence>
+
       {/* 场景本体：按视口高度完整显示（上下不裁）；
           屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
           比画板窄时左右对称裁切。进门时整体向门洞推近 */}
@@ -789,6 +875,24 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         {/* 随风飘过的叶子 */}
         <WindLeaves />
 
+        {/* 时段调色层：multiply 压暗/染色整个场景，线稿保持黑；进门时褪掉。
+            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，不然接缝处一深一浅两条竖带 */}
+        <motion.div
+          className="pointer-events-none absolute inset-y-0"
+          style={{ left: "-60%", right: "-60%", background: theme.tint, mixBlendMode: "multiply" }}
+          initial={false}
+          animate={{ opacity: entering ? 0 : theme.tintAlpha }}
+          transition={{ duration: entering ? 0.5 : TIME_FADE, ease: "easeInOut" }}
+        />
+
+        {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
+            首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
+        <NightLights
+          on={theme.lights && !entering}
+          delay={intro && !introGo ? 0 : intro ? INTRO_AT.openSign + 0.6 : 0}
+          signControls={signControls}
+        />
+
         {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
         {heroHotspots.map((h) => (
           <div
@@ -854,6 +958,95 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         />
       )}
     </div>
+  );
+}
+
+/** 夜空：星星轻轻闪（纯 CSS，不用素材） */
+function NightSky({ reducedMotion }: { reducedMotion: boolean }) {
+  return (
+    <>
+      {STARS.map((st, i) => (
+        <motion.span
+          key={i}
+          className="absolute rounded-full bg-[#FFF6D6]"
+          style={{
+            left: `${st.left}%`,
+            top: `${st.top}%`,
+            width: st.size,
+            height: st.size,
+          }}
+          animate={reducedMotion ? undefined : { opacity: [0.35, 1, 0.35] }}
+          transition={{
+            duration: st.dur,
+            delay: st.delay,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * 天黑后默认亮着的灯：门玻璃暖光 + OPEN 吊牌副本（挂在玻璃前面，
+ * 跟原吊牌共用同一套摆动控制）+ WOOLAB 开灯帧。
+ * 整组画在调色层之上，所以不会被压暗。
+ */
+function NightLights({
+  on,
+  delay,
+  signControls,
+}: {
+  on: boolean;
+  delay: number;
+  signControls: ReturnType<typeof useAnimationControls>;
+}) {
+  const lit = SPRITES.doorLit;
+  const sign = SPRITES.openSign;
+  const w = SPRITES.woolab.on;
+  return (
+    <motion.div
+      className="pointer-events-none absolute inset-0"
+      initial={false}
+      animate={{ opacity: on ? 1 : 0 }}
+      transition={{ duration: on ? TIME_FADE : 0.3, delay: on ? delay : 0, ease: "easeInOut" }}
+    >
+      <img
+        src={lit.src}
+        alt=""
+        draggable={false}
+        className="absolute select-none"
+        style={{ left: px(lit.x), top: py(lit.y), width: px(lit.w) }}
+      />
+      <motion.img
+        src={sign.src}
+        alt=""
+        draggable={false}
+        className="absolute select-none"
+        style={{
+          left: px(sign.x),
+          top: py(sign.y),
+          width: px(sign.w),
+          transformOrigin: "50% 8%",
+        }}
+        animate={signControls}
+      />
+      {/* 开灯帧直接画（和白天 hover 一样）：光锥本身就是半透明暖黄，罩在压暗的墙上就是灯亮着的样子。
+          之前用 hard-light 叠，光锥两条斜边那圈稍实的像素会被提得特别亮，成了两道光边 */}
+      <img
+        src={w.src}
+        alt=""
+        draggable={false}
+        className="absolute select-none"
+        style={{
+          left: px(w.x),
+          top: py(w.y),
+          width: px(w.w),
+          maxWidth: "none",
+        }}
+      />
+    </motion.div>
   );
 }
 

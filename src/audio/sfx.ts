@@ -82,6 +82,8 @@ function ready(): boolean {
  */
 const AMBIENTS = {
   day: { src: "/assets/audio/ambient-day.m4a", volume: 0.9 },
+  /** 夜晚暂时还是白天那条，只是压低；有了虫鸣/夜风的素材换 src 即可 */
+  night: { src: "/assets/audio/ambient-day.m4a", volume: 0.45 },
 } as const;
 
 export type AmbientId = keyof typeof AMBIENTS;

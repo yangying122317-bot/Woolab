@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /**
- * 清松手写体 8（JasonHandwriting8，子集版）：只包含界面文案用到的
- * 字符 + 全量 ASCII + 常用中文标点，用于入口提示等点缀。
+ * 清松手写体 8（JasonHandwriting8，子集版）：包含 i18n/dict.ts、data/lifeStations.ts、
+ * data/labs.ts 里出现的全部中文字符 + 全量 ASCII + 常用中文标点，用于入口提示、清单、目录吊牌等点缀。
  * 若新增文案后出现缺字（回退到系统字体），需要重新生成子集
- * （源文件：JasonHandwriting8.ttf）。
+ * （源文件：JasonHandwriting8.ttf，pyftsubset --text-file=用到的字 --flavor=woff2）。
  */
 @font-face {
   font-family: "HandUI";
@@ -47,13 +47,53 @@
 }
 
 .font-scroll {
-  font-family: "ScrollHand", "HandTitle", system-ui, sans-serif;
+  /* 前两个只有 ASCII，中文落到清松手写（HandUI），不掉到系统黑体 */
+  font-family: "ScrollHand", "HandTitle", "HandUI", system-ui, sans-serif;
+}
+
+/**
+ * Space Grotesk（Google Fonts latin 子集，可变字重 300–700，自托管）：
+ * Lab 详情 lookbook 的编号 / 产品表标签。
+ */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/assets/fonts/space-grotesk.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+.font-look {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+}
+
+/**
+ * DM Sans（Google Fonts latin 子集，可变字重 700–900，自托管）：
+ * 顶栏的 MENU / CN / EN 和目录吊牌上的 ABOUT / LAB / LIFE / CONTACT。
+ */
+@font-face {
+  font-family: "DM Sans";
+  src: url("/assets/fonts/dm-sans.woff2") format("woff2");
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+.font-nav {
+  font-family: "DM Sans", system-ui, sans-serif;
+  text-transform: uppercase;
 }
 
 html,
 body,
 #root {
   height: 100%;
+}
+
+/** Lenis 丝滑滚动需要的两条（不引它自带的 css：那份会把 html/body 的 height 改成 auto） */
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+.lenis [data-lenis-prevent] {
+  overscroll-behavior: contain;
 }
 
 /** 沉浸式页面（如屋内横滚长卷）挂在 <html> 上：隐藏原生滚动条，滚动仍然可用 */

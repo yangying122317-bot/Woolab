@@ -1,0 +1,44 @@
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
+import NavBar, { NavLogo, navBarStyle } from "./NavBar";
+import MenuOverlay from "./MenuOverlay";
+import TimeToggle from "./TimeToggle";
+import { useDetailOpen, usePlainLogo } from "../state/chrome";
+
+/**
+ * 全站顶栏 + 目录。挂在路由外面一份就够：
+ * 首页和 Lab 页直接白字；Life 页白字 + difference 混合——暖色房间里让它跟底色反着来，深底上白、浅底上深。
+ * 点 MENU 挂出黑底吊牌目录（MenuOverlay）。
+ * Lab 详情（z-50）盖上来时，顶栏升到它上面（z-55）、去掉 logo（左上角是详情自己的"回画廊"）、
+ * 石墙是深灰的所以直接白字不混合；目录本身是 z-60 的 portal，不受这个影响。
+ * Life 页清单抽屉开着时（牛皮色压在 logo 底下，difference 会把白 logo 变蓝），
+ * logo 从混合的顶栏里拿出来、在旁边单画一份纯白的，右边的 MENU 那些照旧混合。
+ */
+export default function TopNav() {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const home = pathname === "/";
+  const detail = useDetailOpen();
+  /* Lab 页（入口的砖红墙 + 画廊）直接白字，不混合 */
+  const lab = pathname.startsWith("/lab");
+  const plain = home || detail || lab;
+  const plainLogo = usePlainLogo() && !plain;
+  const extra = home ? <TimeToggle /> : undefined;
+
+  return (
+    <>
+      <header
+        className={`fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
+        style={{ mixBlendMode: plain ? "normal" : "difference" }}
+      >
+        <NavBar color="#FFFFFF" menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} />
+      </header>
+      {plainLogo && (
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex items-center" style={navBarStyle("#FFFFFF")}>
+          <NavLogo />
+        </div>
+      )}
+      {open && <MenuOverlay navColor="#FFFFFF" extra={extra} onClosed={() => setOpen(false)} />}
+    </>
+  );
+}

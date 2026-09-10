@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import {
   animate,
   motion,
@@ -13,6 +14,7 @@ import {
 import { labProjects, type LabProject } from "../data/labs";
 import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
+import { DetailBackdrop, DetailPage } from "./LabDetail";
 
 /**
  * 实验室 · 画展。
@@ -28,21 +30,13 @@ const N = labProjects.length;
 
 /** 滚动总长（px）：沿墙平移 + 进走廊 + 四站节拍 + 出口 */
 const SCROLL_LEN = 7000;
-/** 点画框翻转看详情：详情页视觉还没做，上线先关掉（hover 效果保留） */
-const DETAIL_ENABLED = false;
+/** 点画框翻转看详情。详情页做好了，线上一起放开（之前只在本地开发时开着） */
+const DETAIL_ENABLED = true;
 
 /** 壁灯：灭灯态为蓝罩台灯（与第一屏同款），亮灯态为暖罩+光锥，
     交叉淡入淡出。蓝灯按亮灯画布里灯具的位置对位（灯具同尺寸：
     亮灯画布 616x347、灯具在 x218 起 178x209，蓝灯画布 179x210） */
-function WallLamp({
-  hover,
-  width,
-  height,
-}: {
-  hover: boolean;
-  width: number;
-  height: number;
-}) {
+function WallLamp({ hover, width, height }: { hover: boolean; width: number; height: number }) {
   const k = width / 616;
   return (
     <div className="absolute" style={{ width, height }}>
@@ -144,14 +138,7 @@ function EntranceWall({
 }) {
   const u = frame.g;
   const [lampOn, setLampOn] = useState(false);
-  const { x, scale, opacity } = usePieceMotion(
-    camDepth,
-    camX,
-    ENT_Z,
-    ENT_CX,
-    frame,
-    "cut",
-  );
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, ENT_Z, ENT_CX, frame, "cut");
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   /* 主墙脚线落在该深度的地脚线上；切图里转角条比主墙脚再往下伸一截 */
   const top = useMotionTemplate`${useTransform(
@@ -160,9 +147,7 @@ function EntranceWall({
   )}px`;
   /* 墙过身后虽然透明，但已被放大到盖住整屏——必须连指针一起关掉，
      否则会挡住后面展板的 hover/点击 */
-  const pe = useTransform(opacity, (o) =>
-    o > 0 ? ("auto" as const) : ("none" as const),
-  );
+  const pe = useTransform(opacity, (o) => (o > 0 ? ("auto" as const) : ("none" as const)));
   /* 局部坐标（世界 px）：画挂在相机起点正前方 → 局部 x = 起点相对墙左缘；
      画心在视线上方 55 */
   const floorL = ENT_H * ENT_FOOT; // 主墙脚线
@@ -176,9 +161,7 @@ function EntranceWall({
   const lampFixH = (lampW / 616) * 210;
   const lampL = axisL - lampW / 2;
   const lampT = paintT - 8 - lampFixH;
-  const reduced =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const px = (v: number) => v * u;
 
   return (
@@ -201,10 +184,7 @@ function EntranceWall({
         className="absolute inset-0 h-full w-full select-none"
       />
       {/* 壁灯：hover 油画时点亮 */}
-      <div
-        className="absolute"
-        style={{ left: px(lampL), top: px(lampT), width: px(lampW), height: px(lampH) }}
-      >
+      <div className="absolute" style={{ left: px(lampL), top: px(lampT), width: px(lampW), height: px(lampH) }}>
         <WallLamp hover={lampOn} width={px(lampW)} height={px(lampH)} />
       </div>
       {/* 珍珠小羊油画：开场动画的落位目标（按 id 量取屏幕矩形） */}
@@ -266,14 +246,7 @@ function EntranceStatue({
   frame: ShellFrame;
 }) {
   const u = frame.g;
-  const { x, scale, opacity } = usePieceMotion(
-    camDepth,
-    camX,
-    STATUE_Z,
-    ENT_CAM_X0 + side * STATUE_DX,
-    frame,
-    "cut",
-  );
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * STATUE_DX, frame, "cut");
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
   return (
@@ -474,12 +447,21 @@ const ART_H = Math.round(PANEL_PH * 0.5);
 const LAMP_FIX_H = Math.round(PANEL_PH * 0.16);
 const LAMP_TOP = Math.round(PANEL_PH * 0.01);
 const BADGE_TOP = Math.round(PANEL_PH * 0.755);
-type StationCfg = { art: string; ratio: number };
+/**
+ * 每站的画：art 是连框带画的整张图；mask 是它的外形剪影（翻面后当遮罩用）；
+ * solid 是剪影里最大的一块实心矩形（占图的比例），放大时要让这块盖满屏幕，框的花边才全出屏。
+ */
+type StationCfg = {
+  art: string;
+  mask: string;
+  ratio: number;
+  solid: { x: number; y: number; w: number; h: number };
+};
 const STATION_CFG: StationCfg[] = [
-  { art: "art-tee", ratio: 286 / 352 },
-  { art: "art-sticker", ratio: 555 / 666 },
-  { art: "art-drink", ratio: 661 / 694 },
-  { art: "art-candle", ratio: 615 / 725 },
+  { art: "art-tee", mask: "mask-tee", ratio: 286 / 352, solid: { x: 0.063, y: 0.046, w: 0.878, h: 0.875 } },
+  { art: "art-sticker", mask: "mask-sticker", ratio: 555 / 666, solid: { x: 0.027, y: 0.006, w: 0.919, h: 0.955 } },
+  { art: "art-drink", mask: "mask-drink", ratio: 661 / 694, solid: { x: 0.207, y: 0.21, w: 0.592, h: 0.556 } },
+  { art: "art-candle", mask: "mask-candle", ratio: 615 / 725, solid: { x: 0.127, y: 0.143, w: 0.72, h: 0.694 } },
 ];
 
 /** 到站时顺带"低头"一点：板子立在地上、画框比视线略低，整幅画面往上抬，
@@ -487,8 +469,7 @@ const STATION_CFG: StationCfg[] = [
     四站抬升量相同：进走廊时抬起来、走廊里保持、出走廊回正，路上不跳 */
 const PANEL_WORLD_H = PANEL_PH * (PANEL_W / PANEL_PW);
 const ART_CENTER_ABOVE_FLOOR = PANEL_WORLD_H * (1 - (ART_TOP + ART_H / 2) / PANEL_PH);
-const TILT_D =
-  CO_VP_D - 225 + (CO_WALL_H - ART_CENTER_ABOVE_FLOOR) * (FOCAL / DWELL_DIST); // 设计稿 px
+const TILT_D = CO_VP_D - 225 + (CO_WALL_H - ART_CENTER_ABOVE_FLOOR) * (FOCAL / DWELL_DIST); // 设计稿 px
 /** 返回设计稿 px（画面上抬为正，调用方乘 frame.g） */
 function camTiltOf(cz: number) {
   const last = VIEW_Z.length - 1;
@@ -535,10 +516,7 @@ function CorridorStation({
     return (worldXd - cx) * frame.g * scaleOf(z, cz);
   });
   /* 板脚落在该深度的地脚线上 */
-  const feetY = useTransform(
-    camDepth,
-    (cz) => frame.vpY + CO_WALL_H * frame.g * scaleOf(z, cz),
-  );
+  const feetY = useTransform(camDepth, (cz) => frame.vpY + CO_WALL_H * frame.g * scaleOf(z, cz));
   /* 不做淡出：相机走到板子跟前之前（深度 ≈22）它的内缘就已经滑出画面。
      深度触到钳位后直接隐藏——否则冻结在屏幕外的巨大板体，
      会在下一站转头时被整幅平移带回画面边缘 */
@@ -803,13 +781,7 @@ function CorridorColumn({
   const W = H * (322 / 1793);
   /* 独立立柱：站在墙前一个柱宽处的地板上，地脚线整条从柱身后面穿过、
      不碰柱础，柱础清楚地立在地上。柱高 340 > 走廊墙高 290，柱头探到天花线上方 */
-  const { x, scale, opacity } = usePieceMotion(
-    camDepth,
-    camX,
-    z,
-    side * (CO_WALL_X - W),
-    frame,
-  );
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, z, side * (CO_WALL_X - W), frame);
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
   return (
@@ -921,8 +893,7 @@ function CorridorLines({
   const edgeAt = (x: number) => Math.max(0, halfGap * (1 - x / lFull));
   const useLine = (side: 1 | -1, vert: 1 | -1) => {
     const rot = useTransform(camX, (cx) => {
-      const deg =
-        (Math.atan2(vert * CO_WALL_H, side * CO_WALL_X - cx) * 180) / Math.PI;
+      const deg = (Math.atan2(vert * CO_WALL_H, side * CO_WALL_X - cx) * 180) / Math.PI;
       return `rotate(${deg}deg)`;
     });
     const clip = useTransform([camX, camDepth], (v: number[]) => {
@@ -1010,15 +981,10 @@ function CorridorEndWall({
         className="absolute inset-0 h-full w-full select-none"
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-        <span
-          className="font-hand"
-          style={{ fontSize: 24 * g, color: "rgba(122,74,18,0.55)" }}
-        >
+        <span className="font-hand" style={{ fontSize: 24 * g, color: "rgba(122,74,18,0.55)" }}>
           {t("lab.gallery.exit")}
         </span>
-        <span style={{ fontSize: 13 * g, color: "rgba(122,74,18,0.38)" }}>
-          {t("lab.gallery.wip")}
-        </span>
+        <span style={{ fontSize: 13 * g, color: "rgba(122,74,18,0.38)" }}>{t("lab.gallery.wip")}</span>
       </div>
     </motion.div>
   );
@@ -1049,8 +1015,7 @@ function FakeCorridor({
     h: window.innerHeight,
   }));
   useEffect(() => {
-    const onResize = () =>
-      setVp({ w: window.innerWidth, h: window.innerHeight });
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -1064,10 +1029,7 @@ function FakeCorridor({
      推一下滑一段、稳稳停在节拍点）+ 进场时的一小段迈步（introZ 从负值回到 0） */
   const qDepth = useTransform(q, CAM_Z_KEYS, CAM_Z_VALS);
   const qDepthSoft = useSpring(qDepth, { stiffness: 60, damping: 20, mass: 0.9 });
-  const camDepth = useTransform(
-    [qDepthSoft, introZ],
-    (v: number[]) => v[0] + v[1],
-  );
+  const camDepth = useTransform([qDepthSoft, introZ], (v: number[]) => v[0] + v[1]);
   /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
   const qX = useTransform(q, CAM_X_KEYS, CAM_X_VALS);
   const camX = useSpring(qX, { stiffness: 60, damping: 20, mass: 0.9 });
@@ -1093,15 +1055,7 @@ function FakeCorridor({
       ([-1, 1] as const).map((side) => ({
         z,
         key: `col-${z}-${side}`,
-        el: (
-          <CorridorColumn
-            camDepth={camDepth}
-            camX={camX}
-            z={z}
-            side={side}
-            frame={frame}
-          />
-        ),
+        el: <CorridorColumn camDepth={camDepth} camX={camX} z={z} side={side} frame={frame} />,
       })),
     ),
     ...CO_PROPS.map((spec) => ({
@@ -1129,21 +1083,12 @@ function FakeCorridor({
     {
       z: ENT_Z,
       key: "entrance",
-      el: (
-        <EntranceWall
-          camDepth={camDepth}
-          camX={camX}
-          frame={frame}
-          paintingHidden={paintingHidden}
-        />
-      ),
+      el: <EntranceWall camDepth={camDepth} camX={camX} frame={frame} paintingHidden={paintingHidden} />,
     },
     ...([-1, 1] as const).map((side) => ({
       z: STATUE_Z,
       key: `statue-${side}`,
-      el: (
-        <EntranceStatue camDepth={camDepth} camX={camX} side={side} frame={frame} />
-      ),
+      el: <EntranceStatue camDepth={camDepth} camX={camX} side={side} frame={frame} />,
     })),
   ].sort((a, b) => b.z - a.z);
 
@@ -1167,218 +1112,148 @@ function FakeCorridor({
   );
 }
 
-/* ---------------- 详情：画框原地翻转 → 窗口撑满 ---------------- */
+/* ---------------- 详情：画框原地翻转 → 框形剪影放大到满屏（页面本体见 LabDetail.tsx） ---------------- */
+
+/** 节拍（秒）：原地翻面 → 不停、剪影直接放大出屏；关闭时先把内容淡掉再倒放 */
+const FLIP_T = 0.55;
+const EXPAND_T = 0.7;
+const FADE_T = 0.22;
+/** 翻面：起步慢、到 180° 时还带着速度，紧接着就放大，看着是一口气 */
+const FLIP_EASE = [0.5, 0, 0.8, 0.8] as const;
+/** 翻回来：正常的进出缓动 */
+const UNFLIP_EASE = [0.65, 0, 0.35, 1] as const;
+/** 放大：先快后慢，没有回弹（参考站邮票长大的手感） */
+const EXPAND_EASE = [0.3, 0, 0.2, 1] as const;
+/** 放大到实心块刚好盖满屏之后再多一点，手绘边缘不规则，保险 */
+const EXPAND_OVER = 1.04;
+
+type FlipPhase = "flip" | "expand" | "open" | "fade" | "shrink" | "unflip";
 
 /**
- * 详情页（全屏、占位排版，视觉后补）：奶油底，顶部返回，
- * 标题 / 简介 / 设计过程 / 实物 / 下载 往下排；可滚动。
- * 它按整个视口尺寸铺好，翻转层只是在它前面开一扇"窗"。
+ * 点击画框看详情：
+ * 1. 画框就在原位绕竖轴翻 180°。背面不是金框，而是一块"画框外形"的石墙——
+ *    详情页第一屏的空墙按全屏铺在卡片后面，用这幅画的剪影当遮罩只露出正好被画框盖住的那块；
+ * 2. 翻到 180° 不停，剪影以自己中心为原点放大（顺手滑到屏幕正中），直到花边全部出屏；
+ *    墙纸本身不跟着放大（里面反向缩放抵消），所以放大完和真正的详情页背景逐像素一样，
+ *    这时换上 DetailPage，页头 / 金框 / 标签再出场；
+ * 3. 关闭倒放：内容先淡掉（露出同样的空墙）→ 剪影缩回画框 → 翻回正面。
  */
-function DetailPage({
-  project,
-  index,
-  onClose,
-}: {
-  project: LabProject;
-  index: number;
-  onClose: () => void;
-}) {
-  const { t, pick } = useLanguage();
+function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; onClosed: () => void }) {
   const cfg = STATION_CFG[index];
-  return (
-    <div
-      className="h-full w-full overflow-y-auto"
-      style={{ background: "#FEF0C1", color: "#4A2C14" }}
-    >
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-8 pb-24 pt-8 sm:px-12">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            data-lab-detail-close=""
-            onClick={onClose}
-            className="font-hand text-lg text-[#7E4218] transition hover:opacity-70"
-          >
-            {t("lab.detail.back")}
-          </button>
-          <img
-            src={`/assets/lab/badge-0${index + 1}.webp`}
-            alt=""
-            draggable={false}
-            className="h-10 select-none"
-          />
-        </div>
-
-        {/* 头部：左文右画（占位） */}
-        <div className="mt-14 grid items-center gap-10 sm:grid-cols-[1.2fr_1fr]">
-          <div>
-            <h1 id="lab-detail-title" className="font-hand text-5xl leading-tight sm:text-6xl">
-              {pick(project.title)}
-            </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-[#7E4218]/80">
-              {pick(project.description)}
-            </p>
-            <p className="mt-8 inline-block rounded-full border border-dashed border-[#7E4218]/40 px-4 py-1 text-xs text-[#7E4218]/60">
-              {t("lab.detail.wip")}
-            </p>
-          </div>
-          <img
-            src={`/assets/lab/${cfg.art}.webp`}
-            alt=""
-            draggable={false}
-            className="mx-auto w-56 select-none sm:w-64"
-          />
-        </div>
-
-        {project.process && (
-          <section className="mt-20">
-            <h2 className="font-hand text-2xl">{t("lab.process")}</h2>
-            <ol className="mt-6 grid gap-6 sm:grid-cols-2">
-              {project.process.map((step, i) => (
-                <li
-                  key={i}
-                  className="rounded-2xl border border-[#7E4218]/15 bg-[#FFF6DC] p-5"
-                >
-                  <span className="font-hand text-sm text-[#7E4218]/60">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <h3 className="font-hand mt-1 text-lg">{pick(step.title)}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#7E4218]/80">
-                    {pick(step.text)}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-
-        {project.product && (
-          <section className="mt-20">
-            <h2 className="font-hand text-2xl">{t("lab.product")}</h2>
-            <div className="mt-6 flex h-64 items-center justify-center rounded-2xl border border-dashed border-[#7E4218]/25 bg-[#FFF6DC]">
-              <img
-                src={project.product.image}
-                alt=""
-                className="h-32 w-32 object-contain opacity-60"
-              />
-            </div>
-            <p className="mt-3 text-center text-sm text-[#7E4218]/70">
-              {pick(project.product.caption)}
-            </p>
-          </section>
-        )}
-
-        {project.download && (
-          <section className="mt-20">
-            <h2 className="font-hand text-2xl">{t("lab.download")}</h2>
-            <div className="mt-6 rounded-2xl border-2 border-dashed border-[#7E4218]/25 p-8 text-center">
-              <p className="font-hand text-xl">{pick(project.download.label)}</p>
-              <span className="mt-4 inline-block rounded-full bg-[#7E4218]/10 px-5 py-1.5 text-sm text-[#7E4218]/60">
-                {t("lab.download.cta")}
-              </span>
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** 翻转节拍（秒）：原地翻面 → 停一下 → 窗口撑满；关闭时倒放 */
-const FLIP_T = 0.6;
-const FLIP_HOLD = 0.15;
-const EXPAND_T = 0.35;
-const FLIP_EASE = [0.65, 0, 0.35, 1] as const;
-
-/**
- * 点击画框看详情：画框就在原位绕竖轴翻 180°，翻过去的背面是一扇"窗"——
- * 详情页按全屏尺寸铺在后面，窗口只露出正好被画框盖住的那一块；
- * 停一下，窗口从画框矩形撑到整屏。关闭：窗口缩回画框、再翻回正面。
- */
-function FlipDetail({
-  project,
-  index,
-  rect,
-  onClosed,
-}: {
-  project: LabProject;
-  index: number;
-  rect: DOMRect;
-  onClosed: () => void;
-}) {
-  const cfg = STATION_CFG[index];
-  const [phase, setPhase] = useState<"flip" | "expand" | "open" | "collapse" | "unflip">(
-    "flip",
-  );
+  /* 详情页里"下一件"会切项目；翻转卡片的正面始终是最初点的那幅画 */
+  const [cur, setCur] = useState(index);
+  const curProject = labProjects[cur];
+  const [phase, setPhase] = useState<FlipPhase>("flip");
   const [vp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  const timers = useRef<number[]>([]);
-  const at = (ms: number, fn: () => void) => {
-    timers.current.push(window.setTimeout(fn, ms));
-  };
 
+  /* 卡片中心、放大后要滑到的屏幕正中 */
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const toX = vp.w / 2 - cx;
+  const toY = vp.h / 2 - cy;
+  /*
+   * 放大倍数：卡片停在屏中、以中心放大 S 倍后，剪影里那块实心矩形的四条边都要出屏。
+   * 实心块相对卡片中心的偏移也会被放大，所以四条边分开算，取最大的。
+   */
+  const S = (() => {
+    const { x, y, w, h } = cfg.solid;
+    const W = rect.width;
+    const H = rect.height;
+    const l = (0.5 - x) * W; /* 中心到实心块左边的距离（未放大） */
+    const r = (x + w - 0.5) * W;
+    const t = (0.5 - y) * H;
+    const b = (y + h - 0.5) * H;
+    return Math.max(vp.w / 2 / l, vp.w / 2 / r, vp.h / 2 / t, vp.h / 2 / b) * EXPAND_OVER;
+  })();
+
+  /* 三个动的量：翻转角、放大倍数、位移进度（0 在原位、1 在屏中） */
+  const ry = useMotionValue(0);
+  const s = useMotionValue(1);
+  const k = useMotionValue(0);
+  const x = useTransform(k, (v) => v * toX);
+  const y = useTransform(k, (v) => v * toY);
+  /* 里面那层墙纸反向缩放 / 反向位移，抵消卡片的变换，在屏幕上一动不动 */
+  const invS = useTransform(s, (v) => 1 / v);
+  const invX = useTransform([k, s], ([kv, sv]: number[]) => (-kv * toX) / sv);
+  const invY = useTransform([k, s], ([kv, sv]: number[]) => (-kv * toY) / sv);
+  /* 剪影下的投影（单独一层同形状的黑块虚化，别给墙纸那层挂 filter，放大时太费）：翻面时有，放大一开始就散掉 */
+  const shadowA = useMotionValue(0.32);
+
+  const alive = useRef(true);
   useEffect(() => {
+    alive.current = true;
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
-    at((FLIP_T + FLIP_HOLD) * 1000, () => setPhase("expand"));
-    at((FLIP_T + FLIP_HOLD + EXPAND_T) * 1000, () => setPhase("open"));
+    (async () => {
+      await animate(ry, 180, { duration: FLIP_T, ease: FLIP_EASE });
+      if (!alive.current) return;
+      setPhase("expand");
+      animate(shadowA, 0, { duration: EXPAND_T * 0.4, ease: "easeOut" });
+      animate(k, 1, { duration: EXPAND_T, ease: EXPAND_EASE });
+      await animate(s, S, { duration: EXPAND_T, ease: EXPAND_EASE });
+      if (!alive.current) return;
+      setPhase("open");
+    })();
     return () => {
+      alive.current = false;
       document.documentElement.style.overflow = prev;
-      timers.current.forEach(window.clearTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const close = () => {
+  const close = async () => {
     if (phase !== "open") return;
-    setPhase("collapse");
-    at(EXPAND_T * 1000 + 60, () => setPhase("unflip"));
-    at(EXPAND_T * 1000 + 60 + FLIP_T * 1000, onClosed);
+    setPhase("fade");
+    await new Promise((r) => window.setTimeout(r, FADE_T * 1000));
+    if (!alive.current) return;
+    setPhase("shrink");
+    animate(k, 0, { duration: EXPAND_T, ease: EXPAND_EASE });
+    await animate(s, 1, { duration: EXPAND_T, ease: EXPAND_EASE });
+    if (!alive.current) return;
+    animate(shadowA, 0.32, { duration: 0.2 });
+    setPhase("unflip");
+    await animate(ry, 0, { duration: FLIP_T, ease: UNFLIP_EASE });
+    if (alive.current) onClosed();
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") void close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  /* 窗口：用 clip-path inset 从画框矩形撑到整屏（页面本身不动） */
-  const insetRect = `inset(${rect.top}px ${vp.w - rect.right}px ${vp.h - rect.bottom}px ${rect.left}px)`;
-  const insetFull = "inset(0px 0px 0px 0px)";
-  const windowOpen = phase === "expand" || phase === "open";
-  const showCard = phase === "flip" || phase === "unflip";
-  const flipped = phase !== "unflip";
+  const showPage = phase === "open" || phase === "fade";
+  const showCard = phase !== "open";
+  const maskStyle: CSSProperties = {
+    WebkitMaskImage: `url(/assets/lab/${cfg.mask}.png)`,
+    maskImage: `url(/assets/lab/${cfg.mask}.png)`,
+    WebkitMaskSize: "100% 100%",
+    maskSize: "100% 100%",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+  };
 
   return (
     <div className="fixed inset-0 z-50" style={{ perspective: 1400 }}>
-      {/* 详情页 + 窗口遮罩：翻面阶段先藏着（那时它只从卡片背面露出来） */}
-      {!showCard && (
-        <motion.div
-          className="absolute inset-0"
-          initial={{ clipPath: insetRect }}
-          animate={{ clipPath: windowOpen ? insetFull : insetRect }}
-          transition={{ duration: EXPAND_T, ease: windowOpen ? "easeOut" : "easeIn" }}
-          style={{ pointerEvents: phase === "open" ? "auto" : "none" }}
-        >
-          <DetailPage project={project} index={index} onClose={close} />
-        </motion.div>
-      )}
-
-      {/* 翻转中的画框：正面是画、背面是一扇开在详情页上的窗 */}
+      {/* 翻转 / 放大中的卡片：正面是画，背面是一块画框外形的石墙 */}
       {showCard && (
         <motion.div
-          className="absolute"
+          className="pointer-events-none absolute"
           style={{
             left: rect.left,
             top: rect.top,
             width: rect.width,
             height: rect.height,
             transformStyle: "preserve-3d",
+            rotateY: ry,
+            scale: s,
+            x,
+            y,
+            willChange: "transform",
           }}
-          initial={{ rotateY: flipped ? 0 : 180 }}
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={{ duration: FLIP_T, ease: FLIP_EASE }}
         >
           <img
             src={`/assets/lab/${cfg.art}.webp`}
@@ -1387,22 +1262,44 @@ function FlipDetail({
             className="absolute inset-0 h-full w-full select-none"
             style={{ backfaceVisibility: "hidden" }}
           />
-          <div
-            className="absolute inset-0 overflow-hidden"
-            style={{
-              backfaceVisibility: "hidden",
-              transform: "rotateY(180deg)",
-              boxShadow: "0 18px 40px rgba(60,30,0,0.25)",
-            }}
-          >
-            {/* 窗内：详情页按全屏尺寸铺、按画框位置反向偏移，露出正好在画框后面的那块 */}
-            <div
-              className="pointer-events-none absolute"
-              style={{ left: -rect.left, top: -rect.top, width: vp.w, height: vp.h }}
-            >
-              <DetailPage project={project} index={index} onClose={close} />
+          <div className="absolute inset-0" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
+            <motion.div
+              className="absolute inset-0 bg-black"
+              style={{ ...maskStyle, y: 16, filter: "blur(14px)", opacity: shadowA }}
+            />
+            <div className="absolute inset-0 overflow-hidden" style={maskStyle}>
+              {/* 遮罩里：详情页的空墙按全屏铺、按卡片位置反向偏移，露出正好在画框后面的那块 */}
+              <motion.div
+                className="absolute"
+                style={{
+                  left: -rect.left,
+                  top: -rect.top,
+                  width: vp.w,
+                  height: vp.h,
+                  transformOrigin: `${cx}px ${cy}px`,
+                  scale: invS,
+                  x: invX,
+                  y: invY,
+                  willChange: "transform",
+                }}
+              >
+                <DetailBackdrop />
+              </motion.div>
             </div>
           </div>
+        </motion.div>
+      )}
+
+      {/* 真正的详情页：剪影放大到满屏后挂上来；关闭时先淡掉，底下的卡片还铺着同样的空墙 */}
+      {showPage && (
+        <motion.div
+          className="absolute inset-0"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: phase === "fade" ? 0 : 1 }}
+          transition={{ duration: FADE_T, ease: "easeOut" }}
+          style={{ pointerEvents: phase === "open" ? "auto" : "none" }}
+        >
+          <DetailPage project={curProject} index={cur} onClose={() => void close()} onNext={setCur} />
         </motion.div>
       )}
     </div>
@@ -1448,13 +1345,9 @@ const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
  * 点击任意处跳过；系统开启"减少动态"时直接跳过。
  */
 function LabIntro({ onDone }: { onDone: () => void }) {
-  const reduced =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const [phase, setPhase] = useState<
-    "text" | "fade" | "bright" | "shrink" | "skip"
-  >("text");
+  const [phase, setPhase] = useState<"text" | "fade" | "bright" | "shrink" | "skip">("text");
   const [big] = useState<IntroRect>(() => introBigRect());
   const [target, setTarget] = useState<IntroRect | null>(null);
   const timers = useRef<number[]>([]);
@@ -1656,13 +1549,27 @@ export default function LabPage() {
   const parallaxX = useSpring(0, { stiffness: 40, damping: 15 });
   const headGain = useTransform(scrollYProgress, [0.12, 0.22], [0, 1]);
   const headY = useTransform([bobY, headGain], (v: number[]) => v[0] * v[1]);
-  const headX = useTransform(
-    [parallaxX, headGain],
-    (v: number[]) => v[0] * v[1],
-  );
+  const headX = useTransform([parallaxX, headGain], (v: number[]) => v[0] * v[1]);
 
   const [active, setActive] = useState(0);
-  const [introPlaying, setIntroPlaying] = useState(true);
+  /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场那几秒不放 */
+  const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
+  const [introPlaying, setIntroPlaying] = useState(!fromMenu);
+  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧 */
+  useEffect(() => {
+    const urls = [
+      ...STATION_CFG.map((c) => `/assets/lab/${c.mask}.png`),
+      "/assets/lab/detail/bg-stone-wall.webp",
+      "/assets/lab/detail/bg-stone-mark.webp",
+    ];
+    const imgs = urls.map((src) => {
+      const im = new Image();
+      im.src = src;
+      im.decode().catch(() => {});
+      return im;
+    });
+    return () => imgs.forEach((im) => (im.src = ""));
+  }, []);
   const [open, setOpen] = useState<{ project: LabProject; rect: DOMRect } | null>(null);
   const blockOpen = useRef(false);
   const openProject = (project: LabProject, rect: DOMRect) => {
@@ -1730,7 +1637,6 @@ export default function LabPage() {
       {open && (
         <FlipDetail
           key={open.project.id}
-          project={open.project}
           index={labProjects.findIndex((p) => p.id === open.project.id)}
           rect={open.rect}
           onClosed={closeProject}
