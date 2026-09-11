@@ -1,44 +1,22 @@
 @import "tailwindcss";
 
 /**
- * 清松手写体 8（JasonHandwriting8，子集版）：包含 i18n/dict.ts、data/lifeStations.ts、
- * data/labs.ts 里出现的全部中文字符 + 全量 ASCII + 常用中文标点，用于入口提示、清单、目录吊牌等点缀。
- * 若新增文案后出现缺字（回退到系统字体），需要重新生成子集
- * （源文件：JasonHandwriting8.ttf，pyftsubset --text-file=用到的字 --flavor=woff2）。
- */
-@font-face {
-  font-family: "HandUI";
-  src: url("/assets/fonts/hand-ui.woff2") format("woff2");
-  font-display: swap;
-}
-
-/**
- * 手写风格文字。
- * 清松手写体只有 Regular 一档字重，用同色细描边模拟加粗：
- * 想更粗调大 0.02em（≈0.4px@20px），想还原细体删掉 stroke 那行。
- */
-.font-hand {
-  font-family: "HandUI", system-ui, -apple-system, "PingFang SC", sans-serif;
-  letter-spacing: 0.02em;
-  -webkit-text-stroke: 0.04em currentColor;
-}
-
-/**
- * 清松手写体 4（JasonHandwriting4，子集版）：含 ASCII 全字符集（大小写/数字/标点），
- * 用于 Lab 页开场标题与画廊陈列文字（源文件：JasonHandwriting4.ttf）。
- */
-@font-face {
-  font-family: "HandTitle";
-  src: url("/assets/fonts/hand-title.woff2") format("woff2");
-  font-display: swap;
-}
-
-.font-title {
-  font-family: "HandTitle", "HandUI", system-ui, sans-serif;
-}
-
-/**
- * Nothing You Could Do（ASCII 子集）：Lab 页第一屏 "( Scroll )" 滚动提示。
+ * 全站字体：按「语言 × 风格」四格，每格一个自托管的 woff2 子集（public/assets/fonts/）。
+ *
+ *                 手写                          黑体
+ *   英文   Nothing You Could Do (ScrollHand)   DM Sans
+ *   中文   字制区喜脉喜欢体 (HandZh)            Noto Sans SC (SansZh)
+ *
+ * 英文字体只有 ASCII，中文字体排在它后面兜底：浏览器逐字找字形，一句「跟 WOOLAB 打个招呼」
+ * 里汉字自动落到中文字体、字母用英文字体，所以中英文共用 .font-hand / .font-look / .font-nav 三个类，
+ * 组件里不用再按语言切。
+ *
+ * 两个中文字体都是子集：只含 src/i18n/dict.ts、src/data/*.ts 等文案里出现过的汉字 + 全量 ASCII + 常用标点
+ * （提取时已去掉代码注释）。新增文案后如果有字回退到系统黑体，需要重新生成子集：
+ *   pyftsubset 源字体.ttf --text-file=用到的字.txt --flavor=woff2 --layout-features='*'
+ * 喜脉喜欢体原文件把基线放在字的中间（字形整体压在基线下方），子集时把所有字形抬高了 0.31em
+ * （630/2048；抬到 0.43em 时中文字面比拉丁字高约 0.12em，在圆角标签里看着偏上）、
+ * 并把 ascent/descent 改成 1em / 0.25em，这样才能和 Nothing You Could Do 排在同一条线上。
  */
 @font-face {
   font-family: "ScrollHand";
@@ -46,39 +24,46 @@
   font-display: swap;
 }
 
-.font-scroll {
-  /* 前两个只有 ASCII，中文落到清松手写（HandUI），不掉到系统黑体 */
-  font-family: "ScrollHand", "HandTitle", "HandUI", system-ui, sans-serif;
-}
-
-/**
- * Space Grotesk（Google Fonts latin 子集，可变字重 300–700，自托管）：
- * Lab 详情 lookbook 的编号 / 产品表标签。
- */
+/** 喜脉喜欢体的字形只占 em 的八成、笔画又细，放大 130% 才和 Nothing You Could Do 同样大小 */
 @font-face {
-  font-family: "Space Grotesk";
-  src: url("/assets/fonts/space-grotesk.woff2") format("woff2");
-  font-weight: 300 700;
+  font-family: "HandZh";
+  src: url("/assets/fonts/hand-zh.woff2") format("woff2");
+  size-adjust: 130%;
   font-display: swap;
 }
 
-.font-look {
-  font-family: "Space Grotesk", system-ui, sans-serif;
-}
-
-/**
- * DM Sans（Google Fonts latin 子集，可变字重 700–900，自托管）：
- * 顶栏的 MENU / CN / EN 和目录吊牌上的 ABOUT / LAB / LIFE / CONTACT。
- */
+/** DM Sans（Google Fonts latin 子集，可变字重 100–1000 + opsz 轴） */
 @font-face {
   font-family: "DM Sans";
   src: url("/assets/fonts/dm-sans.woff2") format("woff2");
-  font-weight: 700 900;
+  font-weight: 100 1000;
   font-display: swap;
 }
 
+/** Noto Sans SC（可变字重 100–900） */
+@font-face {
+  font-family: "SansZh";
+  src: url("/assets/fonts/sans-zh.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/**
+ * 手写：提示、标注、清单、便条这类点缀文字。
+ * 两款手写体都只有一档字重，加粗交给浏览器合成。破折号 / 单引号两款手写体里都没有，落到 DM Sans。
+ */
+.font-hand {
+  font-family: "ScrollHand", "HandZh", "DM Sans", "SansZh", system-ui, sans-serif;
+}
+
+/** 黑体正文 / 标题：不改大小写，字重由使用处决定 */
+.font-look {
+  font-family: "DM Sans", "SansZh", system-ui, sans-serif;
+}
+
+/** 黑体、强制大写：顶栏 MENU / CN / EN、目录吊牌、序号小标题 */
 .font-nav {
-  font-family: "DM Sans", system-ui, sans-serif;
+  font-family: "DM Sans", "SansZh", system-ui, sans-serif;
   text-transform: uppercase;
 }
 
@@ -105,11 +90,21 @@ body,
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    "PingFang SC",
-    "Hiragino Sans GB",
-    "Microsoft YaHei",
-    sans-serif;
+  font-family: "DM Sans", "SansZh", system-ui, -apple-system, "PingFang SC", sans-serif;
+}
+
+/**
+ * 全站光标：About 稿里那只手绘箭头（Figma「鼠标icon」，28×41 稿单位）。
+ * 箭头尖在 (5, 3)；1x / 2x 两张位图按屏幕像素密度挑。
+ * 页面里的 cursor-pointer / cursor-grab 一律也用这只箭头（只有一版图），所以带 !important 盖掉工具类。
+ */
+html,
+html * {
+  cursor: url("/assets/cursor-1x.png") 5 3, auto !important;
+  cursor:
+    -webkit-image-set(url("/assets/cursor-1x.png") 1x, url("/assets/cursor-2x.png") 2x) 5 3,
+    auto !important;
+  cursor:
+    image-set(url("/assets/cursor-1x.png") 1x, url("/assets/cursor-2x.png") 2x) 5 3,
+    auto !important;
 }

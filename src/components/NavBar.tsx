@@ -151,6 +151,7 @@ export default function NavBar({
   onMenu,
   extra,
   hideLogo = false,
+  logoOnly = false,
   className = "",
 }: {
   /** 文字 / 图标颜色 */
@@ -162,6 +163,8 @@ export default function NavBar({
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
   hideLogo?: boolean;
+  /** 只留 logo，右边那组先藏着（开场加载页盖着的时候），放开后淡进来 */
+  logoOnly?: boolean;
   className?: string;
 }) {
   const { t, lang, setLang } = useLanguage();
@@ -177,9 +180,12 @@ export default function NavBar({
       {hideLogo ? <span aria-hidden /> : <NavLogo />}
 
       {/* 右：MENU / CN · EN / 喇叭 */}
-      <div
-        className="font-nav pointer-events-auto flex items-center font-bold uppercase leading-[1.2]"
+      <motion.div
+        className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${logoOnly ? "pointer-events-none" : "pointer-events-auto"}`}
         style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: mu(26) }}
+        initial={false}
+        animate={{ opacity: logoOnly ? 0 : 1 }}
+        transition={{ duration: logoOnly ? 0 : 0.6, ease: "easeOut" }}
       >
         {/* MENU：目录打开期间圈一直留着 */}
         <NavHit held={menuOpen}>
@@ -190,7 +196,7 @@ export default function NavBar({
             aria-expanded={menuOpen}
             className="cursor-pointer"
           >
-            MENU
+            {menuOpen ? "CLOSE" : "MENU"}
           </button>
         </NavHit>
 
@@ -240,7 +246,7 @@ export default function NavBar({
             />
           )}
         </button>
-      </div>
+      </motion.div>
     </div>
   );
 }

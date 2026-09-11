@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { LanguageProvider } from "./i18n/LanguageContext";
-import IntroLoader from "./components/IntroLoader";
+import IntroLoader, { INTRO_PREVIEW_PATH, IntroPreview } from "./components/IntroLoader";
 import { SmoothScrollProvider } from "./components/SmoothScroll";
 import Layout from "./components/Layout";
 import TopNav from "./components/TopNav";
@@ -29,6 +29,16 @@ export default function App() {
               <Routes>
                 {/* 首页（场景导航）与屋内长卷使用全屏布局 */}
                 <Route path="/" element={<Home />} />
+                {/* 加载动画单独入口：底下是首页，开屏不看会话标记、可反复播 */}
+                <Route
+                  path={INTRO_PREVIEW_PATH}
+                  element={
+                    <>
+                      <Home />
+                      <IntroPreview />
+                    </>
+                  }
+                />
                 <Route path="/life" element={<LifePage />} />
 
                 {/* 内页共用 Layout（顶部导航 + 语言切换） */}

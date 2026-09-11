@@ -15,6 +15,7 @@ import { labProjects, type LabProject } from "../data/labs";
 import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
+import { usePageShift } from "../components/PageShift";
 
 /**
  * 实验室 · 画展。
@@ -217,7 +218,7 @@ function EntranceWall({
         transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
       />
       <span
-        className="font-scroll absolute whitespace-nowrap"
+        className="font-hand absolute whitespace-nowrap"
         style={{
           left: px(axisL - 19),
           top: px(paintT + ENT_PAINT_H + 20),
@@ -1343,15 +1344,22 @@ const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
  * 画面由暗转亮、模糊散开 → 全屏画面缩小归位到墙面陈列位
  * （金框随缩小进入视野），黑幕同时揭开。
  * 点击任意处跳过；系统开启"减少动态"时直接跳过。
+ * 从目录吊牌进来的（startAtShrink）：整页上飞已经是过场，只留最后一段——
+ * 第一帧就是亮着的全屏油画跟页面一起上来，落稳后直接缩小归位、黑幕揭开。
  */
-function LabIntro({ onDone }: { onDone: () => void }) {
+function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; startAtShrink?: boolean }) {
+  const { t } = useLanguage();
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const [phase, setPhase] = useState<"text" | "fade" | "bright" | "shrink" | "skip">("text");
+  const [phase, setPhase] = useState<"text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
+    startAtShrink ? "hold" : "text",
+  );
   const [big] = useState<IntroRect>(() => introBigRect());
   const [target, setTarget] = useState<IntroRect | null>(null);
   const timers = useRef<number[]>([]);
   const done = useRef(false);
+  /* 目录推着整页上飞的位移量：从目录进来时要等它真正归零再量墙上油画的位置 */
+  const pageY = usePageShift();
 
   const finish = () => {
     if (done.current) return;
@@ -1371,17 +1379,42 @@ function LabIntro({ onDone }: { onDone: () => void }) {
     const at = (ms: number, fn: () => void) => {
       timers.current.push(window.setTimeout(fn, ms));
     };
-    /* 顺序：文字停留 → 文字先渐隐 → 画面再亮起、模糊散开 → 缩小归位 */
-    at(3200, () => setPhase("fade"));
-    at(3800, () => setPhase("bright"));
-    at(5300, () => {
+    const shrink = () => {
       /* 量取场景内油画当前的投影屏幕矩形作为归位目标 */
       const el = document.getElementById("lab-entrance-painting");
       if (el) setTarget(el.getBoundingClientRect());
       setPhase("shrink");
       /* 收尾在缩小真正开始后再计时：飞行 1.1s + 黑幕揭开的尾巴 */
       at(1400, finish);
-    });
+    };
+    if (startAtShrink) {
+      /*
+       * 等目录整页上飞真正落稳再缩：上飞期间整页带 transform，这时候量到的油画位置
+       * 和落稳后差一截，缩到那儿再跟着页面挪一下就是一次跳。
+       * 所以盯着位移量归零那一刻（再缓 60ms 让 transform 撤掉、布局稳定），兜底 1.6s。
+       */
+      let fired = false;
+      const go = () => {
+        if (fired) return;
+        fired = true;
+        at(60, shrink);
+      };
+      if (pageY && pageY.get() !== 0) {
+        const off = pageY.on("change", (v) => {
+          if (v === 0) {
+            off();
+            go();
+          }
+        });
+        timers.current.push(window.setTimeout(off, 1700));
+      }
+      at(pageY && pageY.get() !== 0 ? 1600 : 1000, go);
+    } else {
+      /* 顺序：文字停留 → 文字先渐隐 → 画面再亮起、模糊散开 → 缩小归位 */
+      at(3200, () => setPhase("fade"));
+      at(3800, () => setPhase("bright"));
+      at(5300, shrink);
+    }
 
     return () => {
       document.documentElement.style.overflow = prev;
@@ -1400,7 +1433,7 @@ function LabIntro({ onDone }: { onDone: () => void }) {
   };
 
   const textVisible = phase === "text";
-  const lit = phase === "bright" || phase === "shrink";
+  const lit = phase === "bright" || phase === "hold" || phase === "shrink";
 
   /* 文字行进出场动画（按块错峰入场，退场整组同步） */
   const lineAnim = (delay: number) => ({
@@ -1432,7 +1465,7 @@ function LabIntro({ onDone }: { onDone: () => void }) {
         alt=""
         draggable={false}
         className="absolute max-w-none select-none"
-        initial={{ ...big, filter: INTRO_FILTER_DARK }}
+        initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }}
         animate={
           phase === "shrink" && target
             ? {
@@ -1452,69 +1485,69 @@ function LabIntro({ onDone }: { onDone: () => void }) {
       />
 
       {/* 开场文字：主组作为一个居中排版块（行距与字号同源 vw，
-          任何窗口比例下间距比例都与设计稿一致），底部介绍单独锚定底边 */}
-      <div
-        className="pointer-events-none absolute inset-x-0 flex flex-col items-center text-center"
-        style={{ top: "45.6vh", transform: "translateY(-50%)" }}
-      >
-        <motion.p
-          className="font-title text-[#FFF1C2]"
-          style={{
-            fontSize: "1.7vw",
-            letterSpacing: "0.1em",
-            lineHeight: 1.3,
-            textShadow: INTRO_TEXT_SHADOW,
-          }}
-          {...lineAnim(0.35)}
-        >
-          WELCOME TO THE
-        </motion.p>
-        <motion.p
-          className="font-title text-[#FFF1C2]"
-          style={{
-            fontSize: "5vw",
-            letterSpacing: "-0.01em",
-            lineHeight: 1.1,
-            marginTop: "0.7vw",
-            textShadow: INTRO_TEXT_SHADOW,
-          }}
-          {...lineAnim(0.6)}
-        >
-          WOOLAB SHEEP
-          <br />
-          GALLERY
-        </motion.p>
-        <motion.p
-          className="font-title text-[#FFF1C2]"
-          style={{
-            fontSize: "1.8vw",
-            letterSpacing: "0.1em",
-            lineHeight: 1.3,
-            marginTop: "0.5vw",
-            textShadow: INTRO_TEXT_SHADOW,
-          }}
-          {...lineAnim(0.9)}
-        >
-          THINGS MADE WITH A SHEEP
-        </motion.p>
-      </div>
-      <motion.p
-        className="pointer-events-none absolute inset-x-0 text-center font-title text-[#FFF1C2]"
-        style={{
-          bottom: "10.3vh",
-          fontSize: "1.35vw",
-          letterSpacing: "0.04em",
-          lineHeight: 1.4,
-          textShadow: INTRO_TEXT_SHADOW,
-        }}
-        {...lineAnim(1.2)}
-      >
-        A small gallery of WOOLAB sheep goods,
-        <br />
-        objects and illustrations.
-        <br />
-        Walk through and take a closer look.
-      </motion.p>
+          任何窗口比例下间距比例都与设计稿一致），底部介绍单独锚定底边；只从缩小开始的不渲染 */}
+      {!startAtShrink && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-x-0 flex flex-col items-center text-center"
+            style={{ top: "45.6vh", transform: "translateY(-50%)" }}
+          >
+            <motion.p
+              className="font-look text-[#FFF1C2]"
+              style={{
+                fontSize: "1.7vw",
+                letterSpacing: "0.1em",
+                lineHeight: 1.3,
+                textShadow: INTRO_TEXT_SHADOW,
+              }}
+              {...lineAnim(0.35)}
+            >
+              {t("lab.intro.welcome")}
+            </motion.p>
+            <motion.p
+              className="font-look text-[#FFF1C2]"
+              style={{
+                fontSize: "5vw",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.1,
+                marginTop: "0.7vw",
+                textShadow: INTRO_TEXT_SHADOW,
+                whiteSpace: "pre-line",
+              }}
+              {...lineAnim(0.6)}
+            >
+              {t("lab.intro.title")}
+            </motion.p>
+            <motion.p
+              className="font-look text-[#FFF1C2]"
+              style={{
+                fontSize: "1.8vw",
+                letterSpacing: "0.1em",
+                lineHeight: 1.3,
+                marginTop: "0.5vw",
+                textShadow: INTRO_TEXT_SHADOW,
+              }}
+              {...lineAnim(0.9)}
+            >
+              {t("lab.intro.tag")}
+            </motion.p>
+          </div>
+          <motion.p
+            className="pointer-events-none absolute inset-x-0 text-center font-hand text-[#FFF1C2]"
+            style={{
+              bottom: "10.3vh",
+              fontSize: "1.35vw",
+              letterSpacing: "0.04em",
+              lineHeight: 1.4,
+              textShadow: INTRO_TEXT_SHADOW,
+              whiteSpace: "pre-line",
+            }}
+            {...lineAnim(1.2)}
+          >
+            {t("lab.intro.desc")}
+          </motion.p>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -1552,9 +1585,9 @@ export default function LabPage() {
   const headX = useTransform([parallaxX, headGain], (v: number[]) => v[0] * v[1]);
 
   const [active, setActive] = useState(0);
-  /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场那几秒不放 */
+  /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场只放最后"缩小归位"那一段 */
   const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
-  const [introPlaying, setIntroPlaying] = useState(!fromMenu);
+  const [introPlaying, setIntroPlaying] = useState(true);
   /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧 */
   useEffect(() => {
     const urls = [
@@ -1632,7 +1665,7 @@ export default function LabPage() {
         </div>
       </div>
 
-      {introPlaying && <LabIntro onDone={() => setIntroPlaying(false)} />}
+      {introPlaying && <LabIntro onDone={() => setIntroPlaying(false)} startAtShrink={fromMenu} />}
 
       {open && (
         <FlipDetail

@@ -1,4 +1,10 @@
-import type { Localized } from "../i18n/dict";
+import type { Lang, Localized } from "../i18n/dict";
+
+/** 那段话里要画手绘装饰的词：underline 画下划线（可以好几个词）、circle 画圈 */
+export interface Marks {
+  underline?: string[];
+  circle?: string;
+}
 
 /**
  * 实验室项目：小羊做过的实物产品，每个项目 = 列表卡片 + 详情页。
@@ -10,22 +16,22 @@ import type { Localized } from "../i18n/dict";
 
 export interface Lookbook {
   /** 货号（左上标签） */
-  sku: string;
+  sku: Localized;
   /** 产品名（右上标签） */
-  productName: string;
+  productName: Localized;
   /** 顶部手写标题 */
-  closet: string;
+  closet: Localized;
   /** 通栏主图：两张（左背面、右正面，各约 3:2 横图），或一张已经拼好的横图（strip） */
   photos: { back: string; front: string } | { strip: string };
   /** 页头下面那段话，按行拆开（打开时逐行出现） */
   lines: { zh: string[]; en: string[] };
   /**
-   * 那段话里要画手绘装饰的词（原样写，要和某一行里的文字完全对上）：
-   * underline 画下划线（可以好几个词）、circle 画圈。位置是渲染后量出来的，换行、改字不用调坐标。
+   * 那段话里要画手绘装饰的词，中英各写一份（原样写，要和对应语言某一行里的文字完全对上）。
+   * 位置是渲染后量出来的，换行、改字不用调坐标。
    */
-  marks?: { underline?: string[]; circle?: string };
+  marks?: Partial<Record<Lang, Marks>>;
   /** 产品表：五行 标签 / 内容（标签每个产品自己定，比如 T 恤是 FIT，贴纸是 TYPE） */
-  sheet: { label: string; value: string }[];
+  sheet: { label: Localized; value: Localized }[];
   /**
    * 拼贴里的小图，都是 Figma 里直接导出的成品（带描边 / 胶带 / 调色）：
    * 左背面印花（竖）、右正面小标（横）、斜贴的拍立得
@@ -35,15 +41,15 @@ export interface Lookbook {
   /** 邮票贴纸（可缺） */
   postage?: string;
   /** 两句手写标注：左下 / 右下 */
-  notes: { left: string; right: string };
+  notes: { left: Localized; right: Localized };
   /**
    * 通栏照片上的两句手写标注（默认左 "Back" / 右 "Front"，位置是 T 恤 01 那张的）：
    * 可以改字、改位置（照片稿子 799 宽的坐标，字的左上角），填 false 不要这句。
    * 箭头跟着字走：back 的往右下指；front 的默认往左下指，flip = true 改成往右下指。
    */
   captions?: {
-    front?: { text?: string; x?: number; y?: number; flip?: boolean } | false;
-    back?: { text?: string; x?: number; y?: number } | false;
+    front?: { text?: Localized; x?: number; y?: number; flip?: boolean } | false;
+    back?: { text?: Localized; x?: number; y?: number } | false;
   };
 }
 
@@ -58,7 +64,7 @@ export interface LabProject {
    * label 是框顶上的手写名字；frame 是连框带画的整张图（各产品框型不一样，自己带框），
    * 没有 frame 就用 art（框里的画）套统一的金框，都没填渲染占位。
    */
-  wall?: { label: string; frame?: string; art?: string };
+  wall?: { label: Localized; frame?: string; art?: string };
   /** 详情页信息条：年份 / 类别 */
   year?: string;
   category?: Localized;
@@ -86,14 +92,14 @@ export const labProjects: LabProject[] = [
       en: "Built around Meelo’s everyday look, with a minimal front and a fuller back graphic, keeping the mood relaxed and unhurried.",
     },
     image: "/assets/lab/lab-1.svg",
-    wall: { label: "Meelo's Closet", art: "/assets/lab/detail/frame-sheep.webp" },
+    wall: { label: { zh: "Meelo 的衣柜", en: "Meelo's Closet" }, art: "/assets/lab/detail/frame-sheep.webp" },
     year: "2026",
     category: { zh: "T 恤", en: "T-shirt" },
     looks: [
       {
-        sku: "T-SHIRT 01",
-        productName: "Little Lamb",
-        closet: "Meelo's Closet",
+        sku: { zh: "T 恤 01", en: "T-SHIRT 01" },
+        productName: { zh: "小羊咩", en: "Little Lamb" },
+        closet: { zh: "Meelo 的衣柜", en: "Meelo's Closet" },
         photos: {
           back: "/assets/lab/detail/photo-back.webp",
           front: "/assets/lab/detail/photo-front.webp",
@@ -105,13 +111,16 @@ export const labProjects: LabProject[] = [
             "fuller back graphic, keeping the mood relaxed and unhurried.",
           ],
         },
-        marks: { underline: ["Meelo’s everyday look"], circle: "mood relaxed and" },
+        marks: {
+          zh: { underline: ["日常穿着"], circle: "放松、不赶时间" },
+          en: { underline: ["Meelo’s everyday look"], circle: "mood relaxed and" },
+        },
         sheet: [
-          { label: "NAME:", value: "Little Lamb T-shirt" },
-          { label: "FIT:", value: "Relaxed fit" },
-          { label: "MATERIAL:", value: "Cotton" },
-          { label: "COLOR:", value: "Off white" },
-          { label: "PRINT:", value: "Front + back print" },
+          { label: { zh: "名称：", en: "NAME:" }, value: { zh: "小羊咩 T 恤", en: "Little Lamb T-shirt" } },
+          { label: { zh: "版型：", en: "FIT:" }, value: { zh: "宽松", en: "Relaxed fit" } },
+          { label: { zh: "材质：", en: "MATERIAL:" }, value: { zh: "棉", en: "Cotton" } },
+          { label: { zh: "颜色：", en: "COLOR:" }, value: { zh: "米白", en: "Off white" } },
+          { label: { zh: "印花：", en: "PRINT:" }, value: { zh: "前后印花", en: "Front + back print" } },
         ],
         crops: {
           back: "/assets/lab/detail/crop-back.webp",
@@ -120,14 +129,14 @@ export const labProjects: LabProject[] = [
         polaroid: "/assets/lab/detail/polaroid.webp",
         postage: "/assets/lab/detail/postage.webp",
         notes: {
-          left: "Stripes, beanie, and bag.",
-          right: "Woolab signature.",
+          left: { zh: "条纹、毛线帽和包。", en: "Stripes, beanie, and bag." },
+          right: { zh: "Woolab 的签名。", en: "Woolab signature." },
         },
       },
       {
-        sku: "T-SHIRT 02",
-        productName: "Love Floating",
-        closet: "Meelo's Closet",
+        sku: { zh: "T 恤 02", en: "T-SHIRT 02" },
+        productName: { zh: "漂浮的爱", en: "Love Floating" },
+        closet: { zh: "Meelo 的衣柜", en: "Meelo's Closet" },
         photos: { strip: "/assets/lab/detail/tee02-photo.webp" },
         lines: {
           zh: ["灵感来自漂在水上的 Meelo：", "用手写字和大片留白，", "留住一种更慢、更放松的心情。"],
@@ -137,13 +146,16 @@ export const labProjects: LabProject[] = [
             "more relaxed mood.",
           ],
         },
-        marks: { underline: ["floating", "open space", "slower,"], circle: "more relaxed mood." },
+        marks: {
+          zh: { underline: ["漂在水上", "大片留白"], circle: "更放松的心情" },
+          en: { underline: ["floating", "open space", "slower,"], circle: "more relaxed mood." },
+        },
         sheet: [
-          { label: "NAME:", value: "Love Floating T-shirt" },
-          { label: "FIT:", value: "Relaxed fit" },
-          { label: "MATERIAL:", value: "Cotton" },
-          { label: "COLOR:", value: "Off white" },
-          { label: "PRINT:", value: "Front + back print" },
+          { label: { zh: "名称：", en: "NAME:" }, value: { zh: "漂浮的爱 T 恤", en: "Love Floating T-shirt" } },
+          { label: { zh: "版型：", en: "FIT:" }, value: { zh: "宽松", en: "Relaxed fit" } },
+          { label: { zh: "材质：", en: "MATERIAL:" }, value: { zh: "棉", en: "Cotton" } },
+          { label: { zh: "颜色：", en: "COLOR:" }, value: { zh: "米白", en: "Off white" } },
+          { label: { zh: "印花：", en: "PRINT:" }, value: { zh: "前后印花", en: "Front + back print" } },
         ],
         crops: {
           back: "/assets/lab/detail/tee02-crop-back.webp",
@@ -152,8 +164,8 @@ export const labProjects: LabProject[] = [
         polaroid: "/assets/lab/detail/tee02-polaroid.webp",
         postage: "/assets/lab/detail/postage.webp",
         notes: {
-          left: "Meelo in the pool.",
-          right: "A small Meelo.",
+          left: { zh: "泡在池子里的 Meelo。", en: "Meelo in the pool." },
+          right: { zh: "一只小小的 Meelo。", en: "A small Meelo." },
         },
         /* 02 这张人的头偏右，Front 放到头左边的空墙上，箭头往右下指向胸口的小印花 */
         captions: { front: { x: 470, y: 14, flip: true } },
@@ -187,12 +199,12 @@ export const labProjects: LabProject[] = [
       en: "Placeholder: a set of everyday sheep stickers.",
     },
     image: "/assets/lab/lab-2.svg",
-    wall: { label: "Meelo's Daily", frame: "/assets/lab/detail/sticker-frame.webp" },
+    wall: { label: { zh: "Meelo 的日常", en: "Meelo's Daily" }, frame: "/assets/lab/detail/sticker-frame.webp" },
     looks: [
       {
-        sku: "Sticker Pack",
-        productName: "Daily Bits",
-        closet: "Meelo's Daily",
+        sku: { zh: "贴纸包", en: "Sticker Pack" },
+        productName: { zh: "日常碎片", en: "Daily Bits" },
+        closet: { zh: "Meelo 的日常", en: "Meelo's Daily" },
         photos: { strip: "/assets/lab/detail/sticker-photo.webp" },
         lines: {
           zh: ["围绕 Meelo 的日常瞬间和小表情，", "把它们画成一张张小图案，", "跟着你每天用的东西到处走。"],
@@ -202,13 +214,16 @@ export const labProjects: LabProject[] = [
             "you use every day.",
           ],
         },
-        marks: { underline: ["moments", "little reactions,"], circle: "every day." },
+        marks: {
+          zh: { underline: ["日常瞬间", "小表情"], circle: "到处走" },
+          en: { underline: ["moments", "little reactions,"], circle: "every day." },
+        },
         sheet: [
-          { label: "NAME:", value: "Meelo’s Daily Stickers" },
-          { label: "TYPE:", value: "Transfer stickers" },
-          { label: "MATERIAL:", value: "Transfer film" },
-          { label: "FINISH:", value: "Matte" },
-          { label: "DESIGN:", value: "Meelo graphic series" },
+          { label: { zh: "名称：", en: "NAME:" }, value: { zh: "Meelo 日常贴纸", en: "Meelo’s Daily Stickers" } },
+          { label: { zh: "类型：", en: "TYPE:" }, value: { zh: "转印贴纸", en: "Transfer stickers" } },
+          { label: { zh: "材质：", en: "MATERIAL:" }, value: { zh: "转印膜", en: "Transfer film" } },
+          { label: { zh: "表面：", en: "FINISH:" }, value: { zh: "哑光", en: "Matte" } },
+          { label: { zh: "图案：", en: "DESIGN:" }, value: { zh: "Meelo 图案系列", en: "Meelo graphic series" } },
         ],
         crops: {
           back: "/assets/lab/detail/crop-back.webp",
@@ -216,11 +231,11 @@ export const labProjects: LabProject[] = [
         },
         polaroid: "/assets/lab/detail/sticker-polaroid.webp",
         postage: "/assets/lab/detail/sticker-postage.webp",
-        notes: { left: "Daily Bits.", right: "Little Reactions." },
+        notes: { left: { zh: "日常碎片。", en: "Daily Bits." }, right: { zh: "小表情。", en: "Little Reactions." } },
         /* 左包左下写 Daily Bits（左上角留给靠边的画框）、右包右边写 Little Reactions */
         captions: {
-          back: { text: "Daily Bits", x: 92, y: 196 },
-          front: { text: "Little Reactions", x: 640, y: 70 },
+          back: { text: { zh: "日常碎片", en: "Daily Bits" }, x: 92, y: 196 },
+          front: { text: { zh: "小表情", en: "Little Reactions" }, x: 640, y: 70 },
         },
       },
     ],
@@ -248,12 +263,12 @@ export const labProjects: LabProject[] = [
       en: "Placeholder: the sheep's tiny cup.",
     },
     image: "/assets/lab/lab-1.svg",
-    wall: { label: "Meelo's Bar", frame: "/assets/lab/detail/drink-frame.webp" },
+    wall: { label: { zh: "Meelo 的酒吧", en: "Meelo's Bar" }, frame: "/assets/lab/detail/drink-frame.webp" },
     looks: [
       {
-        sku: "Shot Glass",
-        productName: "One Sip",
-        closet: "Meelo's Bar",
+        sku: { zh: "小酒杯", en: "Shot Glass" },
+        productName: { zh: "一口咩", en: "One Sip" },
+        closet: { zh: "Meelo 的酒吧", en: "Meelo's Bar" },
         photos: { strip: "/assets/lab/detail/drink-photo.webp" },
         lines: {
           zh: ["围绕「一口就好」的小杯子：", "简单的杯型配上 Woolab 的图案，", "不多不少，刚刚好。"],
@@ -263,13 +278,16 @@ export const labProjects: LabProject[] = [
             "just enough.",
           ],
         },
-        marks: { underline: ["one sip,", "just enough."], circle: "nothing more," },
+        marks: {
+          zh: { underline: ["一口就好", "刚刚好"], circle: "不多不少" },
+          en: { underline: ["one sip,", "just enough."], circle: "nothing more," },
+        },
         sheet: [
-          { label: "NAME:", value: "One Sip Glass" },
-          { label: "TYPE:", value: "Shot glass" },
-          { label: "MATERIAL:", value: "Glass" },
-          { label: "FINISH:", value: "Clear" },
-          { label: "PRINT:", value: "Meelo graphic" },
+          { label: { zh: "名称：", en: "NAME:" }, value: { zh: "一口咩小酒杯", en: "One Sip Glass" } },
+          { label: { zh: "类型：", en: "TYPE:" }, value: { zh: "小酒杯", en: "Shot glass" } },
+          { label: { zh: "材质：", en: "MATERIAL:" }, value: { zh: "玻璃", en: "Glass" } },
+          { label: { zh: "表面：", en: "FINISH:" }, value: { zh: "透明", en: "Clear" } },
+          { label: { zh: "印花：", en: "PRINT:" }, value: { zh: "Meelo 图案", en: "Meelo graphic" } },
         ],
         crops: {
           back: "/assets/lab/detail/crop-back.webp",
@@ -277,7 +295,7 @@ export const labProjects: LabProject[] = [
         },
         polaroid: "/assets/lab/detail/drink-polaroid.webp",
         postage: "/assets/lab/detail/drink-postage.webp",
-        notes: { left: "Small sips.", right: "Big vibes." },
+        notes: { left: { zh: "小口小口喝。", en: "Small sips." }, right: { zh: "大大的心情。", en: "Big vibes." } },
         /* 照片上不写字 */
         captions: { back: false, front: false },
       },
@@ -305,12 +323,12 @@ export const labProjects: LabProject[] = [
       en: "Placeholder: the candle that lights the room.",
     },
     image: "/assets/lab/lab-2.svg",
-    wall: { label: "Meelo's Night", frame: "/assets/lab/detail/candle-frame.webp" },
+    wall: { label: { zh: "Meelo 的夜晚", en: "Meelo's Night" }, frame: "/assets/lab/detail/candle-frame.webp" },
     looks: [
       {
-        sku: "Candle",
-        productName: "Meelo",
-        closet: "Meelo's Night",
+        sku: { zh: "香薰蜡烛", en: "Candle" },
+        productName: { zh: "Meelo", en: "Meelo" },
+        closet: { zh: "Meelo 的夜晚", en: "Meelo's Night" },
         photos: { strip: "/assets/lab/detail/candle-photo.webp" },
         lines: {
           zh: ["围绕入夜后安静的那几个小时：", "用暖暖的烛光和 Meelo 的图案，", "给房间添一点更柔和的心情。"],
@@ -319,13 +337,16 @@ export const labProjects: LabProject[] = [
             "and Meelo graphics to bring a softer mood into the room.",
           ],
         },
-        marks: { underline: ["a softer mood into the room."] },
+        marks: {
+          zh: { underline: ["更柔和的心情"] },
+          en: { underline: ["a softer mood into the room."] },
+        },
         sheet: [
-          { label: "NAME:", value: "Meelo Candle" },
-          { label: "TYPE:", value: "Candle" },
-          { label: "MOOD:", value: "Transfer film" },
-          { label: "DESIGN:", value: "Matte" },
-          { label: "SERIES:", value: "Meelo Goods | 2026" },
+          { label: { zh: "名称：", en: "NAME:" }, value: { zh: "Meelo 蜡烛", en: "Meelo Candle" } },
+          { label: { zh: "类型：", en: "TYPE:" }, value: { zh: "蜡烛", en: "Candle" } },
+          { label: { zh: "氛围：", en: "MOOD:" }, value: { zh: "入夜后的柔光", en: "Transfer film" } },
+          { label: { zh: "设计：", en: "DESIGN:" }, value: { zh: "哑光", en: "Matte" } },
+          { label: { zh: "系列：", en: "SERIES:" }, value: { zh: "Meelo Goods | 2026", en: "Meelo Goods | 2026" } },
         ],
         crops: {
           back: "/assets/lab/detail/crop-back.webp",
@@ -333,11 +354,14 @@ export const labProjects: LabProject[] = [
         },
         polaroid: "/assets/lab/detail/candle-polaroid.webp",
         postage: "/assets/lab/detail/candle-postage.webp",
-        notes: { left: "Meelo graphic on the jar.", right: "Woolab mark underneath." },
+        notes: {
+          left: { zh: "罐身上的 Meelo 图案。", en: "Meelo graphic on the jar." },
+          right: { zh: "底下的 Woolab 标。", en: "Woolab mark underneath." },
+        },
         /* 蜡烛右上写一句，箭头往左下指着蜡烛；左边不写（左上角是画框靠边呆的地方） */
         captions: {
           back: false,
-          front: { text: "Meelo graphic on the candle jar.", x: 300, y: 28 },
+          front: { text: { zh: "蜡烛罐上的 Meelo 图案。", en: "Meelo graphic on the candle jar." }, x: 300, y: 28 },
         },
       },
     ],

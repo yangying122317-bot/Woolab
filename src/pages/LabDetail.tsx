@@ -9,8 +9,9 @@ import {
   type MotionValue,
   type Variants,
 } from "framer-motion";
-import { labProjects, type LabProject, type Lookbook } from "../data/labs";
+import { labProjects, type LabProject, type Lookbook, type Marks } from "../data/labs";
 import { useLanguage } from "../i18n/LanguageContext";
+import type { Localized } from "../i18n/dict";
 import { useSmoothContainer } from "../components/SmoothScroll";
 import { MU } from "../components/NavBar";
 import { useReportDetailOpen } from "../state/chrome";
@@ -29,8 +30,8 @@ import { useReportDetailOpen } from "../state/chrome";
  *     它正好从撕纸底下两张小图中间穿过；一路慢慢扶正
  *  3. 再往下滚，通栏主图从底下整块顶上来把拼贴盖掉，停在那段话下面；主角浮在照片上被"托"回屏中；
  *     之后整页一起正常滚，主图完整露出
- *  4. 底部画框墙：主角落进墙上一排画框里（正好扶正）；横滑挑另一只、点开 → 那只飞回页顶、
- *     边飞边歪回起始角度，变成新的主角，换产品重来
+ *  4. 底部画框墙：主角落进墙上一排画框里（正好扶正）；再往下滑，下一只自己飞回页顶（点别的框也行）、
+ *     边飞边歪回起始角度，变成新的主角，换产品重来；最后一件到头就停在墙上
  */
 
 const A = "/assets/lab/detail";
@@ -270,10 +271,7 @@ function LookbookHead({ u, closet }: { u: number; closet: string }) {
   return (
     <Board u={u}>
       <Rotated u={u} x={297} y={22.44} w={126.87} h={29.1} iw={126.87} ih={29.1} transform="rotate(-2.33deg)">
-        <p
-          className="font-scroll whitespace-nowrap text-center text-white"
-          style={{ fontSize: 20 * u, lineHeight: 1.2 }}
-        >
+        <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 20 * u, lineHeight: 1.2 }}>
           {closet}
         </p>
       </Rotated>
@@ -320,7 +318,7 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
           <Img src={art} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/25 p-1 text-center text-white/60">
-            <span className="font-scroll" style={{ fontSize: width * 0.085, lineHeight: 1.25 }}>
+            <span className="font-hand" style={{ fontSize: width * 0.085, lineHeight: 1.25 }}>
               {pick(project.title)}
             </span>
           </div>
@@ -409,6 +407,7 @@ function HeroStrip({
   pad?: { top: number; bottom: number };
   delay?: number;
 }) {
+  const { pick } = useLanguage();
   const k = useViewportWidth() / STRIP_W;
   const hand: CSSProperties = { fontSize: 15 * k, lineHeight: 1.2 };
   const hidden = "inset(0 0 100% 0)";
@@ -417,8 +416,11 @@ function HeroStrip({
   const H = STRIP_H * k + padTop + (pad?.bottom ?? 0);
   /* 两句标注：字、位置（稿子 799 宽的坐标）都可以每件自己定，默认是 T 恤 01 那张的；false = 不要 */
   const front =
-    lb?.captions?.front === false ? null : { text: "Front", x: 654, y: 16, flip: false, ...lb?.captions?.front };
-  const back = lb?.captions?.back === false ? null : { text: "Back", x: 172, y: 50, ...lb?.captions?.back };
+    lb?.captions?.front === false
+      ? null
+      : { text: { zh: "正面", en: "Front" }, x: 654, y: 16, flip: false, ...lb?.captions?.front };
+  const back =
+    lb?.captions?.back === false ? null : { text: { zh: "背面", en: "Back" }, x: 172, y: 50, ...lb?.captions?.back };
   return (
     <div className="relative w-full overflow-hidden" style={{ height: H }}>
       <motion.div
@@ -458,8 +460,8 @@ function HeroStrip({
                     ih={23.83}
                     transform="rotate(-8.68deg)"
                   >
-                    <p className="font-scroll whitespace-nowrap text-black" style={hand}>
-                      {front.text}
+                    <p className="font-hand whitespace-nowrap text-black" style={hand}>
+                      {pick(front.text)}
                     </p>
                   </Rotated>
                   {/* 箭头默认从字底往左下指；flip 就往右下指（字放在东西左边的时候用） */}
@@ -489,8 +491,8 @@ function HeroStrip({
                     ih={23.83}
                     transform="rotate(-8.68deg)"
                   >
-                    <p className="font-scroll whitespace-nowrap text-black" style={hand}>
-                      {back.text}
+                    <p className="font-hand whitespace-nowrap text-black" style={hand}>
+                      {pick(back.text)}
                     </p>
                   </Rotated>
                   <Rotated
@@ -511,7 +513,7 @@ function HeroStrip({
           </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/30 bg-[#4a4444]/70 text-white/60">
-            <span className="font-scroll" style={{ fontSize: 22 * k }}>
+            <span className="font-hand" style={{ fontSize: 22 * k }}>
               {placeholder}
             </span>
           </div>
@@ -534,7 +536,7 @@ type MarkBox = { l: number; t: number; w: number; h: number };
 type MarkKey = `underline:${number}` | "circle";
 
 /** 一段话要画的装饰列表：[key, 词] */
-function markList(marks: Lookbook["marks"] | undefined): [MarkKey, string][] {
+function markList(marks: Marks | undefined): [MarkKey, string][] {
   const out: [MarkKey, string][] = [];
   marks?.underline?.forEach((w, i) => out.push([`underline:${i}`, w]));
   if (marks?.circle) out.push(["circle", marks.circle]);
@@ -588,7 +590,7 @@ function Description({
   delay: number;
 }) {
   const { lang } = useLanguage();
-  const markDefs = markList(marks);
+  const markDefs = markList(marks?.[lang]);
   const Y = (y: number) => y - DESC_Y0;
   /*
    * 行错开出现，手绘装饰 / 箭头等行出完再淡入。
@@ -665,7 +667,7 @@ function Description({
         <Rotated u={u} x={40} y={Y(DESC_TEXT_Y)} w={640} h={60} iw={640} ih={60} transform="rotate(-1.31deg)">
           <div
             ref={textEl}
-            className="font-scroll relative text-center text-white"
+            className="font-hand relative text-center text-white"
             style={{
               fontSize: 16 * u,
               lineHeight: 1.4,
@@ -770,8 +772,9 @@ const fadeIn: Variants = {
 };
 
 function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolean; delay: number }) {
+  const { t, pick } = useLanguage();
   const Y = (y: number) => y - COLLAGE_Y0;
-  const rows: [string, string][] = lb.sheet.slice(0, 5).map((r) => [r.label, r.value]);
+  const rows: [string, string][] = lb.sheet.slice(0, 5).map((r) => [pick(r.label), pick(r.value)]);
   /** 第 i 个元素的出场时刻：0 = 撕纸；之后的等纸擦到八成（0.6s）再每 0.16s 一个 */
   const at = (i: number) => delay + (i === 0 ? 0 : 0.6 + (i - 1) * 0.16);
   /*
@@ -803,7 +806,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
               lineHeight: 1.2,
             }}
           >
-            PRODUCT SHEET
+            {t("lab.detail.sheet")}
           </p>
           <img src={`${A}/sheet-lines.svg`} alt="" draggable={false} style={box(u, 206, Y(914.5), 288, 149)} />
           {rows.map(([k, v], i) => (
@@ -820,7 +823,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
                 {k}
               </p>
               <p
-                className="font-scroll absolute whitespace-nowrap text-black"
+                className="font-hand absolute whitespace-nowrap text-black"
                 style={{
                   left: 262 * u,
                   top: Y(891 + i * 37) * u,
@@ -887,7 +890,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
           {/* 两句手写标注 + 箭头 + 圈：各自挂在两张小图底下 */}
           <motion.div className="absolute inset-0" variants={fadeIn} custom={at(6)}>
             <p
-              className="font-scroll absolute text-white"
+              className="font-hand absolute text-white"
               style={{
                 left: (CROP_B.x + 10) * u,
                 top: Y(CROP_B.y + 255) * u,
@@ -896,7 +899,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
                 lineHeight: 1.2,
               }}
             >
-              {lb.notes.left}
+              {pick(lb.notes.left)}
             </p>
             <Rotated
               u={u}
@@ -911,10 +914,10 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
               <Img src={`${A}/arrow-stripes.svg`} fit="fill" />
             </Rotated>
             <p
-              className="font-scroll absolute whitespace-nowrap text-white"
+              className="font-hand absolute whitespace-nowrap text-white"
               style={{ left: (CROP_F.x - 13) * u, top: Y(CROP_F.y + 202) * u, fontSize: 16 * u, lineHeight: 1.2 }}
             >
-              {lb.notes.right}
+              {pick(lb.notes.right)}
             </p>
             <Rotated
               u={u}
@@ -1013,11 +1016,30 @@ function heroSize(vw: number, vh: number) {
   return { w, h: (w * FRAME_H) / FRAME_W };
 }
 
-/** 墙上那排：每只的宽、框心间距、第 i 只的中心 x（整排水平居中） */
+/** 两边标签占的地方（稿单位）：整排画框要让开，别压到"货号 / 产品名" */
+const WALL_SIDE = 130;
+/** 间距压到最紧也得留这么多倍框宽 */
+const WALL_GAP_MIN = 1.15;
+
+/**
+ * 墙上那排：每只的宽、框心间距、第 i 只的中心 x（整排水平居中）。
+ * 4:3 这类窄屏上按屏高算出来的框会把整排撑到屏边、压住两边的标签：
+ * 先压间距（最紧 WALL_GAP_MIN 倍），还放不下就整排缩小。
+ */
 function wallLayout(vw: number, vh: number) {
-  const wallW = heroSize(vw, vh).w * WALL_K;
-  const gap = wallW * WALL_GAP_K;
   const n = labProjects.length;
+  const avail = vw - 2 * WALL_SIDE * boardUnits().u;
+  let wallW = heroSize(vw, vh).w * WALL_K;
+  let gap = wallW * WALL_GAP_K;
+  const rowW = (w: number, k: number) => (n - 1) * k * w + w;
+  if (rowW(wallW, WALL_GAP_K) > avail) {
+    if (rowW(wallW, WALL_GAP_MIN) <= avail) {
+      gap = (avail - wallW) / (n - 1);
+    } else {
+      wallW = avail / ((n - 1) * WALL_GAP_MIN + 1);
+      gap = wallW * WALL_GAP_MIN;
+    }
+  }
   const slotX = (i: number) => vw / 2 + (i - (n - 1) / 2) * gap;
   return { wallW, gap, slotX };
 }
@@ -1114,7 +1136,7 @@ function FrameWall({
   onOpen: (i: number) => void;
   onBackTop: () => void;
 }) {
-  const { t } = useLanguage();
+  const { pick } = useLanguage();
   const { wallW: W, slotX } = wallLayout(vw, vh);
   const H = (W * FRAME_H) / FRAME_W;
   const rowCy = vh * WALL_ROW_CY;
@@ -1133,12 +1155,6 @@ function FrameWall({
   return (
     <div className="sticky top-0 h-screen overflow-hidden">
       <Watermark u={u} cy={rowCy} mode="wall" />
-      <p
-        className="font-look absolute whitespace-nowrap uppercase text-white/55"
-        style={{ left: 25 * u, top: 60 * u, fontSize: 10 * u, letterSpacing: "0.14em" }}
-      >
-        {t("lab.detail.next")}
-      </p>
 
       {labProjects.map((p, i) => {
         const shown = (landed || i !== index) && i !== hideIndex;
@@ -1157,10 +1173,10 @@ function FrameWall({
               transition={{ duration: 0.25 }}
             >
               <p
-                className="font-scroll whitespace-nowrap text-white"
+                className="font-hand whitespace-nowrap text-white"
                 style={{ fontSize: 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
               >
-                {p.wall?.label ?? p.title.en}
+                {pick(p.wall?.label ?? p.title)}
               </p>
               <img
                 src={`${A}/arrow-down.svg`}
@@ -1185,43 +1201,24 @@ function FrameWall({
                   if (i === index) onBackTop();
                   else onOpen(i);
                 }}
-                aria-label={p.wall?.label ?? p.title.en}
+                aria-label={pick(p.wall?.label ?? p.title)}
               >
                 <FramePiece project={p} width={W} />
               </motion.button>
             </div>
-
-            {/* 当前这只底下标一句"正在看" */}
-            <motion.p
-              className="font-look pointer-events-none absolute inset-x-0 whitespace-nowrap text-center uppercase text-white/60"
-              style={{ top: H + 22 * u, fontSize: 10 * u, letterSpacing: "0.14em" }}
-              animate={{ opacity: i === index && landed ? 1 : 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {t("lab.detail.current")}
-            </motion.p>
           </div>
         );
       })}
-
-      <motion.p
-        className="font-look pointer-events-none absolute inset-x-0 text-center uppercase text-white/70"
-        style={{ bottom: 22 * u, fontSize: 11 * u, letterSpacing: "0.14em" }}
-        animate={{ opacity: landed ? 1 : 0 }}
-        transition={{ duration: 0.4 }}
-      >
-        {t("lab.detail.pick")}
-      </motion.p>
     </div>
   );
 }
 
 /** 项目某一件的两边标签：货号 / 产品名；没填 lookbook 的用编号 + 项目名顶着 */
-function labelOf(p: LabProject, i: number, look = 0) {
+function labelOf(pick: (v: Localized) => string, p: LabProject, i: number, look = 0) {
   const lb = p.looks?.[look];
   return {
-    left: lb?.sku ?? `NO.${String(i + 1).padStart(2, "0")}`,
-    right: lb?.productName ?? p.title.en,
+    left: lb ? pick(lb.sku) : `NO.${String(i + 1).padStart(2, "0")}`,
+    right: lb ? pick(lb.productName) : pick(p.title),
   };
 }
 
@@ -1258,10 +1255,13 @@ function LookSection({
   scroller,
   play,
   delay,
+  fadeIn = false,
 }: {
   lb?: Lookbook;
   fallbackLines: string[];
   first: boolean;
+  /** 切项目切过来的：页头的水印 / 标题淡入，别在回顶那一帧整块跳出来 */
+  fadeIn?: boolean;
   closet: string;
   u: number;
   uc: number;
@@ -1292,10 +1292,15 @@ function LookSection({
     <section ref={ref} className="relative">
       <div className="relative" style={{ height: layout.blockH }}>
         {first && (
-          <>
+          <motion.div
+            className="absolute inset-0"
+            initial={fadeIn ? { opacity: 0 } : false}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
+          >
             <Watermark u={u} cy={vh / 2} />
             <LookbookHead u={u} closet={closet} />
-          </>
+          </motion.div>
         )}
         <Description
           u={u}
@@ -1314,7 +1319,7 @@ function LookSection({
                 className="flex items-center justify-center border border-dashed border-white/30 bg-[#4a4444]/70 text-white/60"
                 style={box(uc, 110, 0, 500, COLLAGE_H)}
               >
-                <span className="font-scroll" style={{ fontSize: 22 * uc }}>
+                <span className="font-hand" style={{ fontSize: 22 * uc }}>
                   {t("lab.detail.shot")}
                 </span>
               </div>
@@ -1363,7 +1368,7 @@ export function DetailPage({
   const lenis = useSmoothContainer(scroller, content, interactive);
   /* 这个项目的几件；一件都没填的渲染一段占位 */
   const looks: (Lookbook | undefined)[] = project.looks?.length ? project.looks : [undefined];
-  const closet = project.wall?.label ?? looks[0]?.closet ?? "Meelo's Closet";
+  const closet = pick(project.wall?.label ?? looks[0]?.closet ?? { zh: "Meelo 的衣柜", en: "Meelo's Closet" });
 
   /* 切到另一件后：回顶部，第一屏重新出场 */
   const shownIndex = useRef(index);
@@ -1382,7 +1387,8 @@ export function DetailPage({
   /* 两边的标签：平时是正在看的这一件（滚到哪件算哪件），鼠标放到墙上某只框时换成那个项目的 */
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [lookIdx, setLookIdx] = useState(0);
-  const shownLabel = hoverIdx === null ? labelOf(project, index, lookIdx) : labelOf(labProjects[hoverIdx], hoverIdx);
+  const shownLabel =
+    hoverIdx === null ? labelOf(pick, project, index, lookIdx) : labelOf(pick, labProjects[hoverIdx], hoverIdx);
 
   const vw = useViewportWidth();
   const [vh, setVh] = useState(() => window.innerHeight);
@@ -1483,6 +1489,26 @@ export function DetailPage({
   const [flying, setFlying] = useState<number | null>(null);
   const flyTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
+  /*
+   * 落到墙上以后再往下滑：不用点，下一只自己升起来飞回页顶接着讲（最后一件到头就停在墙上）。
+   * 落稳后留 350ms 空窗，别让把主角送到墙上的那股惯性顺手把下一只也带走。
+   */
+  const landedAt = useRef(0);
+  useEffect(() => {
+    if (landed) landedAt.current = performance.now();
+  }, [landed]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !interactive) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY <= 0 || !landed || flying !== null) return;
+      if (index >= labProjects.length - 1) return;
+      if (performance.now() - landedAt.current < 350) return;
+      setFlying(index + 1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [landed, flying, index, interactive]);
   const onFlown = () => {
     if (flying === null) return;
     onNext?.(flying);
@@ -1502,9 +1528,9 @@ export function DetailPage({
         type="button"
         data-lab-detail-close=""
         onClick={onClose}
-        className="absolute z-30 font-scroll text-white/90 transition hover:opacity-70"
+        className="font-look absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
         /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
-        style={{ left: 25 * u, top: `calc(${MU} * 26)`, transform: "translateY(-50%)", fontSize: 14 * u }}
+        style={{ left: 25 * u, top: `calc(${MU} * 26)`, transform: "translateY(-50%)", fontSize: 12 * u }}
       >
         {t("lab.detail.back")}
       </button>
@@ -1526,6 +1552,7 @@ export function DetailPage({
               lb={lb}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
+              fadeIn={entered}
               closet={closet}
               u={u}
               uc={uc}

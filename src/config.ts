@@ -4,6 +4,8 @@
 export const config = {
   /** 是否启用开场动画（每个浏览器会话只播放一次） */
   introEnabled: true,
+  /** 首页点小羊是否弹身份卡（角色名片还是原型，先关掉；小羊只保留 hover 的招呼） */
+  identityCardEnabled: false,
   /**
    * 移动端首页地图的展示方式：
    * - "list"：降级为列表式导航（默认，无需竖版地图素材）

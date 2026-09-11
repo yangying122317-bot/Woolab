@@ -60,3 +60,56 @@ export function useReportPlainLogo(active: boolean) {
     };
   }, [active]);
 }
+
+/**
+ * 再进一步：整条顶栏都不混合、直接纯白。
+ * About 页翻到蓝色的 What's Next 那页时用——白字 difference 到蓝上会变成橙的。
+ */
+let plainNav = false;
+
+export function usePlainNav(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => plainNav,
+    () => false,
+  );
+}
+
+/** active 为真的这段时间，整条顶栏纯白 */
+export function useReportPlainNav(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    plainNav = true;
+    emit();
+    return () => {
+      plainNav = false;
+      emit();
+    };
+  }, [active]);
+}
+
+/**
+ * 开场加载那块蓝布还盖着的时候，顶栏只留左上的 logo，右边 MENU / CN·EN / 喇叭等布拉走再淡进来。
+ */
+let logoOnlyNav = false;
+
+export function useLogoOnlyNav(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => logoOnlyNav,
+    () => false,
+  );
+}
+
+/** active 为真的这段时间，顶栏只画 logo */
+export function useReportLogoOnlyNav(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    logoOnlyNav = true;
+    emit();
+    return () => {
+      logoOnlyNav = false;
+      emit();
+    };
+  }, [active]);
+}

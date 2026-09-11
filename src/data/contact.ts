@@ -13,6 +13,5 @@ export interface SocialLink {
 
 export const socialLinks: SocialLink[] = [
   { id: "instagram", label: "Instagram", href: "#" },
-  { id: "xiaohongshu", label: "小红书", href: "#" },
-  { id: "weibo", label: "微博", href: "#" },
+  { id: "xiaohongshu", label: "RED", href: "#" },
 ];

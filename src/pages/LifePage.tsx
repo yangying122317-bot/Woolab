@@ -24,6 +24,10 @@ import { DEFAULT_ROOM, isAllDone, isListDone, isStationDone, loadRoomState, save
 import type { DrinkChoice, RoomState } from "../state/roomState";
 import { playNavigate } from "../audio/sfx";
 import { useLanguage } from "../i18n/LanguageContext";
+import { preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
+
+/** 第一屏素材最多等这么久；网再慢也先揭开（图会陆续补上） */
+const READY_CAP_MS = 4000;
 
 const photoStation = lifeStations.find((s) => s.id === "photo")!;
 /** 第一次进门的引导只演一次 */
@@ -40,7 +44,7 @@ const GUIDE_KEY = "woolab-life-guided";
  * 完成痕迹存 localStorage（见 src/state/roomState.ts），下次进来还在。
  */
 export default function LifePage() {
-  const { t, pick, lang } = useLanguage();
+  const { t, pick } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
@@ -60,6 +64,23 @@ export default function LifePage() {
 
   // 末尾留 8% 进度作"到站缓冲"
   const x = useTransform(scrollYProgress, [0, 0.92, 1], [0, -maxShift, -maxShift]);
+
+  /*
+   * 进门先把第一屏的图在幕后解码完（见 components/life/preload.ts），就位前房间不挂、白光不散；
+   * 就位后再把后面两段的图在后台拉齐。这样揭开的那一刻主线程是空的，滚轮立刻有反应。
+   */
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void whenLifeFirstReady(READY_CAP_MS).then(() => {
+      if (!alive) return;
+      setReady(true);
+      void preloadLifeRest();
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* ---------------- 房间状态（持久化） ---------------- */
   // 带 ?reset 打开时清空进度（连第一次进门的引导也重演），方便从头体验一遍
@@ -108,13 +129,22 @@ export default function LifePage() {
     if (checklistOpen) lenis.stop();
     else lenis.start();
   }, [checklistOpen, lenis]);
-  /* 抽屉是牛皮色、顶到屏幕顶，压着左上角的 logo：开着时 logo 画成纯白 */
-  useReportPlainLogo(checklistOpen);
+  /*
+   * 抽屉是牛皮色、顶到屏幕顶，压着左上角的 logo：开着时 logo 画成纯白。
+   * 收回是 0.42s 的滑出动画，checklistOpen 一变假抽屉还盖在 logo 底下——这段时间 logo 要是切回
+   * difference 混合，白字压在牛皮色上就闪成蓝的；所以纯白要一直保持到抽屉真正滑出画面（onClosed）。
+   */
+  const [drawerShown, setDrawerShown] = useState(false);
+  useEffect(() => {
+    if (checklistOpen) setDrawerShown(true);
+  }, [checklistOpen]);
+  useReportPlainLogo(checklistOpen || drawerShown);
   const [listKick, setListKick] = useState(0);
   const guideHint = useRef(false);
   const hintTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(hintTimer.current), []);
   const onListClosed = () => {
+    setDrawerShown(false);
     setListKick((n) => n + 1);
     if (guideHint.current) {
       guideHint.current = false;
@@ -171,6 +201,8 @@ export default function LifePage() {
    */
   const [entryHint, setEntryHint] = useState(false);
   useEffect(() => {
+    /* 房间还没揭开就先不计时 */
+    if (!ready) return;
     if (localStorage.getItem(GUIDE_KEY)) return;
     if (lifeStations.some((s) => isStationDone(room, s.id))) {
       localStorage.setItem(GUIDE_KEY, "1");
@@ -197,7 +229,7 @@ export default function LifePage() {
       window.removeEventListener(INTRO_DISMISSED_EVENT, onIntroDone);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
   // 隐藏原生滚动条（底部进度条代替）；离开页面时恢复滚动锁
   useEffect(() => {
@@ -376,29 +408,32 @@ export default function LifePage() {
           animate={zoomControls}
           style={{ transformOrigin: zoomOrigin }}
         >
-          {/* 房间长卷：滚动驱动横移 */}
-          <motion.div className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh` }}>
+          {/* 房间长卷：滚动驱动横移；willChange 让它独立成层，横移时不重绘整条墙 */}
+          <motion.div className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
             {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白 */}
             <div className="absolute left-0 w-full" style={{ top: "100%", height: "60vh", background: "#43A0CC" }} />
-            <RoomStage
-              room={room}
-              interactive={!focus}
-              guide={{ entry: entryHint && !checklistOpen, idle }}
-              onOpen={openStation}
-              onChecklist={openChecklist}
-              listKick={listKick}
-              onTeeDone={completeTee}
-              photoActive={photoFocus}
-              onPhotoDone={completePhoto}
-              drinkActive={focus?.id === "drink"}
-              onDrinkDone={completeDrink}
-              candleActive={focus?.id === "candle"}
-              onCandleDone={completeCandle}
-              onDressed={completeDress}
-              paint={paint}
-              onPaintEnd={finishPaint}
-              onEnterLab={enterLab}
-            />
+            {/* 第一屏的图解码完才挂房间：否则三百多张图一起抢带宽、抢主线程，揭开时滚不动 */}
+            {ready && (
+              <RoomStage
+                room={room}
+                interactive={!focus}
+                guide={{ entry: entryHint && !checklistOpen, idle }}
+                onOpen={openStation}
+                onChecklist={openChecklist}
+                listKick={listKick}
+                onTeeDone={completeTee}
+                photoActive={photoFocus}
+                onPhotoDone={completePhoto}
+                drinkActive={focus?.id === "drink"}
+                onDrinkDone={completeDrink}
+                candleActive={focus?.id === "candle"}
+                onCandleDone={completeCandle}
+                onDressed={completeDress}
+                paint={paint}
+                onPaintEnd={finishPaint}
+                onEnterLab={enterLab}
+              />
+            )}
           </motion.div>
         </motion.div>
 
@@ -461,7 +496,7 @@ export default function LifePage() {
               }}
             >
               <span
-                className={`${lang === "zh" ? "font-hand" : "font-look"} whitespace-nowrap font-bold uppercase`}
+                className="font-look whitespace-nowrap font-bold uppercase"
                 style={{ writingMode: "vertical-rl", fontSize: "1.45vh", letterSpacing: "0.08em", color: "#94541C" }}
               >
                 {t("life.checklist.title")}
@@ -512,7 +547,7 @@ export default function LifePage() {
           onClose={() => void closeFocus()}
         />
 
-        {/* 进场：接住开门过场，淡出露出房间（示意稿用中性白光）；从目录来的不放 */}
+        {/* 进场：接住开门过场，等第一屏的图就位再淡出露出房间（示意稿用中性白光）；从目录来的不放 */}
         {!fromMenu && (
           <motion.div
             className="pointer-events-none absolute inset-0 z-50"
@@ -520,7 +555,7 @@ export default function LifePage() {
               background: "radial-gradient(circle at 50% 60%, #FFFFFF 0%, #D9D9D9 70%)",
             }}
             initial={{ opacity: 1 }}
-            animate={{ opacity: 0 }}
+            animate={{ opacity: ready ? 0 : 1 }}
             transition={{ duration: 0.7, ease: "easeOut" }}
           />
         )}

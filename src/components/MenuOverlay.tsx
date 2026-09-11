@@ -14,7 +14,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
-import { seg01Layers } from "../data/seg01Layers";
+import { warmLife } from "./life/preload";
 
 /* ---------------- 设计稿坐标（720 × 450 的 0.5x 稿，下面全按 s 倍放） ---------------- */
 
@@ -157,7 +157,7 @@ const PULL_DELAY = Math.max(0, OUT_TOTAL - 0.15);
  * 绳子顶端钉在屏幕上边不动，牌子掉多深绳子就放多长，摆动也是绕绳子顶端摆。
  * - hover：这块牌往下沉一点、放大一点，其他三块变淡；
  * - 点：牌子往下拽一下（绳子绷紧），拽到底蓝底、牌子、顶栏一起往上带走，蓝底底边坠成一道弧，
- *   新页面从屏幕底下贴着一起上来（点下去那一刻就切了路由，目标页收到 from: "menu" 会跳过自己的开场）；
+ *   新页面从屏幕底下贴着一起上来（点下去那一刻就切了路由，目标页收到 from: "menu" 会精简自己的开场——Life 跳过，Lab 只留缩小归位那段）；
  * - 再点 MENU / 点蓝底 / Esc：牌子按掉下来的反序收回去，蓝底再抽回屏幕上边。
  */
 export default function MenuOverlay({
@@ -205,17 +205,11 @@ export default function MenuOverlay({
   /*
    * 目录一打开就把 Life / Lab 首屏的大图取回来解码好。
    * 不然点牌子上飞、新页面刚露头那一刻才解码，中段会卡一下。
+   * Life 那批走公共的 preload（LifePage 进门时等的就是同一批，这里先拉了那边就不用等）。
    */
   useEffect(() => {
-    const pad = (i: number) => String(i).padStart(2, "0");
+    warmLife(0);
     const urls = [
-      ...seg01Layers.map((l) => `/assets/life/${l.dir ?? "seg01"}/${l.src}.webp`),
-      /* 窗户 / 唱片的序列帧全都常驻 DOM，页面一露头就要全部解码，是上飞中段卡那一下的大头 */
-      ...Array.from({ length: 24 }, (_, i) => `/assets/life/seg01/window-anim/f${pad(i)}.webp`),
-      ...Array.from({ length: 36 }, (_, i) => `/assets/life/seg01/record-anim/f${pad(i)}.webp`),
-      "/assets/life/seg01/record-disc.webp",
-      "/assets/life/seg01/record-arm.webp",
-      "/assets/life/room-bg-tile.webp",
       "/assets/lab/entrance-wall.webp",
       "/assets/lab/gallery-painting-big.webp",
       "/assets/lab/gallery-lamp-on.webp",
@@ -273,7 +267,8 @@ export default function MenuOverlay({
      * 点下去这一刻就切路由。新页面先原位挂在黑底下面（黑底不透明，看不见），
      * 牌子往下拽的这 0.2s 里它就画过一遍、图也解码好了；要是一开始就把它推到屏外，
      * 浏览器会等它露头才解码，正好卡在上飞中段。
-     * 带上 from: "menu"，目标页读到就跳过自己的开场遮罩——上飞本身就是过场。
+     * 带上 from: "menu"，目标页读到就精简自己的开场——上飞本身就是过场
+     * （Life 直接不放；Lab 第一帧就是亮着的满屏油画，落稳后缩进金框）。
      */
     navigate(tag.path, { state: { from: "menu" } });
     window.scrollTo(0, 0);
@@ -526,13 +521,14 @@ function Tag({
           {tag.title}
         </span>
         <span
-          className="font-scroll absolute block text-center leading-[1.2] text-white"
+          className="font-hand absolute block text-center leading-[1.2] text-white"
           style={{
             left: tag.note.cx * s,
             top: tag.note.top * s,
-            /* 英文按稿宽折成两行；中文短，一行放完 */
-            width: /[\u4e00-\u9fff]/.test(note) ? "auto" : tag.note.w * s,
-            whiteSpace: /[\u4e00-\u9fff]/.test(note) ? "nowrap" : "normal",
+            /* 英文按稿宽折行；中文手写体更宽，按牌身宽（两边各留 9）折行，不能超出牌边 */
+            width: (/[\u4e00-\u9fff]/.test(note) ? tag.body.w - 18 : tag.note.w) * s,
+            /* 折成两行时两行长短均一点，别剩一个字掉到第二行 */
+            textWrap: "balance",
             transform: `translateX(-50%) rotate(${tag.note.rotate}deg)`,
             fontSize: 10 * s,
           }}

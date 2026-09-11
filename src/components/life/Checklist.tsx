@@ -231,12 +231,15 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
           {/*
            * 牛皮抽屉：通高、贴左。底是「清单牛皮底」素材——中间挖一块做成无缝平铺的底纹，
            * 四边那圈手绘黑边切成 9 宫格当 border-image（round 重复，不拉伸），
-           * 这样不管屏多高多宽，纹理粒度和边的粗细都跟稿子一样。左边那条边推到屏外看不见。
+           * 这样不管屏多高多宽，纹理粒度和边的粗细都跟稿子一样。
+           * 上、下、左三条边都推到屏外，只露右边那条——上下通栏，不见黑边。
            */}
           <motion.div
-            className="absolute inset-y-0 overflow-hidden select-none text-black"
+            className="absolute overflow-hidden select-none text-black"
             style={{
               left: -edge,
+              top: -edge,
+              bottom: -edge,
               width: dw + edge * 2,
               border: `${edge}px solid transparent`,
               borderImage: `url(${A}/kraft-frame.webp) 24 / ${edge}px round`,
@@ -295,7 +298,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                   <img src={`${A}/${SHEET_LIST.src}`} alt="" draggable={false} style={at(SHEET_LIST)} />
 
                   <span
-                    className={`${hand ? "font-hand" : "font-look"} absolute whitespace-nowrap font-bold uppercase`}
+                    className="font-look absolute whitespace-nowrap font-bold uppercase"
                     style={{
                       left: 188,
                       top: 137.5,
@@ -333,7 +336,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                             }}
                           >
                             <span
-                              className="font-scroll relative whitespace-nowrap text-center capitalize"
+                              className="font-hand relative whitespace-nowrap text-center capitalize"
                               style={{ fontSize: 10, lineHeight: 1.4, transform: `rotate(${row.rotate}deg)` }}
                             >
                               {lines.map((l, j) => (
@@ -447,7 +450,7 @@ function DoneNote({
   return (
     <>
       <motion.div
-        className="font-scroll absolute text-center"
+        className="font-hand absolute text-center"
         style={{ ...box(197.5 - 98, 178.5, 196), fontSize: hand ? 13.5 : 15, lineHeight: hand ? 1.6 : 1.45 }}
         {...wipe(2.45)}
       >
@@ -468,7 +471,7 @@ function DoneNote({
       >
         <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(CTA_BOX, 141.76, 278)} />
         <span
-          className={`${hand ? "font-hand" : "font-look"} absolute whitespace-nowrap font-bold uppercase`}
+          className="font-look absolute whitespace-nowrap font-bold uppercase"
           style={{
             left: 191.84 - 141.76,
             top: 305.98 - 278,

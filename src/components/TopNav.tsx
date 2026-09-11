@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
 import TimeToggle from "./TimeToggle";
-import { useDetailOpen, usePlainLogo } from "../state/chrome";
+import { useDetailOpen, useLogoOnlyNav, usePlainLogo, usePlainNav } from "../state/chrome";
+import { INTRO_PREVIEW_PATH } from "./IntroLoader";
 
 /**
  * 全站顶栏 + 目录。挂在路由外面一份就够：
@@ -17,12 +18,17 @@ import { useDetailOpen, usePlainLogo } from "../state/chrome";
 export default function TopNav() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
-  const home = pathname === "/";
+  /* 加载动画预览页底下也是首页，顶栏按首页那套走 */
+  const home = pathname === "/" || pathname === INTRO_PREVIEW_PATH;
   const detail = useDetailOpen();
   /* Lab 页（入口的砖红墙 + 画廊）直接白字，不混合 */
   const lab = pathname.startsWith("/lab");
-  const plain = home || detail || lab;
+  /* About 页翻到蓝色那页时也整条纯白 */
+  const plainNav = usePlainNav();
+  const plain = home || detail || lab || plainNav;
   const plainLogo = usePlainLogo() && !plain;
+  /* 开场蓝布盖着时只留 logo */
+  const logoOnly = useLogoOnlyNav();
   const extra = home ? <TimeToggle /> : undefined;
 
   return (
@@ -31,7 +37,7 @@ export default function TopNav() {
         className={`fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
         style={{ mixBlendMode: plain ? "normal" : "difference" }}
       >
-        <NavBar color="#FFFFFF" menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} />
+        <NavBar color="#FFFFFF" menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} logoOnly={logoOnly} />
       </header>
       {plainLogo && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex items-center" style={navBarStyle("#FFFFFF")}>

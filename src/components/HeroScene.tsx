@@ -9,7 +9,7 @@ import {
   startAmbient,
   stopAmbient,
 } from "../audio/sfx";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   AnimatePresence,
   motion,
@@ -22,9 +22,13 @@ import { heroHotspots } from "../data/heroHotspots";
 import { config } from "../config";
 import {
   INTRO_DISMISSED_EVENT,
+  INTRO_PREVIEW_PATH,
+  INTRO_REPLAY_EVENT,
   INTRO_SESSION_KEY,
-} from "./IntroLoader";
+} from "../state/intro";
+import HeroCurtain, { CURTAIN_SLIDE_T } from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
+import { warmLife } from "./life/preload";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 
@@ -116,7 +120,12 @@ const SPRITES = {
    * 脚下影子是独立静态层（与原静态图同画布），叠在身体下面。
    */
   sheep: { src: "/assets/hero-sheep-idle.webp", x: 825.2, y: 587, w: 176.2 },
-  sheepShadow: { src: "/assets/hero-sheep-shadow.png", x: 828.2, y: 588, w: 170.2 },
+  sheepShadow: {
+    src: "/assets/hero-sheep-shadow.png",
+    x: 828.2,
+    y: 588,
+    w: 170.2,
+  },
   /**
    * 邮箱拆成两个部件：杆完全静止，邮筒头悬停时开盖 + 微小弹开。
    * 位置由旧整体图（x1157.6 y587.7 w116 h225）的像素分析推得：
@@ -161,7 +170,12 @@ const SPRITES = {
   bush: { src: "/assets/hero-bush.png", x: 1116, y: 763.9, w: 98.2 },
   /** 左右两丛灌木（已从底图抠出，风吹时轻轻摇摆） */
   bushLeft: { src: "/assets/hero-bush-left.png", x: 49.9, y: 726.7, w: 232.7 },
-  bushRight: { src: "/assets/hero-bush-right.png", x: 1119.1, y: 695.8, w: 255.1 },
+  bushRight: {
+    src: "/assets/hero-bush-right.png",
+    x: 1119.1,
+    y: 695.8,
+    w: 255.1,
+  },
 } as const;
 
 /**
@@ -182,6 +196,25 @@ const BIRD_STAND = { src: "/assets/hero-bird-stand.png", w: 119, h: 91 };
 
 /** 小鸟容器（画板像素），所有姿态在容器内底部居中对齐 */
 const BIRD_BOX = { w: 120, h: 97 };
+
+/** 首页第一屏要先下好的图（开场加载页拿这份清单等它们全部解码完，滑开时首页已经是完整的） */
+export const HERO_PRELOAD: string[] = [
+  SPRITES.cloudBig.src,
+  SPRITES.base.src,
+  SPRITES.openSign.src,
+  SPRITES.sheep.src,
+  SPRITES.sheepShadow.src,
+  SPRITES.mailbox.headClosed,
+  SPRITES.mailbox.post,
+  SPRITES.woolab.off.src,
+  SPRITES.woolab.on.src,
+  SPRITES.board.src,
+  SPRITES.bush.src,
+  SPRITES.bushLeft.src,
+  SPRITES.bushRight.src,
+  ...BIRD_FLAP_FRAMES,
+  BIRD_STAND.src,
+];
 
 /** 降落点：屋顶栏杆横杆（顶边 y≈300），花箱左侧的空档（x≈860） */
 const PERCH = {
@@ -252,6 +285,7 @@ function IntroPop({
   go,
   delay,
   origin,
+  zIndex,
   children,
 }: {
   play: boolean;
@@ -259,13 +293,15 @@ function IntroPop({
   delay: number;
   /** 缩放原点（画布百分比坐标）：落地物用根部，吊挂物用挂点 */
   origin: string;
+  /** 开场蓝布盖着时把小羊抬到布上面 */
+  zIndex?: number;
   children: React.ReactNode;
 }) {
   const waiting = play && !go;
   return (
     <motion.div
       className="pointer-events-none absolute inset-0"
-      style={{ transformOrigin: origin }}
+      style={{ transformOrigin: origin, zIndex }}
       initial={play ? { scale: 0, opacity: 0 } : false}
       animate={waiting ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
       transition={
@@ -290,6 +326,31 @@ function IntroPop({
 const PERCH_CENTER = { x: 860 / FRAME_W, y: (304 - BIRD_BOX.h / 2) / FRAME_H };
 /** 惊飞触发半径：占画板宽度的比例（约 110px @1440） */
 const STARTLE_RADIUS = 0.077;
+
+/** 把"multiply 混一层 alpha=a 的颜色 hex"换成等价的 feColorMatrix：每通道乘 (1 - a + a·C) */
+function tintMatrix(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16);
+  const k = (c: number) => (1 - a + (a * c) / 255).toFixed(4);
+  const r = k((n >> 16) & 255);
+  const g = k((n >> 8) & 255);
+  const b = k(n & 255);
+  return `${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0`;
+}
+
+/**
+ * 开场蓝布盖着时小鸟的来回：右端在小羊头顶上方（小羊头顶中心 x≈913 y≈587），
+ * 左端在画面左边约半屏处、稍高；每半程 2.6s，图下完后飞去栏杆 1.4s
+ */
+const INTRO_BIRD = {
+  right: {
+    left: `${((913 - BIRD_BOX.w / 2) / FRAME_W) * 100}%`,
+    top: `${((587 - BIRD_BOX.h - 18) / FRAME_H) * 100}%`,
+  },
+  left: { left: "14%", top: "30%" },
+  midTop: "44%",
+  half: 2.6,
+  toPerch: 1.4,
+};
 
 /** 随风飘过的叶子素材 */
 const LEAF_IMGS = [
@@ -332,17 +393,67 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
-  // 首次进入主页（本次会话内）才播出场动画，之后进来直接呈现完整场景
-  const [intro] = useState(
-    () => !reducedMotion && !sessionStorage.getItem("heroIntroPlayed"),
+  /*
+   * 开场加载页就是压在这个场景里的一块蓝布（HeroCurtain），小羊和小鸟被抬到布上面：
+   * 加载期间小羊原地待机、小鸟在它头顶到画面中间来回飞；图下完了小鸟飞去屋顶栏杆落下，
+   * 小羊朝那边探一下身，布随即整块向上拉走——房子是"露出来"的，小羊小鸟一直都在。
+   * 只在桌面端整屏场景（cover）里做；/intro 预览路由不看会话标记、可反复播。
+   */
+  const { pathname } = useLocation();
+  const introPreview = pathname === INTRO_PREVIEW_PATH;
+  const [curtainRun, setCurtainRun] = useState(0);
+  const [curtainUp, setCurtainUp] = useState(
+    () =>
+      cover &&
+      (introPreview ||
+        (config.introEnabled && !sessionStorage.getItem(INTRO_SESSION_KEY))),
   );
-  // 品牌开屏还盖在上面时先按兵不动，开屏淡出的瞬间物件开始弹出
+  const [curtainSlide, setCurtainSlide] = useState(false);
+  const curtainUpRef = useRef(curtainUp);
+  curtainUpRef.current = curtainUp;
+  /** 图下完了（小鸟状态机据此收尾） */
+  const curtainLoadedRef = useRef(false);
+  const onCurtainDone = () => {
+    setCurtainUp(false);
+    setCurtainSlide(false);
+  };
+  /* 布盖着期间给小羊单独补的时段染色（见小羊那层的注释）；白天 alpha 为 0 不挂 */
+  const sheepTintId = `hero-sheep-tint-${cover ? "d" : "m"}`;
+  const sheepTint =
+    curtainUp && theme.tintAlpha > 0 ? `url(#${sheepTintId})` : undefined;
+  /* 首页站稳后顺手把 Life 页第一屏的图拉进缓存：推门进屋基本不用等 */
+  useEffect(() => {
+    if (!curtainUp) warmLife(2500);
+  }, [curtainUp]);
+  /* 预览入口的 REPLAY：重新盖上布、状态机重跑 */
+  useEffect(() => {
+    if (!introPreview || !cover) return;
+    const replay = () => {
+      curtainLoadedRef.current = false;
+      setCurtainSlide(false);
+      setCurtainUp(true);
+      setCurtainRun((n) => n + 1);
+    };
+    window.addEventListener(INTRO_REPLAY_EVENT, replay);
+    return () => window.removeEventListener(INTRO_REPLAY_EVENT, replay);
+  }, [introPreview, cover]);
+
+  // 品牌开屏还盖在上面时先按兵不动；开屏滑开的瞬间常驻小动作（吊牌晃、小鸟飞过）才开始
   const [introGo, setIntroGo] = useState(
     () => !config.introEnabled || !!sessionStorage.getItem(INTRO_SESSION_KEY),
   );
+  // 首次进入主页（本次会话内）才播"物件依次弹出"的出场动画，之后进来直接呈现完整场景。
+  // 有品牌开屏的那一次不弹：开屏滑开时底下要的是一张已经完整的首页，不是再弹一遍。
+  const [intro] = useState(
+    () =>
+      !reducedMotion &&
+      introGo &&
+      !curtainUp &&
+      !sessionStorage.getItem("heroIntroPlayed"),
+  );
   useEffect(() => {
-    if (intro) sessionStorage.setItem("heroIntroPlayed", "1");
-  }, [intro]);
+    sessionStorage.setItem("heroIntroPlayed", "1");
+  }, []);
   useEffect(() => {
     if (introGo) return;
     const onDismiss = () => setIntroGo(true);
@@ -378,6 +489,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   }, []);
   const [birdFlapIdx, setBirdFlapIdx] = useState(0);
   const [birdStanding, setBirdStanding] = useState(false);
+  /** 素材朝左；开场来回飞往右那半程水平翻过来 */
+  const [birdFacingRight, setBirdFacingRight] = useState(false);
   /** 鼠标靠近栏杆上的小鸟时置位，由状态机消费（用 ref 避免闭包读到旧值） */
   const birdStartledRef = useRef(false);
   const birdStandingRef = useRef(false);
@@ -408,7 +521,108 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
     const stopFlap = () => clearInterval(flapTimer);
 
+    /** 已经落到栏杆上：收翅站定 → 歇一会（鼠标靠近会惊飞）→ 起飞、往左飞出画面 */
+    const perchAndLeave = async () => {
+      // 收翅站定（落地顺势转回朝左，和平时停在栏杆上一个方向），轻轻下沉一下作落地缓冲
+      stopFlap();
+      setBirdFacingRight(false);
+      setBirdStanding(true);
+      birdStartledRef.current = false;
+      birdStandingRef.current = true;
+      await birdControls.start({
+        y: [-3, 1, 0],
+        transition: { duration: 0.35, ease: "easeOut" },
+      });
+      if (!alive) return;
+
+      // 站着歇一会（轻微起伏持续播放）；鼠标靠近会提前惊飞
+      birdControls.start({
+        y: [0, -2, 0],
+        transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" },
+      });
+      const stayUntil = Date.now() + rand(4000, 9000);
+      while (alive && Date.now() < stayUntil && !birdStartledRef.current) {
+        await sleep(120);
+      }
+      // 这轮已经被收掉（预览重播）就别再碰控制器，不然会把新一轮刚起的动画停掉
+      if (!alive) return;
+      birdControls.stop();
+      const startled = birdStartledRef.current;
+      birdStandingRef.current = false;
+
+      // 起飞：展翅向上一蹬，扇着翅膀飞走（被惊飞时更急）
+      setBirdStanding(false);
+      startFlap();
+      await birdControls.start({
+        y: [0, startled ? -20 : -14],
+        transition: { duration: startled ? 0.22 : 0.3, ease: "easeOut" },
+      });
+      if (!alive) return;
+      await birdControls.start({
+        left: [PERCH.left, "-40%"],
+        top: [PERCH.top, `${rand(6, 11)}%`],
+        y: 0,
+        transition: {
+          duration: startled ? 2.6 : 4.2,
+          ease: startled ? "easeOut" : "easeIn",
+        },
+      });
+    };
+
     (async () => {
+      /* ---- 开场蓝布盖着：小鸟在小羊头顶和画面中间之间来回飞，等图下完 ---- */
+      if (curtainUpRef.current) {
+        // 预览重播时上一轮可能还站在栏杆上（无限起伏的动画没停），先停掉再摆位
+        birdControls.stop();
+        setBirdStanding(false);
+        birdStandingRef.current = false;
+        birdControls.set({
+          left: INTRO_BIRD.right.left,
+          top: INTRO_BIRD.right.top,
+          opacity: 1,
+          y: 0,
+        });
+        startFlap();
+        let atLeft = false;
+        while (alive && !curtainLoadedRef.current) {
+          // 往左飞（素材本来朝左）
+          setBirdFacingRight(false);
+          atLeft = true;
+          await birdControls.start({
+            left: [INTRO_BIRD.right.left, INTRO_BIRD.left.left],
+            top: [INTRO_BIRD.right.top, INTRO_BIRD.midTop, INTRO_BIRD.left.top],
+            transition: { duration: INTRO_BIRD.half, ease: "easeInOut" },
+          });
+          if (!alive || curtainLoadedRef.current) break;
+          // 掉头往右飞回小羊头顶
+          setBirdFacingRight(true);
+          atLeft = false;
+          await birdControls.start({
+            left: [INTRO_BIRD.left.left, INTRO_BIRD.right.left],
+            top: [INTRO_BIRD.left.top, INTRO_BIRD.midTop, INTRO_BIRD.right.top],
+            transition: { duration: INTRO_BIRD.half, ease: "easeInOut" },
+          });
+        }
+        if (!alive) return;
+
+        // 图下完了：飞去屋顶栏杆；布在小鸟快落下时开拉，栏杆刚好在它脚下露出来
+        setBirdFacingRight(atLeft);
+        const toPerch = birdControls.start({
+          left: PERCH.left,
+          top: PERCH.top,
+          transition: { duration: INTRO_BIRD.toPerch, ease: "easeInOut" },
+        });
+        await sleep((INTRO_BIRD.toPerch - CURTAIN_SLIDE_T * 0.75) * 1000);
+        if (!alive) return;
+        setCurtainSlide(true);
+        await toPerch;
+        if (!alive) return;
+        await perchAndLeave();
+        if (!alive) return;
+        stopFlap();
+        birdControls.set({ opacity: 0 });
+      }
+
       while (alive) {
         await sleep(rand(4000, 12000));
         if (!alive) break;
@@ -417,6 +631,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
         // 起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"
         const cruiseTop = rand(9, 19);
+        setBirdFacingRight(false);
         setBirdStanding(false);
         birdStandingRef.current = false;
         birdControls.set({
@@ -449,48 +664,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           });
           if (!alive) break;
 
-          // 收翅站定，轻轻下沉一下作落地缓冲
-          stopFlap();
-          setBirdStanding(true);
-          birdStartledRef.current = false;
-          birdStandingRef.current = true;
-          await birdControls.start({
-            y: [-3, 1, 0],
-            transition: { duration: 0.35, ease: "easeOut" },
-          });
+          await perchAndLeave();
           if (!alive) break;
-
-          // 站着歇一会（轻微起伏持续播放）；鼠标靠近会提前惊飞
-          birdControls.start({
-            y: [0, -2, 0],
-            transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" },
-          });
-          const stayUntil = Date.now() + rand(4000, 9000);
-          while (alive && Date.now() < stayUntil && !birdStartledRef.current) {
-            await sleep(120);
-          }
-          birdControls.stop();
-          const startled = birdStartledRef.current;
-          birdStandingRef.current = false;
-          if (!alive) break;
-
-          // 起飞：展翅向上一蹬，扇着翅膀飞走（被惊飞时更急）
-          setBirdStanding(false);
-          startFlap();
-          await birdControls.start({
-            y: [0, startled ? -20 : -14],
-            transition: { duration: startled ? 0.22 : 0.3, ease: "easeOut" },
-          });
-          if (!alive) break;
-          await birdControls.start({
-            left: [PERCH.left, "-40%"],
-            top: [PERCH.top, `${rand(6, 11)}%`],
-            y: 0,
-            transition: {
-              duration: startled ? 2.6 : 4.2,
-              ease: startled ? "easeOut" : "easeIn",
-            },
-          });
         } else {
           // 直接横穿画面：带扇翅节奏的波浪路线
           const c = cruiseTop;
@@ -516,8 +691,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     return () => {
       alive = false;
       stopFlap();
+      birdControls.stop();
     };
-  }, [reducedMotion, birdControls]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reducedMotion, birdControls, curtainRun]);
 
   // 悬停玻璃门时，OPEN 吊牌再晃一次
   useEffect(() => {
@@ -560,13 +737,16 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
   /** 悬停进入/离开热区：更新状态 + 对应音效 */
   const enterHotspot = (id: string) => {
-    if (enteringRef.current) return;
+    /* 开门过场中、开场蓝布还盖着时都不响应（布是 pointer-events-none，鼠标能穿到底下的热区） */
+    if (enteringRef.current || curtainUpRef.current) return;
     setHovered(id);
     // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
     if (id === "about" || id === "life") playLightOn();
     else if (id === "contact") playMailboxOpen();
     else if (id === "sheep")
-      setGreetKey(SHEEP_GREETS[Math.floor(Math.random() * SHEEP_GREETS.length)]);
+      setGreetKey(
+        SHEEP_GREETS[Math.floor(Math.random() * SHEEP_GREETS.length)],
+      );
   };
   const leaveHotspot = (id: string) => {
     setHovered(null);
@@ -576,8 +756,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
   /** 点击/回车激活热区：小羊弹身份卡，大门走开门过场，其余直接跳转 */
   const activateHotspot = (id: string, path: string) => {
-    if (enteringRef.current) return;
+    if (enteringRef.current || curtainUpRef.current) return;
     if (id === "sheep") {
+      if (!config.identityCardEnabled) return;
       playMailboxOpen();
       setCardOpen(true);
       return;
@@ -612,7 +793,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       : {
           x: [0, amount, 0, -amount, 0],
           y: [0, -amount * 0.3, 0, amount * 0.3, 0],
-          transition: { duration, repeat: Infinity, ease: "easeInOut" as const },
+          transition: {
+            duration,
+            repeat: Infinity,
+            ease: "easeInOut" as const,
+          },
         };
 
   return (
@@ -639,6 +824,22 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           {theme.stars && <NightSky reducedMotion={!!reducedMotion} />}
         </motion.div>
       </AnimatePresence>
+
+      {/* 开场蓝布：盖在场景上、小羊小鸟底下（它俩 z 30）；拉走后卸掉 */}
+      {curtainUp && (
+        <HeroCurtain
+          key={curtainRun}
+          preload={HERO_PRELOAD}
+          preview={introPreview}
+          slide={curtainSlide}
+          onLoaded={() => {
+            curtainLoadedRef.current = true;
+            // 减少动效时没有小鸟那段收尾，直接拉
+            if (reducedMotion) setCurtainSlide(true);
+          }}
+          onDone={onCurtainDone}
+        />
+      )}
 
       {/* 场景本体：按视口高度完整显示（上下不裁）；
           屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
@@ -732,7 +933,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         </motion.div>
 
         {/* 左右树丛：以根部为轴被风吹得轻轻摇 */}
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.bushLeft} origin="11.5% 88%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.bushLeft}
+          origin="11.5% 88%"
+        >
           <motion.img
             src={SPRITES.bushLeft.src}
             alt=""
@@ -747,7 +953,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             draggable={false}
           />
         </IntroPop>
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.bushRight} origin="86.6% 88%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.bushRight}
+          origin="86.6% 88%"
+        >
           <motion.img
             src={SPRITES.bushRight.src}
             alt=""
@@ -771,7 +982,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
         {/* OPEN 吊牌：以挂点为轴摆动；开门过场时隐藏，由门板裁剪容器里的副本接替。
             出场时以挂点为原点弹出 */}
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.openSign} origin="45.9% 62%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.openSign}
+          origin="45.9% 62%"
+        >
           <motion.img
             src={SPRITES.openSign.src}
             alt=""
@@ -789,13 +1005,46 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         </IntroPop>
 
         {/* 四个热区元素：悬停时各自轻轻动一下 */}
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.woolab} origin="50% 40%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.woolab}
+          origin="50% 40%"
+        >
           <WoolabSprite lit={hovered === "about"} />
         </IntroPop>
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.board} origin="16.5% 91%">
-          <HotspotSprite sprite={SPRITES.board} active={hovered === "lab"} motionSpec={HOVER_MOTION.lab} origin="50% 100%" />
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.board}
+          origin="16.5% 91%"
+        >
+          <HotspotSprite
+            sprite={SPRITES.board}
+            active={hovered === "lab"}
+            motionSpec={HOVER_MOTION.lab}
+            origin="50% 100%"
+          />
         </IntroPop>
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.sheep} origin="63.4% 91%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.sheep}
+          origin="63.4% 91%"
+          zIndex={curtainUp ? 30 : undefined}
+        >
+          {/* 蓝布盖着时小羊在全屏调色层上面，黄昏/夜里的染色就用一个等价的颜色矩阵单独补在它身上：
+              multiply 混一层 alpha 为 a 的颜色 C，等于每个通道乘 (1 - a + a·C)，布拉走换回全屏层时颜色不跳 */}
+          {curtainUp && theme.tintAlpha > 0 && (
+            <svg width="0" height="0" className="absolute" aria-hidden>
+              <filter id={sheepTintId} colorInterpolationFilters="sRGB">
+                <feColorMatrix
+                  type="matrix"
+                  values={tintMatrix(theme.tint, theme.tintAlpha)}
+                />
+              </filter>
+            </svg>
+          )}
           <img
             src={SPRITES.sheepShadow.src}
             alt=""
@@ -804,6 +1053,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               left: px(SPRITES.sheepShadow.x),
               top: py(SPRITES.sheepShadow.y),
               width: px(SPRITES.sheepShadow.w),
+              filter: sheepTint,
             }}
             draggable={false}
           />
@@ -815,16 +1065,27 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               left: px(SPRITES.sheep.x),
               top: py(SPRITES.sheep.y),
               width: px(SPRITES.sheep.w),
+              filter: sheepTint,
             }}
             draggable={false}
           />
         </IntroPop>
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.mailbox} origin="84.4% 91%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.mailbox}
+          origin="84.4% 91%"
+        >
           <MailboxSprite open={hovered === "contact"} />
         </IntroPop>
 
         {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
-        <IntroPop play={intro} go={introGo} delay={INTRO_AT.bush} origin="80.9% 91%">
+        <IntroPop
+          play={intro}
+          go={introGo}
+          delay={INTRO_AT.bush}
+          origin="80.9% 91%"
+        >
           <motion.img
             src={SPRITES.bush.src}
             alt=""
@@ -843,33 +1104,45 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
         <motion.div
           className="pointer-events-none absolute select-none"
-          style={{ width: px(BIRD_BOX.w), height: py(BIRD_BOX.h) }}
+          style={{
+            width: px(BIRD_BOX.w),
+            height: py(BIRD_BOX.h),
+            zIndex: curtainUp ? 30 : undefined,
+            /* 布盖着时小鸟和小羊一样浮在调色层上面，同样补一份时段染色 */
+            filter: sheepTint,
+          }}
           initial={{ left: "135%", top: "14%", opacity: 0 }}
           animate={birdControls}
         >
-          {BIRD_FLAP_FRAMES.map((src, i) => (
+          <div
+            className="absolute inset-0"
+            style={{ transform: birdFacingRight ? "scaleX(-1)" : undefined }}
+          >
+            {BIRD_FLAP_FRAMES.map((src, i) => (
+              <img
+                key={src}
+                src={src}
+                alt=""
+                draggable={false}
+                className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                style={{
+                  width: `${(BIRD_FLAP_SIZE.w / BIRD_BOX.w) * 100}%`,
+                  display:
+                    !birdStanding && birdFlapIdx === i ? "block" : "none",
+                }}
+              />
+            ))}
             <img
-              key={src}
-              src={src}
+              src={BIRD_STAND.src}
               alt=""
               draggable={false}
               className="absolute bottom-0 left-1/2 -translate-x-1/2"
               style={{
-                width: `${(BIRD_FLAP_SIZE.w / BIRD_BOX.w) * 100}%`,
-                display: !birdStanding && birdFlapIdx === i ? "block" : "none",
+                width: `${(BIRD_STAND.w / BIRD_BOX.w) * 100}%`,
+                display: birdStanding ? "block" : "none",
               }}
             />
-          ))}
-          <img
-            src={BIRD_STAND.src}
-            alt=""
-            draggable={false}
-            className="absolute bottom-0 left-1/2 -translate-x-1/2"
-            style={{
-              width: `${(BIRD_STAND.w / BIRD_BOX.w) * 100}%`,
-              display: birdStanding ? "block" : "none",
-            }}
-          />
+          </div>
         </motion.div>
 
         {/* 随风飘过的叶子 */}
@@ -879,10 +1152,18 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，不然接缝处一深一浅两条竖带 */}
         <motion.div
           className="pointer-events-none absolute inset-y-0"
-          style={{ left: "-60%", right: "-60%", background: theme.tint, mixBlendMode: "multiply" }}
+          style={{
+            left: "-60%",
+            right: "-60%",
+            background: theme.tint,
+            mixBlendMode: "multiply",
+          }}
           initial={false}
           animate={{ opacity: entering ? 0 : theme.tintAlpha }}
-          transition={{ duration: entering ? 0.5 : TIME_FADE, ease: "easeInOut" }}
+          transition={{
+            duration: entering ? 0.5 : TIME_FADE,
+            ease: "easeInOut",
+          }}
         />
 
         {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
@@ -900,9 +1181,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             role="link"
             tabIndex={0}
             aria-label={t(h.labelKey)}
-            className={`group absolute z-20 cursor-pointer outline-none ${
-              entering ? "pointer-events-none" : ""
-            }`}
+            className={`group absolute z-20 outline-none ${
+              h.id === "sheep" && !config.identityCardEnabled
+                ? "cursor-default"
+                : "cursor-pointer"
+            } ${entering || curtainUp ? "pointer-events-none" : ""}`}
             style={{
               left: `${h.left}%`,
               top: `${h.top}%`,
@@ -934,15 +1217,17 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         ))}
       </motion.div>
 
-      {/* 小羊的身份卡：点击小羊弹出，「去它家看看」直接接开门过场 */}
-      <IdentityCard
-        open={cardOpen}
-        onClose={() => setCardOpen(false)}
-        onVisit={() => {
-          setCardOpen(false);
-          void enterLife();
-        }}
-      />
+      {/* 小羊的身份卡：点击小羊弹出，「去它家看看」直接接开门过场（config.identityCardEnabled 关着时不挂） */}
+      {config.identityCardEnabled && (
+        <IdentityCard
+          open={cardOpen}
+          onClose={() => setCardOpen(false)}
+          onVisit={() => {
+            setCardOpen(false);
+            void enterLife();
+          }}
+        />
+      )}
 
       {/* 推进门里时，画面被屋内暖光渐渐填满，再切到内页 */}
       {entering && (
@@ -1010,7 +1295,11 @@ function NightLights({
       className="pointer-events-none absolute inset-0"
       initial={false}
       animate={{ opacity: on ? 1 : 0 }}
-      transition={{ duration: on ? TIME_FADE : 0.3, delay: on ? delay : 0, ease: "easeInOut" }}
+      transition={{
+        duration: on ? TIME_FADE : 0.3,
+        delay: on ? delay : 0,
+        ease: "easeInOut",
+      }}
     >
       <img
         src={lit.src}
@@ -1081,9 +1370,7 @@ function DoorOpenSprite() {
     const panelX = side === "left" ? leftX : rightX;
     return (
       <motion.div
-        className={`absolute top-0 h-full overflow-hidden ${
-          side === "left" ? "left-0" : "right-0"
-        }`}
+        className={`absolute top-0 h-full overflow-hidden ${side === "left" ? "left-0" : "right-0"}`}
         style={{ width: `${(p.single / p.w) * 100}%` }}
         initial={{ x: 0 }}
         animate={{ x: side === "left" ? "-104%" : "104%" }}
@@ -1169,7 +1456,7 @@ function WindLeaves() {
         delay: rand(0, 6) + i * 5,
         repeatDelay: rand(8, 16),
       })),
-    []
+    [],
   );
 
   if (reducedMotion) return null;
@@ -1376,20 +1663,22 @@ function HotspotList() {
   return (
     <ul className="flex flex-1 flex-col gap-3 bg-[#FFF6E9] px-4 py-5">
       {/* 小羊不跳页（在场景里点它弹身份卡），列表里只放页面入口 */}
-      {heroHotspots.filter((h) => h.path).map((h) => (
-        <li key={h.id}>
-          <Link
-            to={h.path}
-            onClick={() => playNavigate()}
-            className="flex items-center justify-between rounded-xl border border-[#F0E2CC] bg-white px-4 py-4 shadow-sm transition active:scale-[0.98]"
-          >
-            <span className="font-hand text-lg">{t(h.labelKey)}</span>
-            <span aria-hidden className="text-neutral-400">
-              →
-            </span>
-          </Link>
-        </li>
-      ))}
+      {heroHotspots
+        .filter((h) => h.path)
+        .map((h) => (
+          <li key={h.id}>
+            <Link
+              to={h.path}
+              onClick={() => playNavigate()}
+              className="flex items-center justify-between rounded-xl border border-[#F0E2CC] bg-white px-4 py-4 shadow-sm transition active:scale-[0.98]"
+            >
+              <span className="font-hand text-lg">{t(h.labelKey)}</span>
+              <span aria-hidden className="text-neutral-400">
+                →
+              </span>
+            </Link>
+          </li>
+        ))}
     </ul>
   );
 }
