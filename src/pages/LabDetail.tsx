@@ -30,8 +30,8 @@ import { useReportDetailOpen } from "../state/chrome";
  *     它正好从撕纸底下两张小图中间穿过；一路慢慢扶正
  *  3. 再往下滚，通栏主图从底下整块顶上来把拼贴盖掉，停在那段话下面；主角浮在照片上被"托"回屏中；
  *     之后整页一起正常滚，主图完整露出
- *  4. 底部画框墙：主角落进墙上一排画框里（正好扶正）；再往下滑，下一只自己飞回页顶（点别的框也行）、
- *     边飞边歪回起始角度，变成新的主角，换产品重来；最后一件到头就停在墙上
+ *  4. 底部画框墙：主角落进墙上一排画框里（正好扶正）；点墙上别的框，那只升起来飞回页顶、
+ *     边飞边歪回起始角度，变成新的主角，换产品重来
  */
 
 const A = "/assets/lab/detail";
@@ -207,25 +207,20 @@ const FRAME_CY = (95 + 262) / 2;
 
 /**
  * 带水印的那张。石纹图是按屏宽铺的（宽屏上比 u 大），所以不按稿子坐标摆，
- * 直接把浮雕中心对到 cy（屏幕 px）：
- *  - head：放在页头后面，对到金框中心，浮雕底下往下渐隐进墙里，那段话压在渐隐区上面
- *  - wall：放在底部画框墙后面，对到那排画框的中心，上下都渐隐
+ * 直接把浮雕中心对到 cy（屏幕 px）：放在页头后面，对到金框中心，浮雕底下往下渐隐进墙里，那段话压在渐隐区上面。
+ * 底部画框墙后面也用同一份、同一个 cy：换项目跳回页顶那一瞬间两边背景逐像素一样，看不出切换。
  */
-function Watermark({ u, cy = FRAME_CY * u, mode = "head" }: { u: number; cy?: number; mode?: "head" | "wall" }) {
+function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
   const { w, h } = stoneSize(u);
   const half = MARK_HALF * h;
-  const boxTop = mode === "head" ? 0 : cy - half - 120;
-  const top = cy - MARK_CY * h - boxTop;
-  const fadeFrom = cy + half + 16 - boxTop;
-  const height = mode === "head" ? fadeFrom + 130 : (half + 120) * 2;
-  const mask =
-    mode === "head"
-      ? `linear-gradient(to bottom, #000 ${fadeFrom}px, transparent 100%)`
-      : "linear-gradient(to bottom, transparent 0, #000 32%, #000 68%, transparent 100%)";
+  const top = cy - MARK_CY * h;
+  const fadeFrom = cy + half + 16;
+  const height = fadeFrom + 130;
+  const mask = `linear-gradient(to bottom, #000 ${fadeFrom}px, transparent 100%)`;
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 overflow-hidden"
-      style={{ top: boxTop, height, WebkitMaskImage: mask, maskImage: mask }}
+      className="pointer-events-none absolute inset-x-0 top-0 overflow-hidden"
+      style={{ height, WebkitMaskImage: mask, maskImage: mask }}
     >
       <img
         src={`${A}/bg-stone-mark.webp`}
@@ -1116,12 +1111,17 @@ function FrameWall({
   index,
   landed,
   active,
+  dim,
   hideIndex,
   onHover,
   onOpen,
   onBackTop,
+  markU,
 }: {
+  /** 画框墙自己的缩放（uc） */
   u: number;
+  /** 页头那套缩放（u）：水印要和页顶那份一样大，得用这个算 */
+  markU: number;
   vw: number;
   vh: number;
   /** 当前正在看的项目 */
@@ -1130,6 +1130,8 @@ function FrameWall({
   landed: boolean;
   /** false = 翻转卡片里那份 / 正在飞：不响应 */
   active: boolean;
+  /** 有一只正飞回页顶：整排画框淡掉（背景留着） */
+  dim: boolean;
   /** 正在飞回页顶的那只：墙上先藏掉 */
   hideIndex: number | null;
   onHover: (i: number | null) => void;
@@ -1154,8 +1156,15 @@ function FrameWall({
 
   return (
     <div className="sticky top-0 h-screen overflow-hidden">
-      <Watermark u={u} cy={rowCy} mode="wall" />
+      {/* 背景和页顶那屏一模一样（同一套缩放、水印对屏幕正中）：有一只飞回去时只淡画框，墙和水印不动 */}
+      <Watermark u={markU} cy={vh / 2} />
 
+      <motion.div
+        className="absolute inset-0"
+        initial={false}
+        animate={{ opacity: dim ? 0 : 1 }}
+        transition={{ duration: 0.45 }}
+      >
       {labProjects.map((p, i) => {
         const shown = (landed || i !== index) && i !== hideIndex;
         const lit = hover === null ? i === index : hover === i;
@@ -1209,6 +1218,7 @@ function FrameWall({
           </div>
         );
       })}
+      </motion.div>
     </div>
   );
 }
@@ -1260,7 +1270,7 @@ function LookSection({
   lb?: Lookbook;
   fallbackLines: string[];
   first: boolean;
-  /** 切项目切过来的：页头的水印 / 标题淡入，别在回顶那一帧整块跳出来 */
+  /** 页头标题淡入浮出（首次进来、切项目回顶都走这个），别整块跳出来；翻转卡片里那份不动 */
   fadeIn?: boolean;
   closet: string;
   u: number;
@@ -1295,9 +1305,9 @@ function LookSection({
         {first && (
           <motion.div
             className="absolute inset-0"
-            initial={fadeIn ? { opacity: 0 } : false}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
+            initial={fadeIn ? { opacity: 0, y: 10 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: Math.max(0, delay - 0.15), ease: "easeOut" }}
           >
             <LookbookHead u={u} closet={closet} />
           </motion.div>
@@ -1489,26 +1499,6 @@ export function DetailPage({
   const [flying, setFlying] = useState<number | null>(null);
   const flyTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
-  /*
-   * 落到墙上以后再往下滑：不用点，下一只自己升起来飞回页顶接着讲（最后一件到头就停在墙上）。
-   * 落稳后留 350ms 空窗，别让把主角送到墙上的那股惯性顺手把下一只也带走。
-   */
-  const landedAt = useRef(0);
-  useEffect(() => {
-    if (landed) landedAt.current = performance.now();
-  }, [landed]);
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || !interactive) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY <= 0 || !landed || flying !== null) return;
-      if (index >= labProjects.length - 1) return;
-      if (performance.now() - landedAt.current < 350) return;
-      setFlying(index + 1);
-    };
-    el.addEventListener("wheel", onWheel, { passive: true });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [landed, flying, index, interactive]);
   const onFlown = () => {
     if (flying === null) return;
     onNext?.(flying);
@@ -1523,18 +1513,26 @@ export function DetailPage({
     /* data-lenis-prevent：整页盖在画廊上面，滚轮别再传给外面 window 那份丝滑滚动 */
     <div className="relative h-full w-full overflow-hidden text-white" data-lenis-prevent="">
       <StoneWall u={u} />
-      {/* 返回按钮钉在角上、两边标签钉在竖直正中，其余都跟着页面滚 */}
-      <button
-        type="button"
-        data-lab-detail-close=""
-        onClick={onClose}
-        className="font-look absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
-        /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
-        style={{ left: 25 * u, top: `calc(${MU} * 26)`, transform: "translateY(-50%)", fontSize: 12 * u }}
+      {/* 返回按钮钉在角上、两边标签钉在竖直正中，其余都跟着页面滚。
+          刚从画廊翻进来时别一下全在：标题先浮出来，这两样跟在后面淡进来（翻转卡片里那份不动） */}
+      <motion.div
+        className="pointer-events-none absolute inset-0 z-30"
+        initial={interactive ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.7, delay: base + 0.55, ease: "easeOut" }}
       >
-        {t("lab.detail.back")}
-      </button>
-      <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />
+        <button
+          type="button"
+          data-lab-detail-close=""
+          onClick={onClose}
+          className="font-look pointer-events-auto absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
+          /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
+          style={{ left: 25 * u, top: `calc(${MU} * 26)`, transform: "translateY(-50%)", fontSize: 12 * u }}
+        >
+          {t("lab.detail.back")}
+        </button>
+        <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />
+      </motion.div>
 
       <div
         ref={scroller}
@@ -1557,7 +1555,7 @@ export function DetailPage({
               lb={lb}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
-              fadeIn={entered}
+              fadeIn={interactive}
               closet={closet}
               u={u}
               uc={uc}
@@ -1573,26 +1571,24 @@ export function DetailPage({
             />
           ))}
 
-          {/* 画框墙：占一屏 + 主角落下来那段；飞回屏中的时候整面墙暗掉，切项目那一跳就看不见了 */}
-          <motion.section
-            className="relative"
-            style={{ height: vh * (1 + WALL_LAND) }}
-            animate={{ opacity: flying === null ? 1 : 0 }}
-            transition={{ duration: 0.45 }}
-          >
+          {/* 画框墙：占一屏 + 主角落下来那段；飞回屏中的时候只淡画框，墙和水印和页顶那屏一样、不动，
+              切项目跳回页顶那一下背景没有任何变化 */}
+          <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
             <FrameWall
               u={uc}
+              markU={u}
               vw={vw}
               vh={vh}
               index={index}
               landed={landed}
               active={interactive && flying === null}
+              dim={flying !== null}
               hideIndex={flying}
               onHover={setHoverIdx}
               onOpen={setFlying}
               onBackTop={backTop}
             />
-          </motion.section>
+          </section>
         </div>
       </div>
 

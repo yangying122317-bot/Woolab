@@ -111,6 +111,7 @@ export const dict = {
     "contact.phone": "拿起电话",
     "contact.hello": "Hi～you found Meelo！",
     "intro.skip": "跳过",
+    "intro.ready": "Meelo\n准备中...",
     close: "关闭",
   },
   en: {
@@ -217,6 +218,7 @@ export const dict = {
     "contact.phone": "Pick up the phone",
     "contact.hello": "Hi～you found Meelo！",
     "intro.skip": "Skip",
+    "intro.ready": "Getting\nMeelo ready...",
     close: "Close",
   },
 } as const;

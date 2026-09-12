@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 /**
- * 手绘引导：一支手画的箭头 + 一行手写字 + 字底下一道划线。
- * 出场是"画出来"的：箭头从尾到头擦出，字从左往右擦出，最后划线；出来后箭头顺着指向轻轻点头。
- * 箭头和划线用的都是详情页那几张 svg，颜色靠 mask 重新上（原图颜色不一）。
+ * 手绘引导：一支手画的箭头 + 一行手写字。
+ * 出场是"画出来"的：箭头从尾到头擦出，字从左往右擦出；出来后箭头顺着指向轻轻点头。
+ * 箭头用的是详情页那张 svg，颜色靠 mask 重新上。
  *
  * 只管自己长什么样，摆在哪由外面用 style 定位；箭头素材原本朝上，rotate 转到要指的方向。
  */
@@ -16,7 +16,6 @@ export default function HandHint({
   textSide = "right",
   fontSize = "3.3vh",
   color = "#262626",
-  lineColor = "#E98A5F",
   tag = false,
   style,
   className = "",
@@ -28,7 +27,6 @@ export default function HandHint({
   textSide?: "left" | "right" | "above" | "below";
   fontSize?: string;
   color?: string;
-  lineColor?: string;
   /** 贴在屏幕上（不在场景里）时垫一张奶油色小纸签，不然压在地板 / 家具上看不清 */
   tag?: boolean;
   style?: CSSProperties;
@@ -57,15 +55,6 @@ export default function HandHint({
     WebkitMaskPosition: "center",
     maskPosition: "center",
     background: color,
-  };
-  const lineMask: CSSProperties = {
-    WebkitMaskImage: "url(/assets/lab/detail/underline-desc.svg)",
-    maskImage: "url(/assets/lab/detail/underline-desc.svg)",
-    WebkitMaskSize: "100% 100%",
-    maskSize: "100% 100%",
-    WebkitMaskRepeat: "no-repeat",
-    maskRepeat: "no-repeat",
-    background: lineColor,
   };
   return (
     <AnimatePresence>
@@ -123,17 +112,6 @@ export default function HandHint({
             >
               {text}
             </motion.span>
-            <motion.span
-              className="absolute left-0 right-0 block"
-              style={{
-                ...lineMask,
-                bottom: "-0.5vh",
-                height: "1vh",
-              }}
-              initial={{ clipPath: "inset(0 100% 0 0)" }}
-              animate={{ clipPath: "inset(0 0% 0 0)" }}
-              transition={{ delay: 0.7, duration: 0.4, ease: "easeInOut" }}
-            />
           </div>
         </motion.div>
       )}

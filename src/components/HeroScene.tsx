@@ -26,7 +26,7 @@ import {
   INTRO_REPLAY_EVENT,
   INTRO_SESSION_KEY,
 } from "../state/intro";
-import HeroCurtain, { CURTAIN_SLIDE_T } from "./HeroCurtain";
+import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
 import { warmLife } from "./life/preload";
 import { useLanguage } from "../i18n/LanguageContext";
@@ -327,31 +327,6 @@ const PERCH_CENTER = { x: 860 / FRAME_W, y: (304 - BIRD_BOX.h / 2) / FRAME_H };
 /** 惊飞触发半径：占画板宽度的比例（约 110px @1440） */
 const STARTLE_RADIUS = 0.077;
 
-/** 把"multiply 混一层 alpha=a 的颜色 hex"换成等价的 feColorMatrix：每通道乘 (1 - a + a·C) */
-function tintMatrix(hex: string, a: number) {
-  const n = parseInt(hex.slice(1), 16);
-  const k = (c: number) => (1 - a + (a * c) / 255).toFixed(4);
-  const r = k((n >> 16) & 255);
-  const g = k((n >> 8) & 255);
-  const b = k(n & 255);
-  return `${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0`;
-}
-
-/**
- * 开场蓝布盖着时小鸟的来回：右端在小羊头顶上方（小羊头顶中心 x≈913 y≈587），
- * 左端在画面左边约半屏处、稍高；每半程 2.6s，图下完后飞去栏杆 1.4s
- */
-const INTRO_BIRD = {
-  right: {
-    left: `${((913 - BIRD_BOX.w / 2) / FRAME_W) * 100}%`,
-    top: `${((587 - BIRD_BOX.h - 18) / FRAME_H) * 100}%`,
-  },
-  left: { left: "14%", top: "30%" },
-  midTop: "44%",
-  half: 2.6,
-  toPerch: 1.4,
-};
-
 /** 随风飘过的叶子素材 */
 const LEAF_IMGS = [
   "/assets/hero-leaf-1.png",
@@ -394,9 +369,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   phaseRef.current = phase;
 
   /*
-   * 开场加载页就是压在这个场景里的一块蓝布（HeroCurtain），小羊和小鸟被抬到布上面：
-   * 加载期间小羊原地待机、小鸟在它头顶到画面中间来回飞；图下完了小鸟飞去屋顶栏杆落下，
-   * 小羊朝那边探一下身，布随即整块向上拉走——房子是"露出来"的，小羊小鸟一直都在。
+   * 开场加载页就是压在这个场景上的一块白布（HeroCurtain：小电视 + 手写签名线描进度）。
+   * 图下完、线描满了布就整块向上拉走——房子是"露出来"的，小鸟已经站在屋顶栏杆上等着。
    * 只在桌面端整屏场景（cover）里做；/intro 预览路由不看会话标记、可反复播。
    */
   const { pathname } = useLocation();
@@ -411,16 +385,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const [curtainSlide, setCurtainSlide] = useState(false);
   const curtainUpRef = useRef(curtainUp);
   curtainUpRef.current = curtainUp;
-  /** 图下完了（小鸟状态机据此收尾） */
-  const curtainLoadedRef = useRef(false);
   const onCurtainDone = () => {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 布盖着期间给小羊单独补的时段染色（见小羊那层的注释）；白天 alpha 为 0 不挂 */
-  const sheepTintId = `hero-sheep-tint-${cover ? "d" : "m"}`;
-  const sheepTint =
-    curtainUp && theme.tintAlpha > 0 ? `url(#${sheepTintId})` : undefined;
   /* 首页站稳后顺手把 Life 页第一屏的图拉进缓存：推门进屋基本不用等 */
   useEffect(() => {
     if (!curtainUp) warmLife(2500);
@@ -429,7 +397,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   useEffect(() => {
     if (!introPreview || !cover) return;
     const replay = () => {
-      curtainLoadedRef.current = false;
       setCurtainSlide(false);
       setCurtainUp(true);
       setCurtainRun((n) => n + 1);
@@ -489,8 +456,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   }, []);
   const [birdFlapIdx, setBirdFlapIdx] = useState(0);
   const [birdStanding, setBirdStanding] = useState(false);
-  /** 素材朝左；开场来回飞往右那半程水平翻过来 */
-  const [birdFacingRight, setBirdFacingRight] = useState(false);
   /** 鼠标靠近栏杆上的小鸟时置位，由状态机消费（用 ref 避免闭包读到旧值） */
   const birdStartledRef = useRef(false);
   const birdStandingRef = useRef(false);
@@ -523,9 +488,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
     /** 已经落到栏杆上：收翅站定 → 歇一会（鼠标靠近会惊飞）→ 起飞、往左飞出画面 */
     const perchAndLeave = async () => {
-      // 收翅站定（落地顺势转回朝左，和平时停在栏杆上一个方向），轻轻下沉一下作落地缓冲
+      // 收翅站定，轻轻下沉一下作落地缓冲
       stopFlap();
-      setBirdFacingRight(false);
       setBirdStanding(true);
       birdStartledRef.current = false;
       birdStandingRef.current = true;
@@ -570,52 +534,24 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
 
     (async () => {
-      /* ---- 开场蓝布盖着：小鸟在小羊头顶和画面中间之间来回飞，等图下完 ---- */
+      /* ---- 开场白布盖着：小鸟先站在屋顶栏杆上等着，布拉走露出来后歇一会再飞走 ---- */
       if (curtainUpRef.current) {
-        // 预览重播时上一轮可能还站在栏杆上（无限起伏的动画没停），先停掉再摆位
+        // 预览重播时上一轮可能还在飞（动画没停），先停掉再摆位
         birdControls.stop();
-        setBirdStanding(false);
+        stopFlap();
+        setBirdStanding(true);
         birdStandingRef.current = false;
         birdControls.set({
-          left: INTRO_BIRD.right.left,
-          top: INTRO_BIRD.right.top,
+          left: PERCH.left,
+          top: PERCH.top,
           opacity: 1,
           y: 0,
         });
-        startFlap();
-        let atLeft = false;
-        while (alive && !curtainLoadedRef.current) {
-          // 往左飞（素材本来朝左）
-          setBirdFacingRight(false);
-          atLeft = true;
-          await birdControls.start({
-            left: [INTRO_BIRD.right.left, INTRO_BIRD.left.left],
-            top: [INTRO_BIRD.right.top, INTRO_BIRD.midTop, INTRO_BIRD.left.top],
-            transition: { duration: INTRO_BIRD.half, ease: "easeInOut" },
-          });
-          if (!alive || curtainLoadedRef.current) break;
-          // 掉头往右飞回小羊头顶
-          setBirdFacingRight(true);
-          atLeft = false;
-          await birdControls.start({
-            left: [INTRO_BIRD.left.left, INTRO_BIRD.right.left],
-            top: [INTRO_BIRD.left.top, INTRO_BIRD.midTop, INTRO_BIRD.right.top],
-            transition: { duration: INTRO_BIRD.half, ease: "easeInOut" },
-          });
+        while (alive && curtainUpRef.current) {
+          await sleep(100);
         }
         if (!alive) return;
-
-        // 图下完了：飞去屋顶栏杆；布在小鸟快落下时开拉，栏杆刚好在它脚下露出来
-        setBirdFacingRight(atLeft);
-        const toPerch = birdControls.start({
-          left: PERCH.left,
-          top: PERCH.top,
-          transition: { duration: INTRO_BIRD.toPerch, ease: "easeInOut" },
-        });
-        await sleep((INTRO_BIRD.toPerch - CURTAIN_SLIDE_T * 0.75) * 1000);
-        if (!alive) return;
-        setCurtainSlide(true);
-        await toPerch;
+        await sleep(400);
         if (!alive) return;
         await perchAndLeave();
         if (!alive) return;
@@ -631,7 +567,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
         // 起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"
         const cruiseTop = rand(9, 19);
-        setBirdFacingRight(false);
         setBirdStanding(false);
         birdStandingRef.current = false;
         birdControls.set({
@@ -825,18 +760,14 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         </motion.div>
       </AnimatePresence>
 
-      {/* 开场蓝布：盖在场景上、小羊小鸟底下（它俩 z 30）；拉走后卸掉 */}
+      {/* 开场白布：整块盖在场景上；图下完、线描满就拉走，拉走后卸掉 */}
       {curtainUp && (
         <HeroCurtain
           key={curtainRun}
           preload={HERO_PRELOAD}
           preview={introPreview}
           slide={curtainSlide}
-          onLoaded={() => {
-            curtainLoadedRef.current = true;
-            // 减少动效时没有小鸟那段收尾，直接拉
-            if (reducedMotion) setCurtainSlide(true);
-          }}
+          onLoaded={() => setCurtainSlide(true)}
           onDone={onCurtainDone}
         />
       )}
@@ -1031,20 +962,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           go={introGo}
           delay={INTRO_AT.sheep}
           origin="63.4% 91%"
-          zIndex={curtainUp ? 30 : undefined}
         >
-          {/* 蓝布盖着时小羊在全屏调色层上面，黄昏/夜里的染色就用一个等价的颜色矩阵单独补在它身上：
-              multiply 混一层 alpha 为 a 的颜色 C，等于每个通道乘 (1 - a + a·C)，布拉走换回全屏层时颜色不跳 */}
-          {curtainUp && theme.tintAlpha > 0 && (
-            <svg width="0" height="0" className="absolute" aria-hidden>
-              <filter id={sheepTintId} colorInterpolationFilters="sRGB">
-                <feColorMatrix
-                  type="matrix"
-                  values={tintMatrix(theme.tint, theme.tintAlpha)}
-                />
-              </filter>
-            </svg>
-          )}
           <img
             src={SPRITES.sheepShadow.src}
             alt=""
@@ -1053,7 +971,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               left: px(SPRITES.sheepShadow.x),
               top: py(SPRITES.sheepShadow.y),
               width: px(SPRITES.sheepShadow.w),
-              filter: sheepTint,
             }}
             draggable={false}
           />
@@ -1065,7 +982,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               left: px(SPRITES.sheep.x),
               top: py(SPRITES.sheep.y),
               width: px(SPRITES.sheep.w),
-              filter: sheepTint,
             }}
             draggable={false}
           />
@@ -1107,17 +1023,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           style={{
             width: px(BIRD_BOX.w),
             height: py(BIRD_BOX.h),
-            zIndex: curtainUp ? 30 : undefined,
-            /* 布盖着时小鸟和小羊一样浮在调色层上面，同样补一份时段染色 */
-            filter: sheepTint,
           }}
           initial={{ left: "135%", top: "14%", opacity: 0 }}
           animate={birdControls}
         >
-          <div
-            className="absolute inset-0"
-            style={{ transform: birdFacingRight ? "scaleX(-1)" : undefined }}
-          >
+          <div className="absolute inset-0">
             {BIRD_FLAP_FRAMES.map((src, i) => (
               <img
                 key={src}
@@ -1145,9 +1055,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           </div>
         </motion.div>
 
-        {/* 随风飘过的叶子 */}
-        <WindLeaves />
-
         {/* 时段调色层：multiply 压暗/染色整个场景，线稿保持黑；进门时褪掉。
             左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，不然接缝处一深一浅两条竖带 */}
         <motion.div
@@ -1172,6 +1079,14 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           on={theme.lights && !entering}
           delay={intro && !introGo ? 0 : intro ? INTRO_AT.openSign + 0.6 : 0}
           signControls={signControls}
+        />
+
+        {/* 随风飘过的叶子：放在夜灯上面，不然晚上会飘到亮着的 WOOLAB 招牌后面去；
+            自己带一份和调色层等价的染色，颜色和夜里的场景一致。进门时调色层褪掉，叶子也跟着不染 */}
+        <WindLeaves
+          id={cover ? "d" : "m"}
+          tint={theme.tint}
+          tintAlpha={entering ? 0 : theme.tintAlpha}
         />
 
         {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
@@ -1442,8 +1357,29 @@ const LEAF_PATH = {
   top: [16, 36, 52, 62, 66], // 单位：画面高度百分比
 } as const;
 
-function WindLeaves() {
+/** 把"multiply 混一层 alpha=a 的颜色 hex"换成等价的 feColorMatrix：每通道乘 (1 - a + a·C) */
+function tintMatrix(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16);
+  const k = (c: number) => (1 - a + (a * c) / 255).toFixed(4);
+  const r = k((n >> 16) & 255);
+  const g = k((n >> 8) & 255);
+  const b = k(n & 255);
+  return `${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0`;
+}
+
+function WindLeaves({
+  id,
+  tint,
+  tintAlpha,
+}: {
+  /** 滤镜 id 后缀（桌面/移动两份场景各一个） */
+  id: string;
+  /** 当前时段的染色：叶子画在调色层和夜灯上面，自己补一份等价的染色 */
+  tint: string;
+  tintAlpha: number;
+}) {
   const reducedMotion = useReducedMotion();
+  const filterId = `hero-leaf-tint-${id}`;
 
   const leaves = useMemo(
     () =>
@@ -1463,6 +1399,13 @@ function WindLeaves() {
 
   return (
     <>
+      {tintAlpha > 0 && (
+        <svg width="0" height="0" className="absolute" aria-hidden>
+          <filter id={filterId} colorInterpolationFilters="sRGB">
+            <feColorMatrix type="matrix" values={tintMatrix(tint, tintAlpha)} />
+          </filter>
+        </svg>
+      )}
       {leaves.map((leaf, i) => (
         <motion.img
           key={i}
@@ -1470,7 +1413,11 @@ function WindLeaves() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute select-none"
-          style={{ width: `${leaf.w}%`, maxWidth: "none" }}
+          style={{
+            width: `${leaf.w}%`,
+            maxWidth: "none",
+            filter: tintAlpha > 0 ? `url(#${filterId})` : undefined,
+          }}
           initial={{
             left: "-4%",
             top: `${LEAF_PATH.top[0] + leaf.offset}%`,

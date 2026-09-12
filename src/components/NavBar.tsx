@@ -126,10 +126,10 @@ function NavHit({
 }
 
 /** 左上角的 WOOLAB logo（点回首页）。单独导出：需要把它从混合模式里拎出来单画一份时用（见 TopNav） */
-export function NavLogo() {
+export function NavLogo({ disabled = false }: { disabled?: boolean }) {
   const { t } = useLanguage();
   return (
-    <Link to="/" className="pointer-events-auto block" aria-label={t("siteName")}>
+    <Link to="/" className={`block ${disabled ? "pointer-events-none" : "pointer-events-auto"}`} aria-label={t("siteName")}>
       <span className="block" style={{ ...maskStyle("/assets/menu/logo.svg"), width: mu(73), height: mu(23) }} />
     </Link>
   );
@@ -152,6 +152,7 @@ export default function NavBar({
   extra,
   hideLogo = false,
   logoOnly = false,
+  hidden = false,
   className = "",
 }: {
   /** 文字 / 图标颜色 */
@@ -163,29 +164,35 @@ export default function NavBar({
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
   hideLogo?: boolean;
-  /** 只留 logo，右边那组先藏着（开场加载页盖着的时候），放开后淡进来 */
+  /** 只留 logo，右边那组先藏着（内页加载页盖着的时候），放开后淡进来 */
   logoOnly?: boolean;
+  /** 整条都藏着、不接鼠标（首页开场白布盖着的时候），放开后整条淡进来 */
+  hidden?: boolean;
   className?: string;
 }) {
   const { t, lang, setLang } = useLanguage();
   const [muted, setMutedState] = useState(isMuted());
   useEffect(() => onMutedChange(setMutedState), []);
+  const rightOff = logoOnly || hidden;
 
   return (
-    <div
+    <motion.div
       className={`pointer-events-none flex items-center justify-between ${className}`}
       style={{ ...navBarStyle(color), transition: "color 0.35s ease" }}
+      initial={false}
+      animate={{ opacity: hidden ? 0 : 1 }}
+      transition={{ duration: hidden ? 0 : 0.6, ease: "easeOut" }}
     >
       {/* 左：logo，点回首页 */}
-      {hideLogo ? <span aria-hidden /> : <NavLogo />}
+      {hideLogo ? <span aria-hidden /> : <NavLogo disabled={hidden} />}
 
       {/* 右：MENU / CN · EN / 喇叭 */}
       <motion.div
-        className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${logoOnly ? "pointer-events-none" : "pointer-events-auto"}`}
+        className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
         style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: mu(26) }}
         initial={false}
-        animate={{ opacity: logoOnly ? 0 : 1 }}
-        transition={{ duration: logoOnly ? 0 : 0.6, ease: "easeOut" }}
+        animate={{ opacity: rightOff ? 0 : 1 }}
+        transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}
       >
         {/* MENU：目录打开期间圈一直留着 */}
         <NavHit held={menuOpen}>
@@ -247,6 +254,6 @@ export default function NavBar({
           )}
         </button>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

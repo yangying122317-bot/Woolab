@@ -113,3 +113,29 @@ export function useReportLogoOnlyNav(active: boolean) {
     };
   }, [active]);
 }
+
+/**
+ * 首页开场那块白布盖着的时候，整条顶栏（连 logo）都藏起来，布拉走再一起淡进来。
+ */
+let navHidden = false;
+
+export function useNavHidden(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => navHidden,
+    () => false,
+  );
+}
+
+/** active 为真的这段时间，整条顶栏藏起来 */
+export function useReportNavHidden(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    navHidden = true;
+    emit();
+    return () => {
+      navHidden = false;
+      emit();
+    };
+  }, [active]);
+}

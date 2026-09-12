@@ -237,7 +237,7 @@ export default function LifePage() {
     scrollRoomTo(LAB_DOOR.left + LAB_DOOR.width / 2);
   };
 
-  // 墙上的清单滚出画面后，屏幕左边缘露出一角牛皮板当入口
+  // 墙上的清单滚出画面后，右下角浮出它的小缩影当入口
   const listLayer = seg01Layers.find((l) => l.src === "list")!;
   const [miniList, setMiniList] = useState(false);
   /** 画面右边缘在长卷里的位置（vh），判断右边还有没有没做的事 */
@@ -522,40 +522,33 @@ export default function LifePage() {
           />
         </div>
 
-        {/* 墙上的清单不在画面里时，屏幕左边缘露出一角牛皮板当入口（面板就是从这儿推出来的） */}
+        {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口（往右走的箭头会让到它上面） */}
         <AnimatePresence>
           {miniList && !checklistOpen && !focus && (
             <motion.button
-              key="list-tab"
+              key="mini-list"
               onClick={openChecklist}
               aria-label={t("life.checklist.title")}
-              initial={{ x: -48 }}
-              animate={{ x: 0 }}
-              exit={{ x: -48 }}
-              whileHover={{ x: 3 }}
-              transition={{ type: "spring", stiffness: 300, damping: 26 }}
-              className="absolute left-0 top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center justify-center"
-              style={{
-                width: "3.4vh",
-                height: "15vh",
-                marginLeft: -2,
-                background: "#CC9E57",
-                border: "1.5px solid #000",
-                borderRadius: "0 2px 2px 0",
-                boxShadow: "3px 0 12px rgba(0,0,0,0.22)",
-              }}
+              initial={{ opacity: 0, y: 20, rotate: 4 }}
+              animate={{ opacity: 1, y: 0, rotate: 0 }}
+              exit={{ opacity: 0, y: 20, rotate: 4 }}
+              whileHover={{ rotate: -5, scale: 1.08 }}
+              transition={{ type: "spring", stiffness: 320, damping: 24 }}
+              className="absolute z-20 cursor-pointer"
+              style={{ right: "3vh", bottom: "3vh" }}
             >
-              <span
-                className="font-look whitespace-nowrap font-bold uppercase"
-                style={{ writingMode: "vertical-rl", fontSize: "1.45vh", letterSpacing: "0.08em", color: "#94541C" }}
-              >
-                {t("life.checklist.title")}
-              </span>
+              <img
+                src="/assets/life/seg01/list.webp"
+                alt=""
+                draggable={false}
+                className="w-auto drop-shadow-lg"
+                style={{ height: "11vh" }}
+              />
             </motion.button>
           )}
         </AnimatePresence>
 
-        {/* 今晚的小事清单：从左边推出来的牛皮板（入口是墙上挂着的清单 / 左边缘那一角） */}
+        {/* 今晚的小事清单：从左边推出来的牛皮板（入口是墙上挂着的清单 / 右下角的小缩影） */}
         <Checklist
           room={room}
           open={checklistOpen}
