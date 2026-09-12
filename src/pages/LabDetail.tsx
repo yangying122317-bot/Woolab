@@ -1291,6 +1291,7 @@ function LookSection({
   return (
     <section ref={ref} className="relative">
       <div className="relative" style={{ height: layout.blockH }}>
+        {/* 页头标题：切项目切过来的淡入；底下的 WOOLAB 水印不在这儿，挂在滚动内容最外层，切项目不重挂 */}
         {first && (
           <motion.div
             className="absolute inset-0"
@@ -1298,7 +1299,6 @@ function LookSection({
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
           >
-            <Watermark u={u} cy={vh / 2} />
             <LookbookHead u={u} closet={closet} />
           </motion.div>
         )}
@@ -1541,7 +1541,12 @@ export function DetailPage({
         className="relative h-full w-full overflow-y-auto"
         style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
       >
-        <div ref={content}>
+        <div ref={content} className="relative">
+          {/*
+           * 第一屏底下的 WOOLAB 石刻水印：跟着内容滚，但放在按项目 key 的段落外面——
+           * 切项目时段落整个重挂，水印要是在里面就会重新出现一次；它对每个项目都一样，挂一次就够。
+           */}
+          <Watermark u={u} cy={vh / 2} />
           {/*
            * 这个项目的每一件：那段话 + 拼贴 → 通栏照片，一件接一件，全是普通内容一路匀速滚；
            * 钉着不动的只有屏中的主角金框，这些东西从它身后依次过去。

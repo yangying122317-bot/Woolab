@@ -33,8 +33,9 @@ export default function TopNav() {
 
   return (
     <>
+      {/* header 本身不接鼠标：它横贯整个顶边，不然会把底下 Lab 详情左上角的"回画廊"盖住；里面的按钮各自 pointer-events-auto */}
       <header
-        className={`fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
+        className={`pointer-events-none fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
         style={{ mixBlendMode: plain ? "normal" : "difference" }}
       >
         <NavBar color="#FFFFFF" menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} logoOnly={logoOnly} />
