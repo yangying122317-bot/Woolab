@@ -10,8 +10,6 @@ import {
 } from "framer-motion";
 import Checklist from "../components/life/Checklist";
 import HandHint from "../components/life/HandHint";
-import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../components/IntroLoader";
-import { config } from "../config";
 import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import { useIdle } from "../components/life/useIdle";
 import StationFocus from "../components/life/StationFocus";
@@ -30,8 +28,13 @@ import { preloadLifeRest, whenLifeFirstReady } from "../components/life/preload"
 const READY_CAP_MS = 4000;
 
 const photoStation = lifeStations.find((s) => s.id === "photo")!;
-/** 第一次进门的引导只演一次 */
-const GUIDE_KEY = "woolab-life-guided";
+
+/** 清单抽屉是谁推出来的：决定要不要锁滚、要不要自动收 */
+type ListReason = "guide" | "stamp" | "user" | "done";
+/** 做完一件后抽屉停多久自己收（划线 0.4s + 盖章 0.95s 之后还留一秒多） */
+const STAMP_STAY = 2800;
+/** 引导那次停多久 */
+const GUIDE_STAY = 3600;
 
 /**
  * 小羊的生活：横向滚动的房间剖面（交互原型骨架）。
@@ -83,11 +86,10 @@ export default function LifePage() {
   }, []);
 
   /* ---------------- 房间状态（持久化） ---------------- */
-  // 带 ?reset 打开时清空进度（连第一次进门的引导也重演），方便从头体验一遍
+  // 带 ?reset 打开时清空进度（引导只看进度，清了自然重演），方便从头体验一遍
   const [room, setRoom] = useState<RoomState>(() => {
     if (new URLSearchParams(window.location.search).has("reset")) {
       window.history.replaceState(null, "", window.location.pathname);
-      localStorage.removeItem(GUIDE_KEY);
       return { ...DEFAULT_ROOM };
     }
     return loadRoomState();
@@ -102,33 +104,86 @@ export default function LifePage() {
   const zoomControls = useAnimationControls();
 
   /* ---------------- 清单 ---------------- */
-  const [checklistOpen, setChecklistOpen] = useState(false);
+  /**
+   * 抽屉只有一个开关 showList / hideList，谁要弹都从这儿走，按"谁推出来的"分四种：
+   *   guide  第一次进门（一件都没做过）自动推出来看几秒——不锁滚，人一滚就收
+   *   stamp  刚做完一件，推出来划线盖章，几秒后自己收——鼠标放上去就等着，移开再倒数
+   *   user   自己点开的（墙上那张 / 左边缘一角）——锁滚，点空处 / Esc 收
+   *   done   四件全做完那次——不自动收，底下浮出"带我过去"
+   */
+  const [list, setList] = useState<{ open: boolean; reason: ListReason }>({ open: false, reason: "user" });
+  const checklistOpen = list.open;
+  const listRef = useRef(list);
+  listRef.current = list;
+  /** 自动收回的倒计时：鼠标进抽屉时暂停（记下剩多少），出来再续 */
   const collapseTimer = useRef<number | undefined>(undefined);
+  const collapseLeft = useRef(0);
+  const collapseFrom = useRef(0);
+  const stopCollapse = () => {
+    if (collapseTimer.current !== undefined) {
+      collapseLeft.current = Math.max(0, collapseLeft.current - (performance.now() - collapseFrom.current));
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = undefined;
+    }
+  };
+  const startCollapse = (ms: number) => {
+    window.clearTimeout(collapseTimer.current);
+    collapseLeft.current = ms;
+    collapseFrom.current = performance.now();
+    collapseTimer.current = window.setTimeout(() => {
+      collapseTimer.current = undefined;
+      setList((l) => ({ ...l, open: false }));
+    }, ms);
+  };
+  const showList = (reason: ListReason, autoCloseMs?: number) => {
+    stopCollapse();
+    setList({ open: true, reason });
+    if (autoCloseMs) startCollapse(autoCloseMs);
+  };
+  const hideList = () => {
+    stopCollapse();
+    setList((l) => ({ ...l, open: false }));
+  };
+  /** 鼠标进了抽屉：自动收的先别倒数 */
+  const onListEnter = () => {
+    if (list.reason === "stamp" || list.reason === "guide") stopCollapse();
+  };
+  /** 鼠标离开抽屉：接着倒数，至少再留一秒多 */
+  const onListLeave = () => {
+    if (list.open && (list.reason === "stamp" || list.reason === "guide"))
+      startCollapse(Math.max(collapseLeft.current, 1200));
+  };
+  /** 在抽屉里点了什么：这就是人家要看的东西了，不再自动收，按自己点开的算 */
+  const onListInteract = () => {
+    if (list.reason !== "user" && list.reason !== "done") showList("user");
+  };
+  /* 刚做完的这件正好是最后一件：纸要被揭走、露出"带我过去"，不能自动收 */
+  useEffect(() => {
+    if (list.open && list.reason === "stamp" && isAllDone(room)) showList("done");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, room]);
+  useEffect(() => () => window.clearTimeout(collapseTimer.current), []);
+
   /** 专注态里刚完成了一项，拉回后要弹清单盖章 */
   const pendingStamp = useRef(false);
   /** 作画动画阶段：拼图完成 → wait（拉回中）→ play（原位作画）→ idle */
   const [paint, setPaint] = useState<PaintPhase>("idle");
 
-  const openChecklist = () => {
-    window.clearTimeout(collapseTimer.current);
-    setChecklistOpen(true);
-  };
-  const closeChecklist = () => {
-    window.clearTimeout(collapseTimer.current);
-    setChecklistOpen(false);
-  };
+  const openChecklist = () => showList("user");
+  const closeChecklist = () => hideList();
 
   /*
-   * 清单面板是从屏幕左边推出来盖在房间上的；开着的时候滚轮锁住（房间别在后面自己跑）。
+   * 自己点开的 / 全做完那次：抽屉盖在房间上，滚轮锁住（房间别在后面自己跑）。
+   * 自动弹出来的（引导 / 盖章）不锁：人要是滚了，说明不想看，抽屉自己收（见下面 x 的监听）。
    * listKick：面板收回去那一刻，墙上挂着的那张清单荡两下，提醒"它就住在这儿"。
-   * 第一次进门那次收回去之后，再补一支箭头指着墙上那张。
+   * 引导那次收回去之后，再补一支箭头指着墙上那张。
    */
   const lenis = useLenis();
   useEffect(() => {
     if (!lenis) return;
-    if (checklistOpen) lenis.stop();
+    if (list.open && (list.reason === "user" || list.reason === "done")) lenis.stop();
     else lenis.start();
-  }, [checklistOpen, lenis]);
+  }, [list, lenis]);
   /*
    * 抽屉是牛皮色、顶到屏幕顶，压着左上角的 logo：开着时 logo 画成纯白。
    * 收回是 0.42s 的滑出动画，checklistOpen 一变假抽屉还盖在 logo 底下——这段时间 logo 要是切回
@@ -187,47 +242,52 @@ export default function LifePage() {
   const [miniList, setMiniList] = useState(false);
   /** 画面右边缘在长卷里的位置（vh），判断右边还有没有没做的事 */
   const [viewRight, setViewRight] = useState(() => (window.innerWidth / window.innerHeight) * 100);
+  /** 抽屉推出来时房间在哪：自动弹出的那两种，房间一动（滚了 8px 以上）就当人不想看，收掉 */
+  const xAtOpen = useRef(0);
+  useEffect(() => {
+    if (list.open) xAtOpen.current = x.get();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.open]);
+  /** 揭开后人已经自己滚过房间了：会玩了，这次不用引导 */
+  const guideDone = useRef(false);
   useMotionValueEvent(x, "change", (v) => {
     const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight;
     setMiniList(-v > listRightPx);
     setViewRight(((-v + window.innerWidth) / window.innerHeight) * 100);
+    const moved = Math.abs(v - xAtOpen.current) > 8;
+    const l = listRef.current;
+    if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
+    if (Math.abs(v) > 8) guideDone.current = true;
   });
 
   /* ---------------- 引导 ---------------- */
   /**
-   * 第一次进门：进场淡入完，清单面板从左边推出来让人看几秒（四件小事）→ 自己收回去、墙上那张荡两下 →
-   * 一支手绘箭头指着它"今晚的清单住在这儿"。之后靠"停下来就出箭头"的站点引导接力。
-   * 只演一次（localStorage 记着）；老访客有进度的也不演。
+   * 引导只看进度，不另记标记：
+   *  - 一件都没做过：房间揭开后，人停下来 1.5s 没动，清单抽屉从左边推出来让人看几秒（四件小事）→
+   *    自己收回去、墙上那张荡两下 → 一支手绘箭头指着它"今晚的清单住在这儿"。
+   *    每次进来都这样；但揭开后人已经自己滚了 / 点了站点，说明会玩了，这次就不弹。
+   *  - 做过任何一件（没做完）：不弹抽屉，只让墙上那张晃两下 + 箭头，提醒清单在这儿。
+   *  - 全做完：什么都不提醒。
+   * 之后靠"停下来就出箭头"的站点引导接力。
    */
   const [entryHint, setEntryHint] = useState(false);
+  const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
+  const guideIdle = useIdle(1500, ready && noProgress && !guideDone.current && !focus && !list.open);
   useEffect(() => {
-    /* 房间还没揭开就先不计时 */
-    if (!ready) return;
-    if (localStorage.getItem(GUIDE_KEY)) return;
-    if (lifeStations.some((s) => isStationDone(room, s.id))) {
-      localStorage.setItem(GUIDE_KEY, "1");
-      return;
-    }
-    let t1: number | undefined;
-    let t2: number | undefined;
-    const start = () => {
-      t1 = window.setTimeout(() => {
-        guideHint.current = true;
-        setChecklistOpen(true);
-        localStorage.setItem(GUIDE_KEY, "1");
-      }, 1200);
-      t2 = window.setTimeout(() => setChecklistOpen(false), 1200 + 3600);
-    };
-    /* 开屏动画还盖着的话，等它散了再开始计时 */
-    const introUp = config.introEnabled && !sessionStorage.getItem(INTRO_SESSION_KEY);
-    const onIntroDone = () => window.setTimeout(start, 600);
-    if (introUp) window.addEventListener(INTRO_DISMISSED_EVENT, onIntroDone, { once: true });
-    else start();
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.removeEventListener(INTRO_DISMISSED_EVENT, onIntroDone);
-    };
+    if (!guideIdle || guideDone.current) return;
+    guideDone.current = true;
+    guideHint.current = true;
+    showList("guide", GUIDE_STAY);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guideIdle]);
+  useEffect(() => {
+    if (!ready || noProgress || isAllDone(room)) return;
+    const t = window.setTimeout(() => {
+      setListKick((n) => n + 1);
+      setEntryHint(true);
+      hintTimer.current = window.setTimeout(() => setEntryHint(false), 2600);
+    }, 900);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
@@ -237,18 +297,14 @@ export default function LifePage() {
     return () => {
       document.documentElement.classList.remove("scrollbar-hidden");
       document.documentElement.style.overflow = "";
-      window.clearTimeout(collapseTimer.current);
     };
   }, []);
-
-  // 最后一件做完弹出的那次清单不自动收：底下要浮出"你和 Meelo 是朋友了"和去 Lab 的入口
-  useEffect(() => {
-    if (checklistOpen && isAllDone(room)) window.clearTimeout(collapseTimer.current);
-  }, [checklistOpen, room]);
 
   /** 点击站点：镜头以站点为原点推近，锁住滚动 */
   const openStation = (station: LifeStation, el: HTMLElement) => {
     if (focus) return;
+    /* 人已经自己上手点站点了，这次不用再推引导 */
+    guideDone.current = true;
     const wrap = wrapRef.current;
     if (!wrap) return;
     const wr = wrap.getBoundingClientRect();
@@ -308,9 +364,7 @@ export default function LifePage() {
     document.documentElement.style.overflow = "";
     if (pendingStamp.current) {
       pendingStamp.current = false;
-      setChecklistOpen(true);
-      window.clearTimeout(collapseTimer.current);
-      collapseTimer.current = window.setTimeout(() => setChecklistOpen(false), 2800);
+      showList("stamp", STAMP_STAY);
     }
   };
 
@@ -355,9 +409,7 @@ export default function LifePage() {
   /** 作画动画播完：定格 + 弹清单盖章 */
   const finishPaint = () => {
     setPaint("idle");
-    window.clearTimeout(collapseTimer.current);
-    setChecklistOpen(true);
-    collapseTimer.current = window.setTimeout(() => setChecklistOpen(false), 2800);
+    showList("stamp", STAMP_STAY);
   };
 
   /** 调酒完成（名字浮现后）：盖章 + 镜头拉回 + 弹清单 */
@@ -385,9 +437,7 @@ export default function LifePage() {
   /** 换装动画播完：这一项才算做完 → 弹清单划线盖章 */
   const completeDress = () => {
     setRoom((r) => ({ ...r, dressed: true }));
-    window.clearTimeout(collapseTimer.current);
-    setChecklistOpen(true);
-    collapseTimer.current = window.setTimeout(() => setChecklistOpen(false), 2800);
+    showList("stamp", STAMP_STAY);
   };
 
   /* 站点引导 / 往右走：都要用户停下来才出，正在专注 / 看清单 / 进 LAB 时不出 */
@@ -513,6 +563,9 @@ export default function LifePage() {
           onGoStation={goStation}
           onGoDoor={goDoor}
           onClosed={onListClosed}
+          onEnter={onListEnter}
+          onLeave={onListLeave}
+          onInteract={onListInteract}
         />
 
         {/* 场景内互动模式（拼图/调酒）：一句提示 + 「先离开」 */}

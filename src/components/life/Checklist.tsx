@@ -16,6 +16,11 @@ interface Props {
   onGoDoor: () => void;
   /** 面板完全收回去了（退场动画播完） */
   onClosed?: () => void;
+  /** 鼠标进 / 出抽屉：自动收回的倒计时据此暂停 / 继续 */
+  onEnter?: () => void;
+  onLeave?: () => void;
+  /** 在抽屉里点了什么（任何位置）：不再自动收 */
+  onInteract?: () => void;
 }
 
 const A = "/assets/life/list";
@@ -163,7 +168,7 @@ const PRELOAD = [
  * 四行全划完：这张纸被揭走，露出底下那张 "All done"，一颗"带我过去"把房间送到门口。
  * 点房间空白处 / Esc 收回。
  */
-export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, onClosed }: Props) {
+export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, onClosed, onEnter, onLeave, onInteract }: Props) {
   const { t, pick, lang } = useLanguage();
   const { vh, dw, k } = useScale();
   const hand = lang === "zh";
@@ -250,6 +255,9 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
             initial={{ x: slideOut }}
             animate={{ x: 0, transition: { type: "spring", stiffness: 210, damping: 27, mass: 1 } }}
             exit={{ x: slideOut, transition: { duration: 0.42, ease: [0.5, 0, 0.75, 0] } }}
+            onPointerEnter={onEnter}
+            onPointerLeave={onLeave}
+            onPointerDownCapture={onInteract}
           >
             {/* 抽屉右下角那条胶带：跟着抽屉的角走，不跟纸 */}
             <img
@@ -367,6 +375,16 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                         >
                           <line x1="0" y1="0.5" x2={ROW_W} y2="0.5" stroke="black" strokeWidth="0.6" strokeDasharray="1.6 3.2" />
                         </svg>
+
+                        {/* 第一行是两步（挂好、穿上）：只挂好没穿上时在虚线底下补一句，别让人以为挂了白挂 */}
+                        {s.id === "tee" && room.tee && !room.dressed && (
+                          <span
+                            className="font-hand pointer-events-none absolute whitespace-nowrap"
+                            style={{ left: ROW_X + 4, top: row.dotY + 3, fontSize: 7, lineHeight: 1.3, color: "#94541C" }}
+                          >
+                            {t("life.checklist.teeHalf")}
+                          </span>
+                        )}
 
                         {isDone && (
                           <>
