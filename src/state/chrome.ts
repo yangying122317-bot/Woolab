@@ -139,3 +139,29 @@ export function useReportNavHidden(active: boolean) {
     };
   }, [active]);
 }
+
+/**
+ * Lab 页走进奶油黄的走廊后，顶栏白字看不清，换成黑字（入口砖红墙、详情深灰石墙仍是白字）。
+ */
+let darkNav = false;
+
+export function useDarkNav(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => darkNav,
+    () => false,
+  );
+}
+
+/** active 为真的这段时间，顶栏黑字 */
+export function useReportDarkNav(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    darkNav = true;
+    emit();
+    return () => {
+      darkNav = false;
+      emit();
+    };
+  }, [active]);
+}

@@ -34,7 +34,8 @@ function load(url: string): Promise<void> {
 }
 const keep: HTMLImageElement[] = [];
 
-/** 一批一起下，limit 个并发；全部完成后 resolve（单张失败不算失败） */
+/** 一批一起下，limit 个并发；全部完成后 resolve（单张失败不算失败）。别处（Lab 详情）也用这两个 */
+export { load as loadImage, loadAll as loadImages };
 async function loadAll(urls: readonly string[], limit = 8): Promise<void> {
   let i = 0;
   const worker = async () => {

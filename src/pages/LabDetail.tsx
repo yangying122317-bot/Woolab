@@ -143,9 +143,29 @@ function Rotated({
   );
 }
 
+/** 详情里的图：已经在缓存里的直接显示；还没到的先透明，到了 0.2s 淡进来，不"啪"地跳出 */
 function Img({ src, style, fit = "cover" }: { src: string; style?: CSSProperties; fit?: CSSProperties["objectFit"] }) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const im = ref.current;
+    if (!im) return;
+    if (im.complete && im.naturalWidth > 0) {
+      setReady(true);
+      return;
+    }
+    setReady(false);
+    const on = () => setReady(true);
+    im.addEventListener("load", on);
+    im.addEventListener("error", on);
+    return () => {
+      im.removeEventListener("load", on);
+      im.removeEventListener("error", on);
+    };
+  }, [src]);
   return (
     <img
+      ref={ref}
       src={src}
       alt=""
       draggable={false}
@@ -156,6 +176,8 @@ function Img({ src, style, fit = "cover" }: { src: string; style?: CSSProperties
         width: "100%",
         height: "100%",
         objectFit: fit,
+        opacity: ready ? 1 : 0,
+        transition: ready ? "opacity 0.2s ease-out" : "none",
         ...style,
       }}
     />
@@ -213,14 +235,19 @@ const FRAME_CY = (95 + 262) / 2;
 function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
   const { w, h } = stoneSize(u);
   const half = MARK_HALF * h;
-  const top = cy - MARK_CY * h;
-  const fadeFrom = cy + half + 16;
+  /*
+   * 只露水印四周那一截，上下都是渐隐：这张带水印的石纹和底下钉死的石墙纹路对不齐，
+   * 要是上边是硬边，画框墙那段滚进来时就会看到一条横着的接缝。
+   */
+  const boxTop = Math.max(0, cy - half - 110);
+  const top = cy - MARK_CY * h - boxTop;
+  const fadeFrom = cy + half + 16 - boxTop;
   const height = fadeFrom + 130;
-  const mask = `linear-gradient(to bottom, #000 ${fadeFrom}px, transparent 100%)`;
+  const mask = `linear-gradient(to bottom, transparent 0, #000 ${boxTop > 0 ? 90 : 0}px, #000 ${fadeFrom}px, transparent 100%)`;
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 overflow-hidden"
-      style={{ height, WebkitMaskImage: mask, maskImage: mask }}
+      className="pointer-events-none absolute inset-x-0 overflow-hidden"
+      style={{ top: boxTop, height, WebkitMaskImage: mask, maskImage: mask }}
     >
       <img
         src={`${A}/bg-stone-mark.webp`}

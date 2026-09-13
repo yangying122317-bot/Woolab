@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
 import TimeToggle from "./TimeToggle";
-import { useDetailOpen, useLogoOnlyNav, useNavHidden, usePlainLogo, usePlainNav } from "../state/chrome";
+import { useDarkNav, useDetailOpen, useLogoOnlyNav, useNavHidden, usePlainLogo, usePlainNav } from "../state/chrome";
 import { INTRO_PREVIEW_PATH } from "./IntroLoader";
 
 /**
@@ -30,6 +30,9 @@ export default function TopNav() {
   /* 内页加载布盖着时只留 logo；首页开场白布盖着时整条都藏 */
   const logoOnly = useLogoOnlyNav();
   const navHidden = useNavHidden();
+  /* Lab 页走进奶油黄走廊后黑字；详情盖上来（深灰石墙）还是白字 */
+  const darkNav = useDarkNav() && !detail;
+  const navColor = darkNav ? "#1F1B17" : "#FFFFFF";
   const extra = home ? <TimeToggle /> : undefined;
 
   return (
@@ -39,7 +42,7 @@ export default function TopNav() {
         className={`pointer-events-none fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
         style={{ mixBlendMode: plain ? "normal" : "difference" }}
       >
-        <NavBar color="#FFFFFF" menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} logoOnly={logoOnly} hidden={navHidden} />
+        <NavBar color={navColor} menuOpen={false} onMenu={() => setOpen(true)} extra={extra} hideLogo={detail || plainLogo} logoOnly={logoOnly} hidden={navHidden} />
       </header>
       {plainLogo && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex items-center" style={navBarStyle("#FFFFFF")}>

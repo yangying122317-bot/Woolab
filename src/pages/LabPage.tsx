@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   animate,
   motion,
@@ -16,6 +16,9 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
+import { useReportDarkNav } from "../state/chrome";
+import { loadImages } from "../components/life/preload";
+import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
 /**
  * 实验室 · 画展。
@@ -377,6 +380,8 @@ const CO_PROPS: PropSpec[] = [
 
 /** q → 相机横向：开头一段沿墙向右平移到走廊中轴，之后一直在中轴上 */
 const CAM_X_KEYS = [0, 0.15];
+/** 滚到这里砖红入口墙已经出画、满屏奶油黄，顶栏从白字换黑字 */
+const CORRIDOR_Q = 0.13;
 const CAM_X_VALS = [ENT_CAM_X0, 0];
 /** q → 相机深度：平移快结束时起步往前走到第一站，随后平台对应停留、斜坡对应前进 */
 const CAM_Z_KEYS = [0, 0.12, 0.24, 0.32, 0.44, 0.52, 0.64, 0.72, 0.84, 0.91, 1];
@@ -597,7 +602,11 @@ function CorridorStation({
           playNavigate();
           onOpen(project, rect);
         }}
-        onMouseEnter={() => setHover(true)}
+        onMouseEnter={() => {
+          setHover(true);
+          /* 碰到哪只框就把那个项目的图先拉齐，悬停到点下去那几百毫秒够用 */
+          warmLabProject(project);
+        }}
         onMouseLeave={() => setHover(false)}
         onPointerMove={(ev) => {
           const r = ev.currentTarget.getBoundingClientRect();
@@ -942,8 +951,20 @@ function CorridorLines({
   );
 }
 
+/* —— 尽头墙上的小场景（世界 px，墙 293×151，墙底边就是地脚线）——
+   壁灯 + 空金框（"下一件留位中"）+ 绿门（Life 页那扇，镜像成往右开）+ 思考羊雕像。
+   按参考图的比例排：整组占墙宽约 70%，居中 */
+const END_LAMP = { x: 59.5, y: 43, w: 20.4, h: (20.4 * 210) / 179 };
+const END_FRAME = { x: 47.5, y: 68.7, w: 44.4, h: (44.4 * 495) / 446 };
+/** 门：门框底压在地脚线上（关门切图 703×1106 就是门框的外沿） */
+const END_DOOR = { x: 98, h: 108, w: (108 * 703) / 1106 };
+/** 开门那张 1093×1229：门框在 x390 起、同尺寸，多出来的是甩开的门板和打到地上的光 */
+const END_DOOR_OPEN = { l: -390 / 703, w: 1093 / 703, h: 1229 / 1106 };
+/** 雕像：台座立在墙前一步的地上，底比地脚线低一点 */
+const END_THINKER = { x: 192.7, w: 39.6, h: (39.6 * 721) / 400, below: 5 };
+
 /** 走廊尽头墙：世界物件，随相机靠近从远处的小矩形一路长大；
-    四角始终落在角线上。出口文案贴在墙上一起缩放 */
+    四角始终落在角线上。墙上的小场景贴在墙上一起缩放；鼠标碰到门，门推开、光亮起；点门回首页 */
 function CorridorEndWall({
   camDepth,
   camX,
@@ -954,6 +975,8 @@ function CorridorEndWall({
   frame: ShellFrame;
 }) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
+  const [doorHover, setDoorHover] = useState(false);
   const g = frame.g;
   const scale = useTransform(camDepth, (cz) => scaleOf(EXIT_Z, cz));
   /* 尽头墙画的是走廊断面（四角在角线上）。相机横向偏离时角线会变斜率，
@@ -963,14 +986,36 @@ function CorridorEndWall({
     return -(CO_END_H / 2 / CO_WALL_H) * cx * g * s;
   });
   const tf = useMotionTemplate`translate(-50%, -50%) translateX(${x}px) scale(${scale})`;
+  /*
+   * 墙的黑边不烧在图里、用和角线同一根手绘线勾：粗细取角线在墙四角那一点的粗细
+   * （角线从消失点 0.9 到画面边缘 3 线性变粗，墙角离消失点多远就多粗），再除掉整块的缩放，
+   * 这样走到尽头墙放大时边也不会跟着变成一根粗杠
+   */
+  const lineT = CO_LINE_T * g;
+  const lineTFar = CO_LINE_T_FAR * g;
+  const lFull = lineT + frame.vpX / Math.cos(Math.atan(CO_SLOPE));
+  const cornerR = Math.hypot(CO_END_W / 2, CO_END_H / 2) * g;
+  const border = useTransform(scale, (s) => {
+    const onScreen = lineTFar + (lineT - lineTFar) * Math.min(1, (cornerR * s) / lFull);
+    return onScreen / s;
+  });
+  const negHalf = useTransform(border, (b) => -b / 2);
+  const wallW = CO_END_W * g;
+  const wallH = CO_END_H * g;
+  const spanW = useTransform(border, (b) => wallW + b);
+  const spanH = useTransform(border, (b) => wallH + b);
+  const bottomTop = useTransform(border, (b) => wallH - b / 2);
+  /* 立起来的线：绕左上角转 90° 后线落在边的左侧，再往右挪半根线宽让它骑在边上 */
+  const rotL = useMotionTemplate`rotate(90deg) translateY(${negHalf}px)`;
+  const lampK = END_LAMP.w / 179;
   return (
     <motion.div
       className="pointer-events-none absolute"
       style={{
         left: frame.vpX,
         top: frame.vpY,
-        width: CO_END_W * g,
-        height: CO_END_H * g,
+        width: wallW,
+        height: wallH,
         transform: tf,
         transformOrigin: "50% 50%",
       }}
@@ -981,12 +1026,125 @@ function CorridorEndWall({
         draggable={false}
         className="absolute inset-0 h-full w-full select-none"
       />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-        <span className="font-hand" style={{ fontSize: 24 * g, color: "rgba(122,74,18,0.55)" }}>
-          {t("lab.gallery.exit")}
-        </span>
-        <span style={{ fontSize: 13 * g, color: "rgba(122,74,18,0.38)" }}>{t("lab.gallery.wip")}</span>
+      {/* 四条边：上下两条横着铺，左右两条转 90° 立起来，两端各多出半根线宽把角包住 */}
+      {([0, 1] as const).map((i) => (
+        <motion.img
+          key={`h${i}`}
+          src="/assets/lab/gallery-c-line.webp"
+          alt=""
+          draggable={false}
+          className="absolute max-w-none select-none"
+          style={{ left: negHalf, top: i === 0 ? negHalf : bottomTop, width: spanW, height: border }}
+        />
+      ))}
+      {([0, 1] as const).map((i) => (
+        <motion.div
+          key={`v${i}`}
+          className="absolute"
+          style={{ left: i === 0 ? 0 : wallW, top: negHalf, width: 0, height: spanH }}
+        >
+          <motion.img
+            src="/assets/lab/gallery-c-line.webp"
+            alt=""
+            draggable={false}
+            className="absolute left-0 top-0 max-w-none select-none"
+            style={{ width: spanH, height: border, transformOrigin: "0 0", transform: rotL }}
+          />
+        </motion.div>
+      ))}
+      {/* 壁灯：和站台的一样，碰到门时亮起来 */}
+      <div
+        className="absolute"
+        style={{ left: (END_LAMP.x - 218 * lampK) * g, top: END_LAMP.y * g, width: 616 * lampK * g, height: 347 * lampK * g }}
+      >
+        <WallLamp hover={doorHover} width={616 * lampK * g} height={347 * lampK * g} />
       </div>
+      {/* 空金框：框里一句"下一件留位中" */}
+      <div
+        className="absolute"
+        style={{ left: END_FRAME.x * g, top: END_FRAME.y * g, width: END_FRAME.w * g, height: END_FRAME.h * g }}
+      >
+        <img src="/assets/lab/end-frame.webp" alt="" draggable={false} className="absolute inset-0 h-full w-full select-none" />
+        <div
+          className="absolute flex items-center justify-center text-center whitespace-pre-line"
+          style={{
+            inset: `${END_FRAME.h * 0.2 * g}px ${END_FRAME.w * 0.2 * g}px`,
+            fontSize: 4.1 * g,
+            lineHeight: 1.3,
+            fontWeight: 600,
+            color: "#D9D2C4",
+          }}
+        >
+          {t("lab.gallery.reserved")}
+        </div>
+      </div>
+      {/* 门：关着的一张压在开着的一张上面，鼠标碰到就换过去；整组镜像成往右开。点门回首页 */}
+      <button
+        type="button"
+        aria-label={t("lab.gallery.door")}
+        onMouseEnter={() => setDoorHover(true)}
+        onMouseLeave={() => setDoorHover(false)}
+        onClick={() => {
+          playNavigate();
+          navigate("/");
+        }}
+        className="pointer-events-auto absolute block cursor-pointer"
+        style={{
+          left: END_DOOR.x * g,
+          top: (CO_END_H - END_DOOR.h) * g,
+          width: END_DOOR.w * g,
+          height: END_DOOR.h * g,
+          transform: "scaleX(-1)",
+        }}
+      >
+        {/* 门缝透出来的暖光，铺在门前的地上 */}
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: -END_DOOR.w * 1.0 * g,
+            top: END_DOOR.h * 0.3 * g,
+            width: END_DOOR.w * 1.8 * g,
+            height: END_DOOR.h * 0.9 * g,
+            background: "radial-gradient(ellipse at 50% 55%, rgba(255,205,70,0.4) 0%, rgba(255,205,70,0) 68%)",
+            opacity: doorHover ? 1 : 0,
+            transition: "opacity 0.45s ease",
+          }}
+        />
+        <img
+          src="/assets/life/seg03/lab-door-open.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none select-none"
+          style={{
+            left: END_DOOR_OPEN.l * END_DOOR.w * g,
+            top: 0,
+            width: END_DOOR_OPEN.w * END_DOOR.w * g,
+            height: END_DOOR_OPEN.h * END_DOOR.h * g,
+            opacity: doorHover ? 1 : 0,
+            transition: "opacity 0.3s ease",
+          }}
+        />
+        <img
+          src="/assets/life/seg03/lab-door.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none"
+          style={{ opacity: doorHover ? 0 : 1, transition: "opacity 0.25s ease" }}
+        />
+      </button>
+      {/* 思考羊雕像 */}
+      <img
+        src="/assets/lab/prop-thinker.webp"
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute select-none"
+        style={{
+          left: END_THINKER.x * g,
+          top: (CO_END_H + END_THINKER.below - END_THINKER.h) * g,
+          width: END_THINKER.w * g,
+          height: END_THINKER.h * g,
+        }}
+      />
     </motion.div>
   );
 }
@@ -1508,7 +1666,6 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
               className="font-look text-[#FFF1C2]"
               style={{
                 fontSize: "5vw",
-                letterSpacing: "-0.01em",
                 lineHeight: 1.1,
                 marginTop: "0.7vw",
                 textShadow: INTRO_TEXT_SHADOW,
@@ -1517,19 +1674,6 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
               {...lineAnim(0.6)}
             >
               {t("lab.intro.title")}
-            </motion.p>
-            <motion.p
-              className="font-look text-[#FFF1C2]"
-              style={{
-                fontSize: "1.8vw",
-                letterSpacing: "0.1em",
-                lineHeight: 1.3,
-                marginTop: "0.5vw",
-                textShadow: INTRO_TEXT_SHADOW,
-              }}
-              {...lineAnim(0.9)}
-            >
-              {t("lab.intro.tag")}
             </motion.p>
           </div>
           <motion.p
@@ -1590,19 +1734,23 @@ export default function LabPage() {
   const [introPlaying, setIntroPlaying] = useState(true);
   /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧 */
   useEffect(() => {
-    const urls = [
+    loadImages([
       ...STATION_CFG.map((c) => `/assets/lab/${c.mask}.png`),
       "/assets/lab/detail/bg-stone-wall.webp",
       "/assets/lab/detail/bg-stone-mark.webp",
-    ];
-    const imgs = urls.map((src) => {
-      const im = new Image();
-      im.src = src;
-      im.decode().catch(() => {});
-      return im;
-    });
-    return () => imgs.forEach((im) => (im.src = ""));
+      /* 尽头墙上的小场景（开门那张是碰到门才显示的，先拉好免得闪） */
+      "/assets/lab/end-frame.webp",
+      "/assets/lab/prop-thinker.webp",
+      "/assets/life/seg03/lab-door.webp",
+      "/assets/life/seg03/lab-door-open.webp",
+    ]);
   }, []);
+  /* 开场播完再在后台把详情页的画、纸、照片都拉好，点画框翻面时框里不会空一下 */
+  useEffect(() => {
+    if (introPlaying) return;
+    const id = window.setTimeout(() => warmLabDetail(), 600);
+    return () => window.clearTimeout(id);
+  }, [introPlaying]);
   const [open, setOpen] = useState<{ project: LabProject; rect: DOMRect } | null>(null);
   const blockOpen = useRef(false);
   const openProject = (project: LabProject, rect: DOMRect) => {
@@ -1624,7 +1772,11 @@ export default function LabPage() {
       if (p >= b.d - 0.05) idx = i + 1;
     });
     setActive(idx);
+    setInCorridor(p >= CORRIDOR_Q);
   });
+  /* 沿墙平移快到走廊轴、满屏都是奶油黄之后，顶栏换黑字 */
+  const [inCorridor, setInCorridor] = useState(false);
+  useReportDarkNav(!introPlaying && inCorridor);
 
   return (
     <div
