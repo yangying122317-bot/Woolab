@@ -89,7 +89,7 @@ export const dict = {
     "lab.detail.sheet": "产品信息",
     "lab.intro.welcome": "欢迎来到",
     "lab.intro.title": "WOOLAB\n小羊画廊",
-    "lab.intro.desc": "一间小小的画廊，放着 WOOLAB 小羊的周边、物件和插画。\n慢慢走，凑近看看。",
+    "lab.intro.desc": "一些围绕 Meelo 做出来的东西，都被收在这里。\n慢慢逛，随便看看。",
     "lab.notFound": "没有找到这个项目",
     "downloads.title": "下载",
     "downloads.placeholder": "壁纸和素材正在准备中，敬请期待。",
@@ -195,7 +195,7 @@ export const dict = {
     "lab.intro.welcome": "WELCOME TO THE",
     "lab.intro.title": "WOOLAB SHEEP\nGALLERY",
     "lab.intro.desc":
-      "A small gallery of WOOLAB sheep goods,\nobjects and illustrations.\nWalk through and take a closer look.",
+      "A collection of things made around Meelo,\ngathered here in one place.\nTake your time and have a look around.",
     "lab.notFound": "Project not found",
     "downloads.title": "Downloads",
     "downloads.placeholder": "Wallpapers and goodies are on the way. Stay tuned!",
