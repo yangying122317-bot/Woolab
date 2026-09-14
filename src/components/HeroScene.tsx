@@ -1161,29 +1161,157 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 }
 
 /** 夜空：星星轻轻闪（纯 CSS，不用素材） */
+/** 一次流星：起点（%）、飞行距离（vw）、倾角、时长；big 是偶尔出现的又长又慢的那种 */
+type Shot = {
+  id: number;
+  left: number;
+  top: number;
+  dist: number;
+  angle: number;
+  dur: number;
+  len: number;
+  big: boolean;
+};
+
+const STAR_COLOR = "#FFF6D6";
+
+function makeShot(): Shot {
+  const big = Math.random() < 0.14;
+  return {
+    id: Date.now(),
+    left: big ? 62 + Math.random() * 30 : 30 + Math.random() * 65,
+    top: big ? 2 + Math.random() * 4 : 3 + Math.random() * 13,
+    dist: big ? 52 + Math.random() * 8 : 22 + Math.random() * 8,
+    angle: big ? -18 : -24 - Math.random() * 6,
+    dur: big ? 2.6 : 0.85 + Math.random() * 0.35,
+    len: big ? 340 : 130 + Math.random() * 50,
+    big,
+  };
+}
+
+/** 流星飞过时，路径附近的星星按经过的先后顺序各亮一下 */
+function starFlashDelay(st: { left: number; top: number }, shot: Shot): number | null {
+  const aspect = typeof window === "undefined" ? 1.6 : window.innerWidth / Math.max(1, window.innerHeight);
+  const rad = (Math.abs(shot.angle) * Math.PI) / 180;
+  const ex = shot.left - shot.dist * Math.cos(rad);
+  const ey = shot.top + shot.dist * Math.sin(rad) * aspect;
+  const dx = ex - shot.left;
+  const dy = ey - shot.top;
+  const len2 = dx * dx + dy * dy;
+  const t = Math.max(0, Math.min(1, ((st.left - shot.left) * dx + (st.top - shot.top) * dy) / len2));
+  const px = shot.left + dx * t - st.left;
+  const py = (shot.top + dy * t - st.top) / aspect;
+  const d = Math.hypot(px, py);
+  const reach = shot.big ? 7 : 5;
+  return d < reach ? t * shot.dur : null;
+}
+
 function NightSky({ reducedMotion }: { reducedMotion: boolean }) {
+  const [shot, setShot] = useState<Shot | null>(null);
+
+  // 隔一阵放一颗流星，间隔随机，别太勤快
+  useEffect(() => {
+    if (reducedMotion) return;
+    let timer = 0;
+    const schedule = (wait: number) => {
+      timer = window.setTimeout(() => {
+        const s = makeShot();
+        setShot(s);
+        schedule(s.dur * 1000 + 7000 + Math.random() * 9000);
+      }, wait);
+    };
+    schedule(3000 + Math.random() * 4000);
+    return () => window.clearTimeout(timer);
+  }, [reducedMotion]);
+
   return (
     <>
-      {STARS.map((st, i) => (
-        <motion.span
-          key={i}
-          className="absolute rounded-full bg-[#FFF6D6]"
+      {STARS.map((st, i) => {
+        const flashAt = shot ? starFlashDelay(st, shot) : null;
+        return (
+          <span key={i} className="absolute" style={{ left: `${st.left}%`, top: `${st.top}%` }}>
+            <motion.span
+              className="block rounded-full"
+              style={{ width: st.size, height: st.size, background: STAR_COLOR }}
+              animate={reducedMotion ? undefined : { opacity: [0.35, 1, 0.35] }}
+              transition={{
+                duration: st.dur,
+                delay: st.delay,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+            {shot && flashAt !== null && (
+              <motion.span
+                key={shot.id}
+                className="absolute rounded-full"
+                style={{
+                  left: "50%",
+                  top: "50%",
+                  width: st.size * 4,
+                  height: st.size * 4,
+                  marginLeft: -st.size * 2,
+                  marginTop: -st.size * 2,
+                  background: `radial-gradient(circle, ${STAR_COLOR} 0%, rgba(255,246,214,0.5) 35%, transparent 70%)`,
+                }}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: [0, 1, 0], scale: [0.6, 1.4, 1] }}
+                transition={{ duration: 1.1, delay: flashAt + 0.05, ease: "easeOut" }}
+              />
+            )}
+          </span>
+        );
+      })}
+      {shot && <ShootingStar key={shot.id} shot={shot} />}
+    </>
+  );
+}
+
+/** 一条流星：头亮尾淡的细光带，沿倾斜方向往左下划，划完自己淡掉 */
+function ShootingStar({ shot }: { shot: Shot }) {
+  const len = shot.len;
+  const thick = shot.big ? 2.4 : 1.9;
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{ left: `${shot.left}%`, top: `${shot.top}%`, transform: `rotate(${shot.angle}deg)` }}
+    >
+      <motion.div
+        className="absolute"
+        style={{ width: len, height: thick * 4, top: -thick * 2, filter: "blur(0.3px)" }}
+        initial={{ x: 0, opacity: 0 }}
+        animate={{ x: `-${shot.dist}vw`, opacity: [0, 1, 1, 0] }}
+        transition={{
+          duration: shot.dur,
+          ease: shot.big ? "linear" : "easeOut",
+          opacity: { duration: shot.dur, times: [0, 0.12, 0.7, 1], ease: "linear" },
+        }}
+      >
+        {/* 尾巴 */}
+        <div
+          className="absolute"
           style={{
-            left: `${st.left}%`,
-            top: `${st.top}%`,
-            width: st.size,
-            height: st.size,
-          }}
-          animate={reducedMotion ? undefined : { opacity: [0.35, 1, 0.35] }}
-          transition={{
-            duration: st.dur,
-            delay: st.delay,
-            repeat: Infinity,
-            ease: "easeInOut",
+            left: 0,
+            top: thick * 1.5,
+            width: len,
+            height: thick,
+            borderRadius: thick,
+            background: `linear-gradient(90deg, ${STAR_COLOR} 0%, rgba(255,246,214,0.7) 22%, rgba(255,246,214,0.16) 60%, transparent 100%)`,
           }}
         />
-      ))}
-    </>
+        {/* 头部小光点 */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            left: -thick,
+            top: 0,
+            width: thick * 4,
+            height: thick * 4,
+            background: `radial-gradient(circle, #fff 0%, ${STAR_COLOR} 35%, transparent 70%)`,
+          }}
+        />
+      </motion.div>
+    </div>
   );
 }
 
