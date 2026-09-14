@@ -18,9 +18,9 @@ import { useLanguage } from "../i18n/LanguageContext";
  *
  * 流程：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 电视"开机"：雪花一闪白、屏幕那层淡掉，
  * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕，看到的是一片天 + 云）→ 报 onLoaded；
- * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：天空慢而稳地放大到占满整屏，
- * 电视机和白布晚一步、加速冲向镜头掠出画面（窗框从眼前刷过去的感觉）→ 掠完广播离场事件
- *（房子地面浮上来、东西一个个弹出）→ 写会话标记、报 onDone。
+ * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：白布、电视机、字、屏幕里的天空
+ * 是一整张画一起绕屏幕里的一点放大（先慢后快），电视边框自然长出画面外、天空正好长到 1:1 铺满
+ *（人往里走的感觉，不是电视朝你涨大）→ 广播离场事件（房子地面浮上来、东西一个个弹出）→ 写会话标记、报 onDone。
  * 布盖着期间顶栏整条藏起来。
  *
  * 场景那边的缩放 / 位移不在这个组件里，用 camera 那三个 MotionValue 传过去驱动（HeroScene 把它们挂在场景外面那层上）。
@@ -37,19 +37,19 @@ const TURN_ON_T = 0.42;
 /** 开机后停一下再推镜头：让人看清电视里是个房子 */
 const HOLD_T = 0.75;
 /**
- * 推镜头总时长。场景（天空 + 云）全程慢而稳地放大——这是"你在走近那个世界"；
- * 电视机和白布先不动，到 FLY_FROM 才开始、加速冲向镜头，FLY_TO 时已经掠出画面边缘——像窗框从眼前刷过去。
- * 两个速度不一样，才有纵深、才像人往里走，而不是电视朝你涨大。
+ * 推镜头总时长。白布 + 电视 + 字 + 屏幕里的天空是一整张画，绕同一个点、同一个倍率一起放大：
+ * 起步几乎不动，越来越快，最后一下天空正好 1:1 铺满整屏——像人朝屏幕走进去，而不是电视朝你涨大。
  */
-const ZOOM_T = 1.6;
-const FLY_FROM = 0.42;
-const FLY_TO = 0.9;
-/** 电视掠过时顺带变透明（从掠过进度的这个点开始），免得放大后糊成一团 */
-const FLY_FADE_FROM = 0.5;
-/** 掠出画面时白布要放大到洞把整个视口都盖过：屏幕形状不规则，多放一点余量 */
-const HOLE_COVER = 1.25;
-/** 开机时电视里对准场景的哪一点（占视口的比例）：正中是那朵大云，会白成一片；往左上挪一点，看到的是蓝天 + 云的边 */
-const AIM = { fx: 0.33, fy: 0.28 };
+const ZOOM_T = 1.7;
+/** 先慢后快，落地只略收一点（带着速度到 1:1，才有"走进去"的劲；收太多末尾会像卡住） */
+const ZOOM_EASE: [number, number, number, number] = [0.7, 0, 0.75, 0.85];
+/**
+ * 天空到 1:1 时，屏幕的洞差不多正好和视口一样大，四边还剩一点电视边框；
+ * 白布单独再顺势冲这么久把边框扫出画面（这时只剩四边一丝，看不出和场景脱节）。
+ */
+const TAIL_T = 0.2;
+/** 尾段要把洞放到盖过整个视口：屏幕形状是手绘的不规则边，多放一点余量 */
+const HOLE_COVER = 1.12;
 
 /* ---- 稿子（720×450 画板）上的东西 ---- */
 const BOARD_W = 720;
@@ -177,7 +177,7 @@ export default function HeroCurtain({
   const boardLeft = (vw - BOARD_W * u) / 2;
   const boardTop = (vh - BOARD_H * u) / 2;
 
-  /* 屏幕在视口里的像素矩形、中心；场景要缩到多小才刚好盖住这个洞；白布最后要放到多大洞才盖过整个视口 */
+  /* 屏幕在视口里的像素矩形、中心；场景要缩到多小才刚好盖住这个洞 */
   const hole = useMemo(() => {
     const x = boardLeft + SCREEN.x * u;
     const y = boardTop + SCREEN.y * u;
@@ -191,28 +191,48 @@ export default function HeroCurtain({
       cx: x + w / 2,
       cy: y + h / 2,
       sceneScale: Math.max(w / vw, h / vh) * 1.04,
-      endScale: Math.max(vw / w, vh / h) * HOLE_COVER,
       mask: `url("data:image/svg+xml;utf8,${encodeURIComponent(
         `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${vw} ${vh}'><path fill-rule='evenodd' d='M0 0H${vw}V${vh}H0Z ${screenPathAt(x, y, w, h, SCREEN.holeInset * u)}'/></svg>`,
       )}")`,
     };
   }, [boardLeft, boardTop, u, vw, vh]);
 
-  /* 白布自己的镜头：绕屏幕中心放大、位移 */
+  /* 白布自己的缩放：绕 pivot 放大 */
   const clothScale = useMotionValue(1);
-  const clothX = useMotionValue(0);
-  const clothY = useMotionValue(0);
-  const clothOpacity = useMotionValue(1);
 
-  /* 场景先缩进屏幕里、AIM 那一点对准屏幕中心（布还盖着，看不见这一步）；场景层以自己的中心缩放 */
-  const camStart = useMemo(() => {
-    const ox = (AIM.fx - 0.5) * vw;
-    const oy = (AIM.fy - 0.5) * vh;
+  /**
+   * 整张画一起放大时绕的那个点（pivot）= 屏幕中心。
+   * 白布、电视和屏幕里的场景都绕它放同样的倍率，两者才始终是一整张画；放大到 sceneEnd 时场景正好 1:1 归位。
+   * 顺带算出尾段白布要放到多大，洞才能把整个视口盖过（pivot 在正中，四边差不多同时出画）。
+   */
+  const pivot = useMemo(() => {
+    const px = hole.cx;
+    const py = hole.cy;
+    const cover = Math.max(
+      px / (px - hole.x),
+      (vw - px) / (hole.x + hole.w - px),
+      py / (py - hole.y),
+      (vh - py) / (hole.y + hole.h - py),
+    );
+    const sceneEnd = 1 / hole.sceneScale;
     return {
-      x: hole.cx - vw / 2 - ox * hole.sceneScale,
-      y: hole.cy - vh / 2 - oy * hole.sceneScale,
+      x: px,
+      y: py,
+      sceneEnd,
+      clothEnd: Math.max(cover * HOLE_COVER, sceneEnd),
     };
   }, [hole, vw, vh]);
+  /**
+   * 场景的起始位移：缩到 sceneScale 后要正好塞在屏幕里（布还盖着，看不见这一步）；场景层以视口中心缩放，
+   * 而绕 pivot 放大到 1:1 时位移要归零，所以起始位移只能是 (pivot - 视口中心) × (1 - sceneScale)。
+   */
+  const camStart = useMemo(() => {
+    const s0 = hole.sceneScale;
+    return {
+      x: (pivot.x - vw / 2) * (1 - s0),
+      y: (pivot.y - vh / 2) * (1 - s0),
+    };
+  }, [hole, pivot, vw, vh]);
   const zooming = useRef(false);
   useEffect(() => {
     if (zooming.current) return;
@@ -335,43 +355,48 @@ export default function HeroCurtain({
   useEffect(() => {
     if (!slide || zooming.current) return;
     zooming.current = true;
-    const { cx, cy, sceneScale: s0, endScale } = hole;
-    const dx = cx - vw / 2;
-    const dy = cy - vh / 2;
+    const s0 = hole.sceneScale;
+    const { x: px, y: py, sceneEnd, clothEnd } = pivot;
+    // 绕 pivot 放大 k 倍时，场景层自己的缩放 / 位移该是多少（场景层以视口中心为原点）
+    const dx = px - vw / 2;
+    const dy = py - vh / 2;
+    const setZoom = (k: number) => {
+      clothScale.set(k);
+      camera.scale.set(s0 * k);
+      camera.x.set(dx * (1 - k) + k * camStart.x);
+      camera.y.set(dy * (1 - k) + k * camStart.y);
+    };
     let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
+    };
     const hold = window.setTimeout(() => {
-      animate(0, 1, {
+      // 主段：整张画一起绕 pivot 放大，天空正好到 1:1、位移归零
+      animate(1, sceneEnd, {
         duration: ZOOM_T,
-        ease: [0.55, 0, 0.3, 1],
-        onUpdate: (p) => {
-          // 场景：慢而稳地从屏幕大小推到占满整屏，同时从对准的那点滑回原位
-          camera.scale.set(s0 + (1 - s0) * p);
-          camera.x.set(camStart.x * (1 - p));
-          camera.y.set(camStart.y * (1 - p));
-          // 白布 + 电视：洞跟着场景中心走；到点后加速冲向镜头掠出去，后半程顺带变透明
-          clothX.set(-dx * p);
-          clothY.set(-dy * p);
-          const q = Math.min(
-            Math.max((p - FLY_FROM) / (FLY_TO - FLY_FROM), 0),
-            1,
-          );
-          const fly = q * q * q;
-          clothScale.set(1 + (endScale - 1) * fly);
-          const f = Math.min(
-            Math.max((q - FLY_FADE_FROM) / (1 - FLY_FADE_FROM), 0),
-            1,
-          );
-          clothOpacity.set(1 - f * f);
-          if (!dismissed && p >= FLY_TO) {
-            dismissed = true;
-            window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
-          }
-        },
-      }).then(() => {
-        if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
-        if (!dismissed) window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
-        onDone();
-      });
+        ease: ZOOM_EASE,
+        onUpdate: setZoom,
+      })
+        .then(() => {
+          setZoom(sceneEnd);
+          camera.scale.set(1);
+          camera.x.set(0);
+          camera.y.set(0);
+          dismiss();
+          // 尾段：只剩四边一点白布毛边，白布自己顺势再冲一下扫出画面
+          return animate(sceneEnd, clothEnd, {
+            duration: TAIL_T,
+            ease: "easeOut",
+            onUpdate: (k) => clothScale.set(k),
+          });
+        })
+        .then(() => {
+          if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
+          dismiss();
+          onDone();
+        });
     }, HOLD_T * 1000);
     return () => window.clearTimeout(hold);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,10 +408,7 @@ export default function HeroCurtain({
       style={{
         zIndex: 20,
         scale: clothScale,
-        x: clothX,
-        y: clothY,
-        opacity: clothOpacity,
-        transformOrigin: `${hole.cx}px ${hole.cy}px`,
+        transformOrigin: `${pivot.x}px ${pivot.y}px`,
         willChange: "transform",
       }}
     >

@@ -1120,8 +1120,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
             首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
           <NightLights
-            on={theme.lights && !entering}
-            delay={intro && !introGo ? 0 : intro ? INTRO_AT.openSign + 0.6 : 0}
+            on={theme.lights && !entering && !(intro && !introGo)}
+            delay={intro ? INTRO_AT.openSign + 0.6 : 0}
             signControls={signControls}
           />
 
