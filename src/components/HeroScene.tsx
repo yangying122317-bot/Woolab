@@ -1189,23 +1189,6 @@ function makeShot(): Shot {
   };
 }
 
-/** 流星飞过时，路径附近的星星按经过的先后顺序各亮一下 */
-function starFlashDelay(st: { left: number; top: number }, shot: Shot): number | null {
-  const aspect = typeof window === "undefined" ? 1.6 : window.innerWidth / Math.max(1, window.innerHeight);
-  const rad = (Math.abs(shot.angle) * Math.PI) / 180;
-  const ex = shot.left - shot.dist * Math.cos(rad);
-  const ey = shot.top + shot.dist * Math.sin(rad) * aspect;
-  const dx = ex - shot.left;
-  const dy = ey - shot.top;
-  const len2 = dx * dx + dy * dy;
-  const t = Math.max(0, Math.min(1, ((st.left - shot.left) * dx + (st.top - shot.top) * dy) / len2));
-  const px = shot.left + dx * t - st.left;
-  const py = (shot.top + dy * t - st.top) / aspect;
-  const d = Math.hypot(px, py);
-  const reach = shot.big ? 7 : 5;
-  return d < reach ? t * shot.dur : null;
-}
-
 function NightSky({ reducedMotion }: { reducedMotion: boolean }) {
   const [shot, setShot] = useState<Shot | null>(null);
 
@@ -1226,42 +1209,26 @@ function NightSky({ reducedMotion }: { reducedMotion: boolean }) {
 
   return (
     <>
-      {STARS.map((st, i) => {
-        const flashAt = shot ? starFlashDelay(st, shot) : null;
-        return (
-          <span key={i} className="absolute" style={{ left: `${st.left}%`, top: `${st.top}%` }}>
-            <motion.span
-              className="block rounded-full"
-              style={{ width: st.size, height: st.size, background: STAR_COLOR }}
-              animate={reducedMotion ? undefined : { opacity: [0.35, 1, 0.35] }}
-              transition={{
-                duration: st.dur,
-                delay: st.delay,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            />
-            {shot && flashAt !== null && (
-              <motion.span
-                key={shot.id}
-                className="absolute rounded-full"
-                style={{
-                  left: "50%",
-                  top: "50%",
-                  width: st.size * 4,
-                  height: st.size * 4,
-                  marginLeft: -st.size * 2,
-                  marginTop: -st.size * 2,
-                  background: `radial-gradient(circle, ${STAR_COLOR} 0%, rgba(255,246,214,0.5) 35%, transparent 70%)`,
-                }}
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: [0, 1, 0], scale: [0.6, 1.4, 1] }}
-                transition={{ duration: 1.1, delay: flashAt + 0.05, ease: "easeOut" }}
-              />
-            )}
-          </span>
-        );
-      })}
+      {STARS.map((st, i) => (
+        <motion.span
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            left: `${st.left}%`,
+            top: `${st.top}%`,
+            width: st.size,
+            height: st.size,
+            background: STAR_COLOR,
+          }}
+          animate={reducedMotion ? undefined : { opacity: [0.35, 1, 0.35] }}
+          transition={{
+            duration: st.dur,
+            delay: st.delay,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
       {shot && <ShootingStar key={shot.id} shot={shot} />}
     </>
   );
