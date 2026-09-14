@@ -89,6 +89,7 @@ export default function ContactPage() {
   const zh = lang === "zh";
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const [copied, setCopied] = useState(false);
+  const [emailHover, setEmailHover] = useState(false);
   /** 电话：idle → 已拿起（ring 嘟 / hello 对面说话、底下冒字）→ 放回去 */
   const [call, setCall] = useState<"idle" | "ring" | "hello">("idle");
   /** 拿起 / 放回：听筒被拎歪那层 */
@@ -290,15 +291,46 @@ export default function ContactPage() {
               className={`${bodyFont} absolute text-center text-black`}
               style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
             >
-              <button
-                type="button"
-                onClick={() => void copyEmail()}
-                title={t("contact.copy")}
-                className="cursor-pointer border-0 bg-transparent p-0 underline decoration-solid underline-offset-2 hover:decoration-2"
-                style={{ color: "inherit", font: "inherit", letterSpacing: "inherit" }}
+              {/* hover 不加粗下划线，改成手绘圈从左往右把邮箱圈起来；移开就淡掉 */}
+              <span
+                className="relative inline-block"
+                onMouseEnter={() => setEmailHover(true)}
+                onMouseLeave={() => setEmailHover(false)}
               >
-                {copied ? t("contact.copied") : contactEmail}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => void copyEmail()}
+                  title={t("contact.copy")}
+                  className="cursor-pointer border-0 bg-transparent p-0 underline decoration-solid underline-offset-2"
+                  style={{ color: "inherit", font: "inherit", letterSpacing: "inherit" }}
+                >
+                  {copied ? t("contact.copied") : contactEmail}
+                </button>
+                <motion.img
+                  src={`${C}/circle-email.svg`}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none absolute max-w-none"
+                  style={{
+                    left: "-11%",
+                    width: "122%",
+                    top: "52%",
+                    aspectRatio: "178 / 38",
+                    translateY: "-50%",
+                  }}
+                  initial={false}
+                  animate={
+                    emailHover
+                      ? { clipPath: "inset(-6px -6px -6px -6px)", opacity: 1 }
+                      : { clipPath: "inset(-6px 100% -6px -6px)", opacity: 0 }
+                  }
+                  transition={
+                    emailHover
+                      ? { clipPath: { duration: 0.45, ease: "easeOut" }, opacity: { duration: 0 } }
+                      : { opacity: { duration: 0.2 }, clipPath: { delay: 0.2, duration: 0 } }
+                  }
+                />
+              </span>
             </div>
 
             <Head font={headFont} weight={headWeight} y={FIND.y}>
