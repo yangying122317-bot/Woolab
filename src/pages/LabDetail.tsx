@@ -278,9 +278,7 @@ const BEAMS =
   " transparent 0vw, transparent 9vw, rgba(255,244,222,0.36) 12vw, rgba(255,244,222,0.36) 17vw, transparent 21vw," +
   /* 2：很淡很散的一条，只是一点余光 */
   " transparent 34vw, rgba(255,244,222,0.09) 42vw, rgba(255,244,222,0.09) 46vw, transparent 55vw," +
-  /* 画框附近不放光，主角那块留干净 */
-  /* 4：一条细线，亮一点，像窗框分出来的 */
-  " transparent 80vw, rgba(255,244,222,0.28) 82vw, rgba(255,244,222,0.28) 83.5vw, transparent 86vw," +
+  /* 画框附近不放光，主角那块留干净（原来 80–86vw 有一条细亮线正好横过屏幕中间，去掉了） */
   /* 5：最边上一条宽而暗的 */
   " transparent 98vw, rgba(255,244,222,0.12) 104vw, rgba(255,244,222,0.12) 110vw, transparent 116vw)";
 
