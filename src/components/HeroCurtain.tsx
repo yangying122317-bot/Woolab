@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   animate,
   motion,
   useMotionValue,
   useSpring,
   useTransform,
-  useVelocity,
+  type MotionValue,
 } from "framer-motion";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { useReportNavHidden } from "../state/chrome";
@@ -13,25 +13,33 @@ import { useLanguage } from "../i18n/LanguageContext";
 
 /**
  * 首页开场的那块白布：压在首页场景上面，把整个房子盖住。
- * 布上是一台小电视（屏幕里雪花闪着、Getting Meelo ready... 跟着抖）和一条横穿画面的手写 woolab 签名线：
- * 淡的一条是完整的签名，深的那条从左往右一笔一笔描上去，描到哪算加载到哪
- * （进度 = 图下了几成 和 时间过了几成 里较小的那个，两头都满了线才画完）。
- * 这里只管：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 线画满 → 电视关机（压成一条亮线缩没）→ 报 onLoaded；
- * 外面（HeroScene）把 slide 置真 → 布整块向上拉走、底边拖一个弧 →
- * 写会话标记（预览不写）、广播离场事件、报 onDone。布盖着期间顶栏整条藏起来。
+ * 布上是一台小电视，屏幕里雪花闪着、Getting Meelo ready... 跟着抖。
+ * 白布在屏幕那块是挖空的（mask），只是加载期间被雪花屏那层盖着，看不出来。
+ *
+ * 流程：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 电视"开机"：雪花一闪白、屏幕那层淡掉，
+ * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕，看到的是空房子）→ 报 onLoaded；
+ * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：场景放大到占满整屏，
+ * 白布和电视同步放大飞出画面 → 快推到位时广播离场事件（场景里的东西开始一个个弹出来）→ 写会话标记、报 onDone。
+ * 布盖着期间顶栏整条藏起来。
+ *
+ * 场景那边的缩放 / 位移不在这个组件里，用 camera 那三个 MotionValue 传过去驱动（HeroScene 把它们挂在场景外面那层上）。
  */
 
-/** 至少停这么久，签名线起码能完整描一遍 */
+/** 至少停这么久 */
 const MIN_SHOW = 1.6;
 /** 图再没下完也走，别把人卡在开屏 */
 const MAX_WAIT = 7;
-/** 线画满后再等一下让弹簧追上，再报加载完成 */
+/** 进度满后再等一下，再开机 */
 const SETTLE_MS = 350;
-/** 拉走的时长 */
-export const CURTAIN_SLIDE_T = 0.7;
-/** 底边拖弧：最多鼓多少（占屏高）、速度→弧深的系数 */
-const SAG_MAX = 0.14;
-const SAG_K = 0.1;
+/** 开机：闪白 + 屏幕那层淡掉 */
+const TURN_ON_T = 0.42;
+/** 开机后停一下再推镜头：让人看清电视里是个房子 */
+const HOLD_T = 0.75;
+/** 推镜头总时长；前 ZOOM_SPLIT 段场景推到占满整屏，剩下一点白布边飞出画面 */
+const ZOOM_T = 1.35;
+const ZOOM_SPLIT = 0.74;
+/** 推到位时白布要放大到洞把整个视口都盖过：屏幕形状不规则，多放一点余量 */
+const HOLE_COVER = 1.25;
 
 /* ---- 稿子（720×450 画板）上的东西 ---- */
 const BOARD_W = 720;
@@ -47,7 +55,6 @@ const TV = {
 /**
  * 屏幕（灰色那块）：位置尺寸按画板坐标，底色和图里一致；
  * 形状用稿里那个手绘矢量原样裁（四边微鼓、四角不规则），按 0～1 的相对坐标定义、跟着屏幕缩放。
- * 描边（1.5，居中）是画在图上的，这层压在图上面，所以往里收一点别盖住描边。
  */
 const SCREEN = {
   x: 313,
@@ -58,8 +65,10 @@ const SCREEN = {
   off: "#2A2A2A",
   clipId: "hero-tv-screen-clip",
   path: "M0.86 2.51C0.21 17.25 -0.7 48.48 0.86 55.5C6.69 57.1 93.4 57.86 97.64 55.5C101.89 53.14 99.75 6.65 96.35 2.51C92.96 -1.64 4.38 0.08 0.86 2.51Z",
-  /** 往里收多少：屏幕描边另外叠在最上面（见 SCREEN_FRAME），这里不用收 */
+  /** 雪花那层不往里收，边藏在描边底下 */
   inset: 0,
+  /** 白布上挖的洞往里收一点（画板单位）：屏幕的手绘描边要留在布上，别被挖掉半边 */
+  holeInset: 1.2,
 };
 /** 屏幕的手绘描边，单独一张图压在雪花上面（导出框比 100×57 大一圈：描边和噪点溢出） */
 const SCREEN_FRAME = {
@@ -73,12 +82,28 @@ const screenClipTransform = () => {
   const sy = 1 - (2 * SCREEN.inset) / SCREEN.h;
   return `translate(0.5 0.5) scale(${sx} ${sy}) translate(-0.5 -0.5) scale(${1 / SCREEN.w} ${1 / SCREEN.h})`;
 };
+/** 屏幕形状换算到屏幕像素坐标（路径里只有 M / C / Z，数字严格 x y 交替） */
+function screenPathAt(
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  inset: number,
+) {
+  const kx = (w - 2 * inset) / SCREEN.w;
+  const ky = (h - 2 * inset) / SCREEN.h;
+  let i = 0;
+  return SCREEN.path.replace(/-?\d*\.?\d+/g, (n) => {
+    const v = parseFloat(n);
+    const isX = i % 2 === 0;
+    i += 1;
+    return (isX ? x0 + inset + v * kx : y0 + inset + v * ky).toFixed(2);
+  });
+}
 /** 屏幕里那两行字的字号、颜色 */
 const TV_TEXT = { size: 12, color: "#5E5B58" };
 /** 雪花画布的分辨率（拉伸到屏幕大小，颗粒感刚好） */
 const SNOW = { w: 120, h: 66, alpha: 0.34 };
-/** 关机收尾：先压成一条亮线，再从两边缩没 */
-const SHUTOFF_T = 0.34;
 /** 电视两边那根手写签名线：先收起来（看着有点怪），加载进度只留屏幕里的雪花 + 那句话；想要回来改成 true */
 const SHOW_SIGN = false;
 /**
@@ -102,10 +127,18 @@ const loaded = (src: string) =>
     im.src = src;
   });
 
+/** 场景那层的镜头参数：缩放 + 位移（像素），由这里驱动 */
+export type CurtainCamera = {
+  scale: MotionValue<number>;
+  x: MotionValue<number>;
+  y: MotionValue<number>;
+};
+
 export default function HeroCurtain({
   preload,
   preview,
   slide,
+  camera,
   onLoaded,
   onDone,
 }: {
@@ -113,8 +146,9 @@ export default function HeroCurtain({
   preload: string[];
   /** 预览入口：不写会话标记 */
   preview: boolean;
-  /** 置真就拉走 */
+  /** 置真就往电视里推镜头 */
   slide: boolean;
+  camera: CurtainCamera;
   onLoaded: () => void;
   onDone: () => void;
 }) {
@@ -128,22 +162,48 @@ export default function HeroCurtain({
     return () => window.removeEventListener("resize", on);
   }, []);
   const { w: vw, h: vh } = vp;
-  /* 画板按"盖满"缩放：签名线两头要出画面 */
+  /* 画板按"盖满"缩放 */
   const u = Math.max(vw / BOARD_W, vh / BOARD_H);
   const boardLeft = (vw - BOARD_W * u) / 2;
   const boardTop = (vh - BOARD_H * u) / 2;
 
-  const pad = SAG_MAX * vh;
-  const y = useMotionValue(0);
-  const vel = useVelocity(y);
-  const sagRaw = useTransform(vel, (v) => Math.min(Math.abs(v) * SAG_K, pad));
-  const sag = useSpring(sagRaw, { stiffness: 140, damping: 16 });
-  const clip = useTransform(
-    sag,
-    (d) => `path("M0 0 H${vw} V${vh} Q${vw / 2} ${vh + d} 0 ${vh} Z")`,
-  );
+  /* 屏幕在视口里的像素矩形、中心；场景要缩到多小才刚好盖住这个洞；白布最后要放到多大洞才盖过整个视口 */
+  const hole = useMemo(() => {
+    const x = boardLeft + SCREEN.x * u;
+    const y = boardTop + SCREEN.y * u;
+    const w = SCREEN.w * u;
+    const h = SCREEN.h * u;
+    return {
+      x,
+      y,
+      w,
+      h,
+      cx: x + w / 2,
+      cy: y + h / 2,
+      sceneScale: Math.max(w / vw, h / vh) * 1.04,
+      endScale: Math.max(vw / w, vh / h) * HOLE_COVER,
+      mask: `url("data:image/svg+xml;utf8,${encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${vw} ${vh}'><path fill-rule='evenodd' d='M0 0H${vw}V${vh}H0Z ${screenPathAt(x, y, w, h, SCREEN.holeInset * u)}'/></svg>`,
+      )}")`,
+    };
+  }, [boardLeft, boardTop, u, vw, vh]);
 
-  /* 进度：目标值按帧算，弹簧跟着走，线就描得顺 */
+  /* 白布自己的镜头：绕屏幕中心放大、位移 */
+  const clothScale = useMotionValue(1);
+  const clothX = useMotionValue(0);
+  const clothY = useMotionValue(0);
+
+  /* 场景先缩进屏幕里、中心对准屏幕中心（布还盖着，看不见这一步） */
+  const zooming = useRef(false);
+  useEffect(() => {
+    if (zooming.current) return;
+    camera.scale.set(hole.sceneScale);
+    camera.x.set(hole.cx - vw / 2);
+    camera.y.set(hole.cy - vh / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hole]);
+
+  /* 进度：目标值按帧算，弹簧跟着走 */
   const target = useMotionValue(0);
   const drawn = useSpring(target, {
     stiffness: 70,
@@ -189,9 +249,9 @@ export default function HeroCurtain({
       if (!alive) return;
       cancelAnimationFrame(raf);
       target.set(1);
-      // 线描满 → 电视"关机"→ 报加载完成（外面随即拉布）
+      // 进度满 → 电视"开机"→ 报加载完成（外面随即推镜头）
       window.setTimeout(() => {
-        if (alive) setShutoff(true);
+        if (alive) setOn(true);
       }, SETTLE_MS);
     });
     return () => {
@@ -202,12 +262,12 @@ export default function HeroCurtain({
   }, []);
 
   /* 雪花屏 + 字抖：每帧重画一张低分辨率的随机灰点，叠一条慢慢往下滚的暗带；字跟着小幅乱跳 */
-  const [shutoff, setShutoff] = useState(false);
+  const [on, setOn] = useState(false);
   const snowRef = useRef<HTMLCanvasElement | null>(null);
   const jitterX = useMotionValue(0);
   const jitterY = useMotionValue(0);
   useEffect(() => {
-    if (shutoff) return;
+    if (on) return;
     const canvas = snowRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
@@ -247,180 +307,217 @@ export default function HeroCurtain({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shutoff]);
+  }, [on]);
   /* 字的抖动量按画板单位算，这里换成像素 */
   const textX = useTransform(jitterX, (v) => v * u);
   const textY = useTransform(jitterY, (v) => v * u);
 
-  /* 拉走 */
-  const sliding = useRef(false);
+  /* 推镜头 */
   useEffect(() => {
-    if (!slide || sliding.current) return;
-    sliding.current = true;
-    animate(y, -(vh + pad), {
-      duration: CURTAIN_SLIDE_T,
-      ease: [0.55, 0, 0.75, 0.55],
-    }).then(() => {
-      if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
-      window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
-      onDone();
-    });
+    if (!slide || zooming.current) return;
+    zooming.current = true;
+    const { cx, cy, sceneScale: s0, endScale } = hole;
+    const dx = cx - vw / 2;
+    const dy = cy - vh / 2;
+    let dismissed = false;
+    const hold = window.setTimeout(() => {
+      animate(0, 1, {
+        duration: ZOOM_T,
+        ease: [0.6, 0, 0.3, 1],
+        onUpdate: (p) => {
+          // 前一段：场景从屏幕大小推到占满整屏，白布同步放大（洞始终框着场景的同一块）
+          const a = Math.min(p / ZOOM_SPLIT, 1);
+          camera.scale.set(s0 + (1 - s0) * a);
+          camera.x.set(dx * (1 - a));
+          camera.y.set(dy * (1 - a));
+          clothX.set(-dx * a);
+          clothY.set(-dy * a);
+          // 后一段：场景已经到位，白布自己再放大一截，让洞的边缘完全飞出视口
+          const b = Math.max(0, (p - ZOOM_SPLIT) / (1 - ZOOM_SPLIT));
+          clothScale.set(
+            a < 1 ? 1 + (1 / s0 - 1) * a : 1 / s0 + (endScale - 1 / s0) * b,
+          );
+          if (!dismissed && p >= ZOOM_SPLIT) {
+            dismissed = true;
+            window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
+          }
+        },
+      }).then(() => {
+        if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
+        if (!dismissed) window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
+        onDone();
+      });
+    }, HOLD_T * 1000);
+    return () => window.clearTimeout(hold);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide]);
 
   return (
     <motion.div
-      className="pointer-events-auto absolute inset-x-0 top-0 select-none overflow-hidden bg-white"
+      className="pointer-events-auto absolute inset-0 select-none"
       style={{
-        height: vh + pad,
-        y,
-        clipPath: clip,
         zIndex: 20,
+        scale: clothScale,
+        x: clothX,
+        y: clothY,
+        transformOrigin: `${hole.cx}px ${hole.cy}px`,
+        willChange: "transform",
       }}
     >
-      {/* 画板：签名线 + 电视 + 屏幕里的字，一起按 u 缩放、居中 */}
+      {/* 白布：屏幕那块挖空 */}
       <div
-        className="absolute"
+        className="absolute inset-0 bg-white"
         style={{
-          left: boardLeft,
-          top: boardTop,
-          width: BOARD_W * u,
-          height: BOARD_H * u,
+          WebkitMaskImage: hole.mask,
+          maskImage: hole.mask,
+          WebkitMaskSize: "100% 100%",
+          maskSize: "100% 100%",
         }}
       >
-        {SHOW_SIGN && (
-        <svg
-          className="absolute inset-0 overflow-visible"
-          width={BOARD_W * u}
-          height={BOARD_H * u}
-          viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
-          aria-hidden
-        >
-          <g
-            transform={SIGN.transform}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {/* 完整的签名，淡淡的 */}
-            <path
-              d={SIGN.d}
-              stroke="#000"
-              strokeOpacity={SIGN.trackAlpha}
-              strokeWidth={SIGN.width}
-            />
-            {/* 描到哪算加载到哪 */}
-            <motion.path
-              d={SIGN.d}
-              stroke="#000"
-              strokeWidth={SIGN.width}
-              style={{ pathLength: drawn }}
-            />
-          </g>
-        </svg>
-        )}
-
-        <img
-          src={TV.src}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute"
-          style={{
-            left: TV.x * u,
-            top: TV.y * u,
-            width: TV.w * u,
-            height: TV.h * u,
-          }}
-        />
-        {/* 屏幕形状的裁形模板：0～1 相对坐标，套在下面那层上 */}
-        <svg width="0" height="0" className="absolute" aria-hidden>
-          <clipPath id={SCREEN.clipId} clipPathUnits="objectBoundingBox">
-            <path d={SCREEN.path} transform={screenClipTransform()} />
-          </clipPath>
-        </svg>
-        {/* 屏幕：整块按手绘屏幕的形状裁掉；底下一层关机后的深色，上面是灰屏 + 雪花 + 字；
-            关机时灰屏先压成一条亮线再从两边缩没（裁形在外层，缩的是裁好的屏幕） */}
+        {/* 画板：签名线 + 电视 + 屏幕描边，一起按 u 缩放、居中 */}
         <div
-          className="pointer-events-none absolute"
+          className="absolute"
           style={{
-            left: SCREEN.x * u,
-            top: SCREEN.y * u,
-            width: SCREEN.w * u,
-            height: SCREEN.h * u,
-            background: SCREEN.off,
-            clipPath: `url(#${SCREEN.clipId})`,
+            left: boardLeft,
+            top: boardTop,
+            width: BOARD_W * u,
+            height: BOARD_H * u,
           }}
         >
-          <motion.div
-            className="absolute inset-0 overflow-hidden"
-            style={{ background: SCREEN.bg }}
-            initial={false}
-            animate={
-              shutoff
-                ? {
-                    scaleY: [1, 0.035, 0.035],
-                    scaleX: [1, 1, 0],
-                    backgroundColor: [SCREEN.bg, "#FFFFFF", "#FFFFFF"],
-                    boxShadow: [
-                      "0 0 0 rgba(255,255,255,0)",
-                      `0 0 ${6 * u}px rgba(255,255,255,0.9)`,
-                      `0 0 ${2 * u}px rgba(255,255,255,0.6)`,
-                    ],
-                  }
-                : {}
-            }
-            transition={{
-              duration: SHUTOFF_T,
-              times: [0, 0.55, 1],
-              ease: "easeIn",
+          {SHOW_SIGN && (
+            <svg
+              className="absolute inset-0 overflow-visible"
+              width={BOARD_W * u}
+              height={BOARD_H * u}
+              viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+              aria-hidden
+            >
+              <g
+                transform={SIGN.transform}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path
+                  d={SIGN.d}
+                  stroke="#000"
+                  strokeOpacity={SIGN.trackAlpha}
+                  strokeWidth={SIGN.width}
+                />
+                <motion.path
+                  d={SIGN.d}
+                  stroke="#000"
+                  strokeWidth={SIGN.width}
+                  style={{ pathLength: drawn }}
+                />
+              </g>
+            </svg>
+          )}
+
+          <img
+            src={TV.src}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute"
+            style={{
+              left: TV.x * u,
+              top: TV.y * u,
+              width: TV.w * u,
+              height: TV.h * u,
             }}
-            onAnimationComplete={() => {
-              if (shutoff) onLoaded();
+          />
+          {/* 屏幕描边：压在最上面，雪花的边就藏在描边底下 */}
+          <img
+            src={SCREEN_FRAME.src}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute"
+            style={{
+              left: (SCREEN.x - (SCREEN_FRAME.w - SCREEN.w) / 2) * u,
+              top: (SCREEN.y - (SCREEN_FRAME.h - SCREEN.h) / 2) * u,
+              width: SCREEN_FRAME.w * u,
+              height: SCREEN_FRAME.h * u,
+              zIndex: 2,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 屏幕形状的裁形模板：0～1 相对坐标，套在下面那层上 */}
+      <svg width="0" height="0" className="absolute" aria-hidden>
+        <clipPath id={SCREEN.clipId} clipPathUnits="objectBoundingBox">
+          <path d={SCREEN.path} transform={screenClipTransform()} />
+        </clipPath>
+      </svg>
+      {/* 屏幕：和白布平级，盖在洞上；灰屏 + 雪花 + 字。开机时先闪一下白，然后整层淡掉，洞里就是场景 */}
+      <motion.div
+        className="pointer-events-none absolute"
+        style={{
+          left: hole.x,
+          top: hole.y,
+          width: hole.w,
+          height: hole.h,
+          background: SCREEN.off,
+          clipPath: `url(#${SCREEN.clipId})`,
+          zIndex: 1,
+        }}
+        initial={false}
+        animate={{ opacity: on ? 0 : 1 }}
+        transition={{
+          duration: TURN_ON_T * 0.6,
+          delay: on ? TURN_ON_T * 0.4 : 0,
+          ease: "easeOut",
+        }}
+        onAnimationComplete={() => {
+          if (on) onLoaded();
+        }}
+      >
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{ background: SCREEN.bg }}
+        >
+          <canvas
+            ref={snowRef}
+            width={SNOW.w}
+            height={SNOW.h}
+            className="absolute inset-0 h-full w-full"
+            style={{
+              opacity: on ? 0 : SNOW.alpha,
+              imageRendering: "pixelated",
+              transition: "opacity 0.12s",
+            }}
+            aria-hidden
+          />
+          <motion.div
+            className="font-look absolute inset-0 flex items-center justify-center text-center whitespace-pre-line"
+            style={{
+              x: textX,
+              y: textY,
+              fontSize: TV_TEXT.size * u,
+              lineHeight: 1.1,
+              fontWeight: 900,
+              color: TV_TEXT.color,
+              /* 雪花上压一圈同色的柔光，字才读得清 */
+              textShadow: `0 0 ${2 * u}px ${SCREEN.bg}, 0 0 ${4 * u}px ${SCREEN.bg}`,
+              opacity: on ? 0 : 1,
+              transition: "opacity 0.12s",
             }}
           >
-            <canvas
-              ref={snowRef}
-              width={SNOW.w}
-              height={SNOW.h}
-              className="absolute inset-0 h-full w-full"
-              style={{
-                opacity: shutoff ? 0 : SNOW.alpha,
-                imageRendering: "pixelated",
-              }}
-              aria-hidden
-            />
-            <motion.div
-              className="font-look absolute inset-0 flex items-center justify-center text-center whitespace-pre-line"
-              style={{
-                x: textX,
-                y: textY,
-                fontSize: TV_TEXT.size * u,
-                lineHeight: 1.1,
-                fontWeight: 900,
-                color: TV_TEXT.color,
-                /* 雪花上压一圈同色的柔光，字才读得清 */
-                textShadow: `0 0 ${2 * u}px ${SCREEN.bg}, 0 0 ${4 * u}px ${SCREEN.bg}`,
-                opacity: shutoff ? 0 : 1,
-              }}
-            >
-              {t("intro.ready")}
-            </motion.div>
+            {t("intro.ready")}
           </motion.div>
+          {/* 开机那一下的闪白 */}
+          <motion.div
+            className="absolute inset-0 bg-white"
+            initial={false}
+            animate={{ opacity: on ? [0, 1, 1] : 0 }}
+            transition={{
+              duration: TURN_ON_T * 0.4,
+              times: [0, 0.6, 1],
+              ease: "easeOut",
+            }}
+          />
         </div>
-        {/* 屏幕描边：压在雪花最上面，雪花的边就藏在描边底下 */}
-        <img
-          src={SCREEN_FRAME.src}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute"
-          style={{
-            left: (SCREEN.x - (SCREEN_FRAME.w - SCREEN.w) / 2) * u,
-            top: (SCREEN.y - (SCREEN_FRAME.h - SCREEN.h) / 2) * u,
-            width: SCREEN_FRAME.w * u,
-            height: SCREEN_FRAME.h * u,
-          }}
-        />
-      </div>
+      </motion.div>
     </motion.div>
   );
 }

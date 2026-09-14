@@ -15,6 +15,7 @@ import {
   AnimatePresence,
   motion,
   useAnimationControls,
+  useMotionValue,
   useReducedMotion,
   type TargetAndTransition,
 } from "framer-motion";
@@ -121,7 +122,13 @@ const SPRITES = {
    * 脚下影子是独立静态层（与原静态图同画布），叠在身体下面。
    */
   /* 小羊：开场只等 37KB 的静帧（就是待机动画的第一帧），850KB 的待机动画拉开幕布后再换上去——两张第一帧一样，换的时候看不出来 */
-  sheep: { src: "/assets/hero-sheep-still.webp", anim: "/assets/hero-sheep-idle.webp", x: 825.2, y: 587, w: 176.2 },
+  sheep: {
+    src: "/assets/hero-sheep-still.webp",
+    anim: "/assets/hero-sheep-idle.webp",
+    x: 825.2,
+    y: 587,
+    w: 176.2,
+  },
   sheepShadow: {
     src: "/assets/hero-sheep-shadow.png",
     x: 828.2,
@@ -341,7 +348,9 @@ export default function HeroScene() {
   // 白天 = 自然环境（有鸟叫）；清晨 / 傍晚 = 同一条里没鸟叫的安静段；夜里 = 蝉鸣
   const { phase } = useTimeOfDay();
   useEffect(() => {
-    startAmbient(phase === "day" ? "day" : phase === "night" ? "night" : "calm");
+    startAmbient(
+      phase === "day" ? "day" : phase === "night" ? "night" : "calm",
+    );
   }, [phase]);
   useEffect(() => () => stopAmbient(), []);
 
@@ -372,10 +381,17 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   phaseRef.current = phase;
 
   /*
-   * 开场加载页就是压在这个场景上的一块白布（HeroCurtain：小电视 + 手写签名线描进度）。
-   * 图下完、线描满了布就整块向上拉走——房子是"露出来"的，小鸟已经站在屋顶栏杆上等着。
+   * 开场加载页就是压在这个场景上的一块白布（HeroCurtain：小电视 + 雪花屏进度）。
+   * 图下完电视"开机"，屏幕里出现的是这个场景（缩小了、只有空房子），然后镜头往屏幕里推，
+   * 场景放大到占满整屏、白布飞出画面；推到位时场景里的东西才一个个弹出来。
+   * 缩放 / 位移由幕布那边驱动这三个 MotionValue，挂在场景外面那层上。
    * 只在桌面端整屏场景（cover）里做；/intro 预览路由不看会话标记、可反复播。
    */
+  const camera = {
+    scale: useMotionValue(1),
+    x: useMotionValue(0),
+    y: useMotionValue(0),
+  };
   const { pathname } = useLocation();
   const introPreview = pathname === INTRO_PREVIEW_PATH;
   const [curtainRun, setCurtainRun] = useState(0);
@@ -412,6 +428,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const replay = () => {
       setCurtainSlide(false);
       setCurtainUp(true);
+      setIntroGo(false);
       setCurtainRun((n) => n + 1);
     };
     window.addEventListener(INTRO_REPLAY_EVENT, replay);
@@ -423,14 +440,16 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     () => !config.introEnabled || !!sessionStorage.getItem(INTRO_SESSION_KEY),
   );
   // 首次进入主页（本次会话内）才播"物件依次弹出"的出场动画，之后进来直接呈现完整场景。
-  // 有品牌开屏的那一次不弹：开屏滑开时底下要的是一张已经完整的首页，不是再弹一遍。
+  // 有开场电视的那一次也弹：电视里先只有空房子，镜头推到位了东西再一个个弹出来（introGo 由幕布快推到位时打开）。
   const [intro] = useState(
     () =>
       !reducedMotion &&
-      introGo &&
-      !curtainUp &&
+      (introGo || curtainUp) &&
       !sessionStorage.getItem("heroIntroPlayed"),
   );
+  // 有电视开场时底图和云不藏：电视屏幕里要看得见房子；只藏那些要弹出来的东西
+  const [tvIntro] = useState(() => intro && curtainUp);
+  const baseHidden = intro && !introGo && !tvIntro;
   useEffect(() => {
     sessionStorage.setItem("heroIntroPlayed", "1");
   }, []);
@@ -752,11 +771,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   return (
     <div
       ref={stageRef}
-      className={`relative overflow-hidden ${
-        // 屏幕比画板（16:10）更扁时画面会超出高度：贴底对齐，
-        // 只裁天空，保证地面和场景物件完整
-        cover ? "flex h-full items-end justify-center" : ""
-      }`}
+      className={`relative overflow-hidden ${cover ? "h-full" : ""}`}
       style={{ background: theme.sky }}
     >
       {/* 天空：按时段换渐变，新旧两层交叉淡化（渐变本身没法过渡） */}
@@ -781,365 +796,375 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           preload={HERO_PRELOAD}
           preview={introPreview}
           slide={curtainSlide}
+          camera={camera}
           onLoaded={() => setCurtainSlide(true)}
           onDone={onCurtainDone}
         />
       )}
 
-      {/* 场景本体：按视口高度完整显示（上下不裁）；
-          屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
-          比画板窄时左右对称裁切。进门时整体向门洞推近 */}
+      {/* 镜头层：开场电视那段由幕布驱动缩放 / 位移（场景先缩进电视屏幕，再推到占满整屏），平时就是 1:1 */}
       <motion.div
-        className="relative shrink-0"
-        animate={zoomControls}
+        className={cover ? "flex h-full items-end justify-center" : ""}
         style={{
-          transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
-          willChange: entering ? "transform" : undefined,
-          ...(cover
-            ? {
-                aspectRatio: `${HERO_RATIO}`,
-                width: `calc(100vh * ${HERO_RATIO})`,
-              }
-            : { aspectRatio: `${HERO_RATIO}`, width: "100%" }),
-        }}
-        onMouseMove={(e) => {
-          // 鼠标靠近栏杆上的小鸟 → 惊飞
-          if (!birdStandingRef.current || birdStartledRef.current) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          const dx = (e.clientX - rect.left) / rect.width - PERCH_CENTER.x;
-          const dy = (e.clientY - rect.top) / rect.height - PERCH_CENTER.y;
-          // dy 按画板宽高比折算，让触发范围是圆形而不是被拉扁的椭圆
-          const dist = Math.hypot(dx, dy / HERO_RATIO);
-          if (dist < STARTLE_RADIUS) birdStartledRef.current = true;
+          scale: camera.scale,
+          x: camera.x,
+          y: camera.y,
+          transformOrigin: "50% 50%",
         }}
       >
-        {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入 */}
+        {/* 场景本体：按视口高度完整显示（上下不裁）；
+          屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
+          比画板窄时左右对称裁切。进门时整体向门洞推近 */}
         <motion.div
-          className="pointer-events-none absolute inset-0"
-          initial={intro ? { opacity: 0 } : false}
-          animate={{ opacity: intro && !introGo ? 0 : 1 }}
-          transition={
-            intro && !introGo
-              ? { duration: 0 }
-              : { delay: 0.3, duration: 0.9, ease: "easeOut" }
-          }
-        >
-          <motion.img
-            src={SPRITES.cloudBig.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: "-1.5%",
-              top: py(SPRITES.cloudBig.y),
-              width: "103%",
-              maxWidth: "none",
-            }}
-            animate={drift(16, 46)}
-            draggable={false}
-          />
-        </motion.div>
-
-        {/* 建筑与地面（静止底图，不含树丛）；两侧接边缘延伸条补满宽屏。
-            出场时从下方轻轻浮现，随后各物件依次弹出 */}
-        <motion.div
-          className="pointer-events-none absolute inset-0"
-          initial={intro ? { opacity: 0, y: "3%" } : false}
-          animate={
-            intro && !introGo
-              ? { opacity: 0, y: "3%" }
-              : { opacity: 1, y: "0%" }
-          }
-          transition={
-            intro && !introGo
-              ? { duration: 0 }
-              : { duration: 0.55, ease: [0.33, 1, 0.68, 1] }
-          }
-        >
-          <img
-            src={SPRITES.base.src}
-            alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full select-none"
-            draggable={false}
-          />
-          <img
-            src="/assets/hero-base-edge-l.png"
-            alt=""
-            className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
-            style={{ right: "100%" }}
-            draggable={false}
-          />
-          <img
-            src="/assets/hero-base-edge-r.png"
-            alt=""
-            className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
-            style={{ left: "100%" }}
-            draggable={false}
-          />
-        </motion.div>
-
-        {/* 左右树丛：以根部为轴被风吹得轻轻摇 */}
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.bushLeft}
-          origin="11.5% 88%"
-        >
-          <motion.img
-            src={SPRITES.bushLeft.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.bushLeft.x),
-              top: py(SPRITES.bushLeft.y),
-              width: px(SPRITES.bushLeft.w),
-              transformOrigin: "50% 100%",
-            }}
-            animate={bushSway(1, 4.6, 0)}
-            draggable={false}
-          />
-        </IntroPop>
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.bushRight}
-          origin="86.6% 88%"
-        >
-          <motion.img
-            src={SPRITES.bushRight.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.bushRight.x),
-              top: py(SPRITES.bushRight.y),
-              width: px(SPRITES.bushRight.w),
-              transformOrigin: "50% 100%",
-            }}
-            animate={bushSway(0.8, 5.4, 1.2)}
-            draggable={false}
-          />
-        </IntroPop>
-
-        {/* 点击大门后才挂载：门框 + 屋内暖光 + 向两侧滑开的门板 */}
-        {entering && <DoorOpenSprite />}
-
-        {/* 大门：悬停时屋内亮灯（在 OPEN 吊牌下层） */}
-        <DoorGlowSprite lit={hovered === "life" && !entering} />
-
-        {/* OPEN 吊牌：以挂点为轴摆动；开门过场时隐藏，由门板裁剪容器里的副本接替。
-            出场时以挂点为原点弹出 */}
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.openSign}
-          origin="45.9% 62%"
-        >
-          <motion.img
-            src={SPRITES.openSign.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.openSign.x),
-              top: py(SPRITES.openSign.y),
-              width: px(SPRITES.openSign.w),
-              transformOrigin: "50% 8%",
-              visibility: entering ? "hidden" : "visible",
-            }}
-            animate={signControls}
-            draggable={false}
-          />
-        </IntroPop>
-
-        {/* 四个热区元素：悬停时各自轻轻动一下 */}
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.woolab}
-          origin="50% 40%"
-        >
-          <WoolabSprite lit={hovered === "about"} />
-        </IntroPop>
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.board}
-          origin="16.5% 91%"
-        >
-          <HotspotSprite
-            sprite={SPRITES.board}
-            active={hovered === "lab"}
-            motionSpec={HOVER_MOTION.lab}
-            origin="50% 100%"
-          />
-        </IntroPop>
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.sheep}
-          origin="63.4% 91%"
-        >
-          <img
-            src={SPRITES.sheepShadow.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.sheepShadow.x),
-              top: py(SPRITES.sheepShadow.y),
-              width: px(SPRITES.sheepShadow.w),
-            }}
-            draggable={false}
-          />
-          <img
-            src={sheepAnim ? SPRITES.sheep.anim : SPRITES.sheep.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.sheep.x),
-              top: py(SPRITES.sheep.y),
-              width: px(SPRITES.sheep.w),
-            }}
-            draggable={false}
-          />
-        </IntroPop>
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.mailbox}
-          origin="84.4% 91%"
-        >
-          <MailboxSprite open={hovered === "contact"} />
-        </IntroPop>
-
-        {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
-        <IntroPop
-          play={intro}
-          go={introGo}
-          delay={INTRO_AT.bush}
-          origin="80.9% 91%"
-        >
-          <motion.img
-            src={SPRITES.bush.src}
-            alt=""
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: px(SPRITES.bush.x),
-              top: py(SPRITES.bush.y),
-              width: px(SPRITES.bush.w),
-              transformOrigin: "50% 100%",
-            }}
-            animate={bushSway(0.8, 5.4, 1.2)}
-            draggable={false}
-          />
-        </IntroPop>
-
-        {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
-        <motion.div
-          className="pointer-events-none absolute select-none"
+          className="relative shrink-0"
+          animate={zoomControls}
           style={{
-            width: px(BIRD_BOX.w),
-            height: py(BIRD_BOX.h),
+            transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
+            willChange: entering ? "transform" : undefined,
+            ...(cover
+              ? {
+                  aspectRatio: `${HERO_RATIO}`,
+                  width: `calc(100vh * ${HERO_RATIO})`,
+                }
+              : { aspectRatio: `${HERO_RATIO}`, width: "100%" }),
           }}
-          initial={{ left: "135%", top: "14%", opacity: 0 }}
-          animate={birdControls}
+          onMouseMove={(e) => {
+            // 鼠标靠近栏杆上的小鸟 → 惊飞
+            if (!birdStandingRef.current || birdStartledRef.current) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const dx = (e.clientX - rect.left) / rect.width - PERCH_CENTER.x;
+            const dy = (e.clientY - rect.top) / rect.height - PERCH_CENTER.y;
+            // dy 按画板宽高比折算，让触发范围是圆形而不是被拉扁的椭圆
+            const dist = Math.hypot(dx, dy / HERO_RATIO);
+            if (dist < STARTLE_RADIUS) birdStartledRef.current = true;
+          }}
         >
-          <div className="absolute inset-0">
-            {BIRD_FLAP_FRAMES.map((src, i) => (
+          {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入 */}
+          <motion.div
+            className="pointer-events-none absolute inset-0"
+            initial={intro && !tvIntro ? { opacity: 0 } : false}
+            animate={{ opacity: baseHidden ? 0 : 1 }}
+            transition={
+              baseHidden
+                ? { duration: 0 }
+                : { delay: 0.3, duration: 0.9, ease: "easeOut" }
+            }
+          >
+            <motion.img
+              src={SPRITES.cloudBig.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: "-1.5%",
+                top: py(SPRITES.cloudBig.y),
+                width: "103%",
+                maxWidth: "none",
+              }}
+              animate={drift(16, 46)}
+              draggable={false}
+            />
+          </motion.div>
+
+          {/* 建筑与地面（静止底图，不含树丛）；两侧接边缘延伸条补满宽屏。
+            出场时从下方轻轻浮现，随后各物件依次弹出 */}
+          <motion.div
+            className="pointer-events-none absolute inset-0"
+            initial={intro && !tvIntro ? { opacity: 0, y: "3%" } : false}
+            animate={
+              baseHidden ? { opacity: 0, y: "3%" } : { opacity: 1, y: "0%" }
+            }
+            transition={
+              baseHidden
+                ? { duration: 0 }
+                : { duration: 0.55, ease: [0.33, 1, 0.68, 1] }
+            }
+          >
+            <img
+              src={SPRITES.base.src}
+              alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full select-none"
+              draggable={false}
+            />
+            <img
+              src="/assets/hero-base-edge-l.png"
+              alt=""
+              className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+              style={{ right: "100%" }}
+              draggable={false}
+            />
+            <img
+              src="/assets/hero-base-edge-r.png"
+              alt=""
+              className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+              style={{ left: "100%" }}
+              draggable={false}
+            />
+          </motion.div>
+
+          {/* 左右树丛：以根部为轴被风吹得轻轻摇 */}
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.bushLeft}
+            origin="11.5% 88%"
+          >
+            <motion.img
+              src={SPRITES.bushLeft.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.bushLeft.x),
+                top: py(SPRITES.bushLeft.y),
+                width: px(SPRITES.bushLeft.w),
+                transformOrigin: "50% 100%",
+              }}
+              animate={bushSway(1, 4.6, 0)}
+              draggable={false}
+            />
+          </IntroPop>
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.bushRight}
+            origin="86.6% 88%"
+          >
+            <motion.img
+              src={SPRITES.bushRight.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.bushRight.x),
+                top: py(SPRITES.bushRight.y),
+                width: px(SPRITES.bushRight.w),
+                transformOrigin: "50% 100%",
+              }}
+              animate={bushSway(0.8, 5.4, 1.2)}
+              draggable={false}
+            />
+          </IntroPop>
+
+          {/* 点击大门后才挂载：门框 + 屋内暖光 + 向两侧滑开的门板 */}
+          {entering && <DoorOpenSprite />}
+
+          {/* 大门：悬停时屋内亮灯（在 OPEN 吊牌下层） */}
+          <DoorGlowSprite lit={hovered === "life" && !entering} />
+
+          {/* OPEN 吊牌：以挂点为轴摆动；开门过场时隐藏，由门板裁剪容器里的副本接替。
+            出场时以挂点为原点弹出 */}
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.openSign}
+            origin="45.9% 62%"
+          >
+            <motion.img
+              src={SPRITES.openSign.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.openSign.x),
+                top: py(SPRITES.openSign.y),
+                width: px(SPRITES.openSign.w),
+                transformOrigin: "50% 8%",
+                visibility: entering ? "hidden" : "visible",
+              }}
+              animate={signControls}
+              draggable={false}
+            />
+          </IntroPop>
+
+          {/* 四个热区元素：悬停时各自轻轻动一下 */}
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.woolab}
+            origin="50% 40%"
+          >
+            <WoolabSprite lit={hovered === "about"} />
+          </IntroPop>
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.board}
+            origin="16.5% 91%"
+          >
+            <HotspotSprite
+              sprite={SPRITES.board}
+              active={hovered === "lab"}
+              motionSpec={HOVER_MOTION.lab}
+              origin="50% 100%"
+            />
+          </IntroPop>
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.sheep}
+            origin="63.4% 91%"
+          >
+            <img
+              src={SPRITES.sheepShadow.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.sheepShadow.x),
+                top: py(SPRITES.sheepShadow.y),
+                width: px(SPRITES.sheepShadow.w),
+              }}
+              draggable={false}
+            />
+            <img
+              src={sheepAnim ? SPRITES.sheep.anim : SPRITES.sheep.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.sheep.x),
+                top: py(SPRITES.sheep.y),
+                width: px(SPRITES.sheep.w),
+              }}
+              draggable={false}
+            />
+          </IntroPop>
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.mailbox}
+            origin="84.4% 91%"
+          >
+            <MailboxSprite open={hovered === "contact"} />
+          </IntroPop>
+
+          {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.bush}
+            origin="80.9% 91%"
+          >
+            <motion.img
+              src={SPRITES.bush.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(SPRITES.bush.x),
+                top: py(SPRITES.bush.y),
+                width: px(SPRITES.bush.w),
+                transformOrigin: "50% 100%",
+              }}
+              animate={bushSway(0.8, 5.4, 1.2)}
+              draggable={false}
+            />
+          </IntroPop>
+
+          {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
+          <motion.div
+            className="pointer-events-none absolute select-none"
+            style={{
+              width: px(BIRD_BOX.w),
+              height: py(BIRD_BOX.h),
+            }}
+            initial={{ left: "135%", top: "14%", opacity: 0 }}
+            animate={birdControls}
+          >
+            <div className="absolute inset-0">
+              {BIRD_FLAP_FRAMES.map((src, i) => (
+                <img
+                  key={src}
+                  src={src}
+                  alt=""
+                  draggable={false}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                  style={{
+                    width: `${(BIRD_FLAP_SIZE.w / BIRD_BOX.w) * 100}%`,
+                    display:
+                      !birdStanding && birdFlapIdx === i ? "block" : "none",
+                  }}
+                />
+              ))}
               <img
-                key={src}
-                src={src}
+                src={BIRD_STAND.src}
                 alt=""
                 draggable={false}
                 className="absolute bottom-0 left-1/2 -translate-x-1/2"
                 style={{
-                  width: `${(BIRD_FLAP_SIZE.w / BIRD_BOX.w) * 100}%`,
-                  display:
-                    !birdStanding && birdFlapIdx === i ? "block" : "none",
+                  width: `${(BIRD_STAND.w / BIRD_BOX.w) * 100}%`,
+                  display: birdStanding ? "block" : "none",
                 }}
               />
-            ))}
-            <img
-              src={BIRD_STAND.src}
-              alt=""
-              draggable={false}
-              className="absolute bottom-0 left-1/2 -translate-x-1/2"
-              style={{
-                width: `${(BIRD_STAND.w / BIRD_BOX.w) * 100}%`,
-                display: birdStanding ? "block" : "none",
-              }}
-            />
-          </div>
-        </motion.div>
+            </div>
+          </motion.div>
 
-        {/* 时段调色层：multiply 压暗/染色整个场景，线稿保持黑；进门时褪掉。
+          {/* 时段调色层：multiply 压暗/染色整个场景，线稿保持黑；进门时褪掉。
             左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，不然接缝处一深一浅两条竖带 */}
-        <motion.div
-          className="pointer-events-none absolute inset-y-0"
-          style={{
-            left: "-60%",
-            right: "-60%",
-            background: theme.tint,
-            mixBlendMode: "multiply",
-          }}
-          initial={false}
-          animate={{ opacity: entering ? 0 : theme.tintAlpha }}
-          transition={{
-            duration: entering ? 0.5 : TIME_FADE,
-            ease: "easeInOut",
-          }}
-        />
-
-        {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
-            首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
-        <NightLights
-          on={theme.lights && !entering}
-          delay={intro && !introGo ? 0 : intro ? INTRO_AT.openSign + 0.6 : 0}
-          signControls={signControls}
-        />
-
-        {/* 随风飘过的叶子：放在夜灯上面，不然晚上会飘到亮着的 WOOLAB 招牌后面去；
-            自己带一份和调色层等价的染色，颜色和夜里的场景一致。进门时调色层褪掉，叶子也跟着不染 */}
-        <WindLeaves
-          id={cover ? "d" : "m"}
-          tint={theme.tint}
-          tintAlpha={entering ? 0 : theme.tintAlpha}
-        />
-
-        {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
-        {heroHotspots.map((h) => (
-          <div
-            key={h.id}
-            role="link"
-            tabIndex={0}
-            aria-label={t(h.labelKey)}
-            className={`group absolute z-20 cursor-pointer outline-none ${entering || curtainUp ? "pointer-events-none" : ""}`}
+          <motion.div
+            className="pointer-events-none absolute inset-y-0"
             style={{
-              left: `${h.left}%`,
-              top: `${h.top}%`,
-              width: `${h.width}%`,
-              height: `${h.height}%`,
+              left: "-60%",
+              right: "-60%",
+              background: theme.tint,
+              mixBlendMode: "multiply",
             }}
-            onMouseEnter={() => enterHotspot(h.id)}
-            onMouseLeave={() => leaveHotspot(h.id)}
-            onFocus={() => enterHotspot(h.id)}
-            onBlur={() => leaveHotspot(h.id)}
-            onClick={() => activateHotspot(h.id, h.path)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                activateHotspot(h.id, h.path);
-              }
+            initial={false}
+            animate={{ opacity: entering ? 0 : theme.tintAlpha }}
+            transition={{
+              duration: entering ? 0.5 : TIME_FADE,
+              ease: "easeInOut",
             }}
-          >
-            {/* 名称标签：悬停时淡入；小羊显示打招呼而不是栏目名 */}
-            <span
-              className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300 ${
-                hovered === h.id
-                  ? "opacity-100"
-                  : "pointer-events-none opacity-0"
-              }`}
+          />
+
+          {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
+            首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
+          <NightLights
+            on={theme.lights && !entering}
+            delay={intro && !introGo ? 0 : intro ? INTRO_AT.openSign + 0.6 : 0}
+            signControls={signControls}
+          />
+
+          {/* 随风飘过的叶子：放在夜灯上面，不然晚上会飘到亮着的 WOOLAB 招牌后面去；
+            自己带一份和调色层等价的染色，颜色和夜里的场景一致。进门时调色层褪掉，叶子也跟着不染 */}
+          <WindLeaves
+            id={cover ? "d" : "m"}
+            tint={theme.tint}
+            tintAlpha={entering ? 0 : theme.tintAlpha}
+          />
+
+          {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
+          {heroHotspots.map((h) => (
+            <div
+              key={h.id}
+              role="link"
+              tabIndex={0}
+              aria-label={t(h.labelKey)}
+              className={`group absolute z-20 cursor-pointer outline-none ${entering || curtainUp ? "pointer-events-none" : ""}`}
+              style={{
+                left: `${h.left}%`,
+                top: `${h.top}%`,
+                width: `${h.width}%`,
+                height: `${h.height}%`,
+              }}
+              onMouseEnter={() => enterHotspot(h.id)}
+              onMouseLeave={() => leaveHotspot(h.id)}
+              onFocus={() => enterHotspot(h.id)}
+              onBlur={() => leaveHotspot(h.id)}
+              onClick={() => activateHotspot(h.id, h.path)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  activateHotspot(h.id, h.path);
+                }
+              }}
             >
-              {h.id === "sheep" ? t(greetKey) : t(h.labelKey)}
-            </span>
-          </div>
-        ))}
+              {/* 名称标签：悬停时淡入；小羊显示打招呼而不是栏目名 */}
+              <span
+                className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300 ${
+                  hovered === h.id
+                    ? "opacity-100"
+                    : "pointer-events-none opacity-0"
+                }`}
+              >
+                {h.id === "sheep" ? t(greetKey) : t(h.labelKey)}
+              </span>
+            </div>
+          ))}
+        </motion.div>
       </motion.div>
 
       {/* 小羊的身份卡：点击小羊弹出，「去它家看看」直接接开门过场（config.identityCardEnabled 关着时不挂） */}
@@ -1252,17 +1277,30 @@ function ShootingStar({ shot }: { shot: Shot }) {
   return (
     <div
       className="pointer-events-none absolute"
-      style={{ left: `${shot.left}%`, top: `${shot.top}%`, transform: `rotate(${shot.angle}deg)` }}
+      style={{
+        left: `${shot.left}%`,
+        top: `${shot.top}%`,
+        transform: `rotate(${shot.angle}deg)`,
+      }}
     >
       <motion.div
         className="absolute"
-        style={{ width: len, height: thick * 4, top: -thick * 2, filter: "blur(0.3px)" }}
+        style={{
+          width: len,
+          height: thick * 4,
+          top: -thick * 2,
+          filter: "blur(0.3px)",
+        }}
         initial={{ x: 0, opacity: 0 }}
         animate={{ x: `-${shot.dist}vw`, opacity: [0, 1, 1, 0] }}
         transition={{
           duration: shot.dur,
           ease: shot.big ? "linear" : "easeOut",
-          opacity: { duration: shot.dur, times: [0, 0.12, 0.7, 1], ease: "linear" },
+          opacity: {
+            duration: shot.dur,
+            times: [0, 0.12, 0.7, 1],
+            ease: "linear",
+          },
         }}
       >
         {/* 尾巴 */}
