@@ -1148,6 +1148,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             tintAlpha={entering ? 0 : theme.tintAlpha}
           />
 
+          {/* 夜里灌木丛边飞的萤火虫：和夜灯一样等物件都摆好了再亮起来；身体借叶子那份染色，尾巴的光不染 */}
+          <Fireflies
+            on={theme.stars && !entering && !(intro && !introGo)}
+            delay={intro ? INTRO_AT.openSign + 1.2 : 0.4}
+            tintFilter={!entering && theme.tintAlpha > 0 ? `url(#hero-leaf-tint-${cover ? "d" : "m"})` : undefined}
+          />
+
           {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
           {heroHotspots.map((h) => (
             <div
@@ -1606,6 +1613,181 @@ function WindLeaves({
         />
       ))}
     </>
+  );
+}
+
+/**
+ * 萤火虫：身体 / 上翅 / 下翅三张图（同一 58x52 画板，从 Figma 三个 Frame 各自渲染，直接叠放就对齐）。
+ * 尾巴那团黄和两片翅膀根部在画板里的位置，单位是画板的百分比。素材原本头朝左。
+ */
+const FIREFLY = {
+  body: "/assets/hero-firefly-body.webp",
+  wingTop: "/assets/hero-firefly-wing-top.webp",
+  wingBottom: "/assets/hero-firefly-wing-bottom.webp",
+  tail: { x: 78, y: 73 },
+  wingRoot: { x: 41, y: 63 },
+} as const;
+const FIREFLY_ASSETS = [FIREFLY.body, FIREFLY.wingTop, FIREFLY.wingBottom];
+/** 每只的活动范围（画面百分比）：左右两丛灌木、右边邮箱一带、房子左侧稍高的空中 */
+const FIREFLY_ZONES = [
+  { left: [3, 17], top: [70, 86] },
+  { left: [75, 92], top: [70, 86] },
+  { left: [82, 97], top: [58, 78] },
+  { left: [8, 26], top: [56, 74] },
+] as const;
+
+type Fly = {
+  w: number;
+  pts: { x: number; y: number }[];
+  duration: number;
+  delay: number;
+  bob: number;
+  glowDur: number;
+  glowDelay: number;
+  flap: number;
+};
+
+function Fireflies({
+  on,
+  delay,
+  tintFilter,
+}: {
+  /** 夜里 + 场景摆好了才出来 */
+  on: boolean;
+  /** 出现前再等多久（首次进场时等物件都弹完） */
+  delay: number;
+  /** 身体和翅膀借用的染色滤镜（和叶子同一个），尾巴的光不染 */
+  tintFilter?: string;
+}) {
+  const reducedMotion = useReducedMotion();
+  const flies = useMemo<Fly[]>(
+    () =>
+      FIREFLY_ZONES.map((z) => {
+        const pts = Array.from({ length: 6 }, () => ({ x: rand(z.left[0], z.left[1]), y: rand(z.top[0], z.top[1]) }));
+        pts.push(pts[0]); // 绕一圈回到起点，循环才接得上
+        return {
+          w: rand(2.5, 3.2),
+          pts,
+          duration: rand(20, 28),
+          delay: rand(0, 4),
+          bob: rand(1.4, 2.2),
+          glowDur: rand(2, 3.4),
+          glowDelay: rand(0, 2),
+          flap: rand(0.12, 0.16),
+        };
+      }),
+    [],
+  );
+  /* 图很小（共 19KB），一挂上就拉好，夜里第一次亮起来不闪 */
+  useEffect(() => {
+    void loadImages(FIREFLY_ASSETS);
+  }, []);
+
+  if (reducedMotion) return null;
+  return (
+    <AnimatePresence>
+      {on && flies.map((f, i) => <Firefly key={i} fly={f} delay={delay} tintFilter={tintFilter} />)}
+    </AnimatePresence>
+  );
+}
+
+function Firefly({ fly, delay, tintFilter }: { fly: Fly; delay: number; tintFilter?: string }) {
+  /* 朝向：素材头朝左；往右飞就镜像过来。看 left 的变化方向定 */
+  const [facing, setFacing] = useState<1 | -1>(1);
+  const lastX = useRef<number | null>(null);
+  const wingStyle = {
+    transformOrigin: `${FIREFLY.wingRoot.x}% ${FIREFLY.wingRoot.y}%`,
+    filter: tintFilter,
+  };
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{ width: `${fly.w}%`, aspectRatio: "58 / 52" }}
+      initial={{ left: `${fly.pts[0].x}%`, top: `${fly.pts[0].y}%`, opacity: 0 }}
+      animate={{
+        left: fly.pts.map((p) => `${p.x}%`),
+        top: fly.pts.map((p) => `${p.y}%`),
+        opacity: 1,
+      }}
+      exit={{ opacity: 0, transition: { duration: 0.6 } }}
+      transition={{
+        left: { duration: fly.duration, repeat: Infinity, ease: "easeInOut", delay: fly.delay },
+        top: { duration: fly.duration, repeat: Infinity, ease: "easeInOut", delay: fly.delay },
+        opacity: { duration: 1.2, delay },
+      }}
+      onUpdate={(latest) => {
+        const x = parseFloat(String(latest.left));
+        if (Number.isNaN(x)) return;
+        const prev = lastX.current;
+        lastX.current = x;
+        if (prev === null) return;
+        const dx = x - prev;
+        if (Math.abs(dx) < 0.003) return;
+        const next = dx < 0 ? 1 : -1;
+        if (next !== facing) setFacing(next);
+      }}
+    >
+      {/* 转身：scaleX 过 0 那一下像它真的掉了个头 */}
+      <motion.div className="relative h-full w-full" animate={{ scaleX: facing }} transition={{ duration: 0.25, ease: "easeInOut" }}>
+        <motion.div
+          className="relative h-full w-full"
+          animate={{ y: ["0%", "-9%", "0%"] }}
+          transition={{ duration: fly.bob, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {/* 尾巴的光：一大团黄晕在身体底下呼吸（叠色，让夜色亮起来） */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              left: `${FIREFLY.tail.x}%`,
+              top: `${FIREFLY.tail.y}%`,
+              width: "200%",
+              aspectRatio: "1",
+              translate: "-50% -50%",
+              background:
+                "radial-gradient(circle, rgba(255,232,140,1) 0%, rgba(255,204,80,0.55) 24%, rgba(255,186,50,0) 64%)",
+              mixBlendMode: "screen",
+            }}
+            animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }}
+            transition={{ duration: fly.glowDur, repeat: Infinity, ease: "easeInOut", delay: fly.glowDelay }}
+          />
+          <img src={FIREFLY.body} alt="" draggable={false} className="absolute inset-0 h-full w-full max-w-none select-none" style={{ filter: tintFilter }} />
+          {/* 尾巴本身也跟着亮：一小点暖黄盖在染过色的黄尾巴上，把它从夜色里点出来 */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              left: `${FIREFLY.tail.x}%`,
+              top: `${FIREFLY.tail.y}%`,
+              width: "34%",
+              aspectRatio: "1",
+              translate: "-50% -50%",
+              background: "radial-gradient(circle, rgba(255,236,150,0.95) 0%, rgba(255,220,110,0.7) 45%, rgba(255,210,90,0) 100%)",
+              mixBlendMode: "screen",
+            }}
+            animate={{ opacity: [0.35, 1, 0.35] }}
+            transition={{ duration: fly.glowDur, repeat: Infinity, ease: "easeInOut", delay: fly.glowDelay }}
+          />
+          {/* 两片翅膀各自绕根部扇，一上一下错半拍 */}
+          <motion.img
+            src={FIREFLY.wingBottom}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full max-w-none select-none"
+            style={wingStyle}
+            animate={{ rotate: [-9, 9] }}
+            transition={{ duration: fly.flap, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+          />
+          <motion.img
+            src={FIREFLY.wingTop}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full max-w-none select-none"
+            style={wingStyle}
+            animate={{ rotate: [11, -11] }}
+            transition={{ duration: fly.flap, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: fly.flap / 2 }}
+          />
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }
 
