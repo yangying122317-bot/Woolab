@@ -17,9 +17,10 @@ import { useLanguage } from "../i18n/LanguageContext";
  * 白布在屏幕那块是挖空的（mask），只是加载期间被雪花屏那层盖着，看不出来。
  *
  * 流程：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 电视"开机"：雪花一闪白、屏幕那层淡掉，
- * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕，看到的是空房子）→ 报 onLoaded；
- * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：场景放大到占满整屏，
- * 白布和电视同步放大飞出画面 → 快推到位时广播离场事件（场景里的东西开始一个个弹出来）→ 写会话标记、报 onDone。
+ * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕，看到的是一片天 + 云）→ 报 onLoaded；
+ * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：天空慢而稳地放大到占满整屏，
+ * 电视机和白布晚一步、加速冲向镜头掠出画面（窗框从眼前刷过去的感觉）→ 掠完广播离场事件
+ *（房子地面浮上来、东西一个个弹出）→ 写会话标记、报 onDone。
  * 布盖着期间顶栏整条藏起来。
  *
  * 场景那边的缩放 / 位移不在这个组件里，用 camera 那三个 MotionValue 传过去驱动（HeroScene 把它们挂在场景外面那层上）。
@@ -35,11 +36,20 @@ const SETTLE_MS = 350;
 const TURN_ON_T = 0.42;
 /** 开机后停一下再推镜头：让人看清电视里是个房子 */
 const HOLD_T = 0.75;
-/** 推镜头总时长；前 ZOOM_SPLIT 段场景推到占满整屏，剩下一点白布边飞出画面 */
-const ZOOM_T = 1.35;
-const ZOOM_SPLIT = 0.74;
-/** 推到位时白布要放大到洞把整个视口都盖过：屏幕形状不规则，多放一点余量 */
+/**
+ * 推镜头总时长。场景（天空 + 云）全程慢而稳地放大——这是"你在走近那个世界"；
+ * 电视机和白布先不动，到 FLY_FROM 才开始、加速冲向镜头，FLY_TO 时已经掠出画面边缘——像窗框从眼前刷过去。
+ * 两个速度不一样，才有纵深、才像人往里走，而不是电视朝你涨大。
+ */
+const ZOOM_T = 1.6;
+const FLY_FROM = 0.42;
+const FLY_TO = 0.9;
+/** 电视掠过时顺带变透明（从掠过进度的这个点开始），免得放大后糊成一团 */
+const FLY_FADE_FROM = 0.5;
+/** 掠出画面时白布要放大到洞把整个视口都盖过：屏幕形状不规则，多放一点余量 */
 const HOLE_COVER = 1.25;
+/** 开机时电视里对准场景的哪一点（占视口的比例）：正中是那朵大云，会白成一片；往左上挪一点，看到的是蓝天 + 云的边 */
+const AIM = { fx: 0.33, fy: 0.28 };
 
 /* ---- 稿子（720×450 画板）上的东西 ---- */
 const BOARD_W = 720;
@@ -192,16 +202,25 @@ export default function HeroCurtain({
   const clothScale = useMotionValue(1);
   const clothX = useMotionValue(0);
   const clothY = useMotionValue(0);
+  const clothOpacity = useMotionValue(1);
 
-  /* 场景先缩进屏幕里、中心对准屏幕中心（布还盖着，看不见这一步） */
+  /* 场景先缩进屏幕里、AIM 那一点对准屏幕中心（布还盖着，看不见这一步）；场景层以自己的中心缩放 */
+  const camStart = useMemo(() => {
+    const ox = (AIM.fx - 0.5) * vw;
+    const oy = (AIM.fy - 0.5) * vh;
+    return {
+      x: hole.cx - vw / 2 - ox * hole.sceneScale,
+      y: hole.cy - vh / 2 - oy * hole.sceneScale,
+    };
+  }, [hole, vw, vh]);
   const zooming = useRef(false);
   useEffect(() => {
     if (zooming.current) return;
     camera.scale.set(hole.sceneScale);
-    camera.x.set(hole.cx - vw / 2);
-    camera.y.set(hole.cy - vh / 2);
+    camera.x.set(camStart.x);
+    camera.y.set(camStart.y);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hole]);
+  }, [hole, camStart]);
 
   /* 进度：目标值按帧算，弹簧跟着走 */
   const target = useMotionValue(0);
@@ -323,21 +342,27 @@ export default function HeroCurtain({
     const hold = window.setTimeout(() => {
       animate(0, 1, {
         duration: ZOOM_T,
-        ease: [0.6, 0, 0.3, 1],
+        ease: [0.55, 0, 0.3, 1],
         onUpdate: (p) => {
-          // 前一段：场景从屏幕大小推到占满整屏，白布同步放大（洞始终框着场景的同一块）
-          const a = Math.min(p / ZOOM_SPLIT, 1);
-          camera.scale.set(s0 + (1 - s0) * a);
-          camera.x.set(dx * (1 - a));
-          camera.y.set(dy * (1 - a));
-          clothX.set(-dx * a);
-          clothY.set(-dy * a);
-          // 后一段：场景已经到位，白布自己再放大一截，让洞的边缘完全飞出视口
-          const b = Math.max(0, (p - ZOOM_SPLIT) / (1 - ZOOM_SPLIT));
-          clothScale.set(
-            a < 1 ? 1 + (1 / s0 - 1) * a : 1 / s0 + (endScale - 1 / s0) * b,
+          // 场景：慢而稳地从屏幕大小推到占满整屏，同时从对准的那点滑回原位
+          camera.scale.set(s0 + (1 - s0) * p);
+          camera.x.set(camStart.x * (1 - p));
+          camera.y.set(camStart.y * (1 - p));
+          // 白布 + 电视：洞跟着场景中心走；到点后加速冲向镜头掠出去，后半程顺带变透明
+          clothX.set(-dx * p);
+          clothY.set(-dy * p);
+          const q = Math.min(
+            Math.max((p - FLY_FROM) / (FLY_TO - FLY_FROM), 0),
+            1,
           );
-          if (!dismissed && p >= ZOOM_SPLIT) {
+          const fly = q * q * q;
+          clothScale.set(1 + (endScale - 1) * fly);
+          const f = Math.min(
+            Math.max((q - FLY_FADE_FROM) / (1 - FLY_FADE_FROM), 0),
+            1,
+          );
+          clothOpacity.set(1 - f * f);
+          if (!dismissed && p >= FLY_TO) {
             dismissed = true;
             window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
           }
@@ -360,6 +385,7 @@ export default function HeroCurtain({
         scale: clothScale,
         x: clothX,
         y: clothY,
+        opacity: clothOpacity,
         transformOrigin: `${hole.cx}px ${hole.cy}px`,
         willChange: "transform",
       }}

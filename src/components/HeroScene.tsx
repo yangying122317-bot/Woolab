@@ -447,9 +447,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       (introGo || curtainUp) &&
       !sessionStorage.getItem("heroIntroPlayed"),
   );
-  // 有电视开场时底图和云不藏：电视屏幕里要看得见房子；只藏那些要弹出来的东西
+  // 有电视开场时云不藏：电视屏幕里是一片天 + 飘着的云；房子地面和要弹出来的东西都等镜头推到位再出
   const [tvIntro] = useState(() => intro && curtainUp);
-  const baseHidden = intro && !introGo && !tvIntro;
+  const cloudHidden = intro && !introGo && !tvIntro;
+  const baseHidden = intro && !introGo;
   useEffect(() => {
     sessionStorage.setItem("heroIntroPlayed", "1");
   }, []);
@@ -566,7 +567,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
 
     (async () => {
-      /* ---- 开场白布盖着：小鸟先站在屋顶栏杆上等着，布拉走露出来后歇一会再飞走 ---- */
+      /* ---- 开场电视：小鸟先藏着（屏幕里只有天空，房子还没出来），镜头推到位、房子浮上来后才在栏杆上现身，歇一会再飞走 ---- */
       if (curtainUpRef.current) {
         // 预览重播时上一轮可能还在飞（动画没停），先停掉再摆位
         birdControls.stop();
@@ -576,7 +577,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         birdControls.set({
           left: PERCH.left,
           top: PERCH.top,
-          opacity: 1,
+          opacity: 0,
           y: 0,
         });
         while (alive && curtainUpRef.current) {
@@ -584,6 +585,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         }
         if (!alive) return;
         await sleep(400);
+        if (!alive) return;
+        await birdControls.start({
+          opacity: 1,
+          transition: { duration: 0.35 },
+        });
         if (!alive) return;
         await perchAndLeave();
         if (!alive) return;
@@ -843,9 +849,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           <motion.div
             className="pointer-events-none absolute inset-0"
             initial={intro && !tvIntro ? { opacity: 0 } : false}
-            animate={{ opacity: baseHidden ? 0 : 1 }}
+            animate={{ opacity: cloudHidden ? 0 : 1 }}
             transition={
-              baseHidden
+              cloudHidden
                 ? { duration: 0 }
                 : { delay: 0.3, duration: 0.9, ease: "easeOut" }
             }
@@ -869,7 +875,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             出场时从下方轻轻浮现，随后各物件依次弹出 */}
           <motion.div
             className="pointer-events-none absolute inset-0"
-            initial={intro && !tvIntro ? { opacity: 0, y: "3%" } : false}
+            initial={intro ? { opacity: 0, y: "3%" } : false}
             animate={
               baseHidden ? { opacity: 0, y: "3%" } : { opacity: 1, y: "0%" }
             }
