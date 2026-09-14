@@ -10,14 +10,23 @@ import { PAPER_TAG } from "./PaperTag";
  *
  * 只管自己长什么样，摆在哪由外面用 style 定位；箭头素材原本朝上，rotate 转到要指的方向。
  */
-/** 加粗用的几层错位（像素） */
-const BOLD_OFFSETS: [number, number][] = [
-  [0, 0],
-  [0.7, 0],
-  [-0.7, 0],
-  [0, 0.7],
-  [0, -0.7],
-];
+/**
+ * 加粗用的几层错位（像素）：以 0.7px 为一圈往外一圈圈叠，stroke 越大圈越多、越粗。
+ * stroke = 1 就是原来那四个方向一圈；更粗时每圈八个方向，免得层与层之间露缝。
+ */
+function boldOffsets(stroke: number): [number, number][] {
+  const rings = Math.max(1, Math.ceil(stroke));
+  const out: [number, number][] = [[0, 0]];
+  for (let i = 1; i <= rings; i++) {
+    const r = (0.7 * stroke * i) / rings;
+    const dirs = rings === 1 ? 4 : 8;
+    for (let d = 0; d < dirs; d++) {
+      const a = (d / dirs) * Math.PI * 2;
+      out.push([Math.round(Math.cos(a) * r * 100) / 100, Math.round(Math.sin(a) * r * 100) / 100]);
+    }
+  }
+  return out;
+}
 
 export default function HandHint({
   show,
@@ -28,6 +37,7 @@ export default function HandHint({
   fontSize = "3.3vh",
   color = "#262626",
   bold = false,
+  stroke = 1,
   tag = false,
   flip = false,
   maxWidth,
@@ -44,6 +54,8 @@ export default function HandHint({
   color?: string;
   /** 箭头素材是一根很细的手绘线，缩小到 8vh 以下就快看不见了：加粗是把同一张 mask 错开半像素多画几层 */
   bold?: boolean;
+  /** 加粗的错位再乘多少：放在会被镜头放大的场景里（推近 2 倍）时，错位得跟着放大才够粗 */
+  stroke?: number;
   /** 字垫一张奶油色小纸签（箭头不垫，还是直接画在场景里），不然压在地板 / 家具上看不清 */
   tag?: boolean;
   /** 箭头左右镜像（素材那道弧是固定朝一边弯的，有时想让它弯向另一边） */
@@ -125,7 +137,7 @@ export default function HandHint({
                 },
               }}
             >
-              {(bold ? BOLD_OFFSETS : [[0, 0]]).map(([dx, dy]) => (
+              {(bold ? boldOffsets(stroke) : [[0, 0]]).map(([dx, dy]) => (
                 <div key={`${dx},${dy}`} style={{ ...arrowMask, transform: `translate(${dx}px, ${dy}px)` }} />
               ))}
             </motion.div>

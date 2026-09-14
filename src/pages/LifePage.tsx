@@ -9,7 +9,6 @@ import {
   useTransform,
 } from "framer-motion";
 import Checklist from "../components/life/Checklist";
-import HandHint from "../components/life/HandHint";
 import PaperTag, { PAPER_TAG } from "../components/life/PaperTag";
 import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import { useIdle } from "../components/life/useIdle";
@@ -278,20 +277,8 @@ export default function LifePage() {
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;
     if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
-    if (Math.abs(v) > 8) {
-      guideDone.current = true;
-      setScrolled(true);
-    }
+    if (Math.abs(v) > 8) guideDone.current = true;
   });
-  /** 人已经滚过房间：右下角"往右走"的提示就不用再出了 */
-  const [scrolled, setScrolled] = useState(false);
-  /** 揭开后稍等一下再出"往右走"，别和白光散开挤在同一秒 */
-  const [scrollCueReady, setScrollCueReady] = useState(false);
-  useEffect(() => {
-    if (!ready) return;
-    const t = window.setTimeout(() => setScrollCueReady(true), 1200);
-    return () => window.clearTimeout(t);
-  }, [ready]);
 
   /* ---------------- 引导 ---------------- */
   /**
@@ -529,19 +516,6 @@ export default function LifePage() {
             style={{ scaleX: scrollYProgress, transformOrigin: "0 50%" }}
           />
         </div>
-
-        {/* 往右走：还没滚过房间时，右下角一支箭头指向右边 + 纸签；人一滚就没，之后不再出 */}
-        <HandHint
-          show={scrollCueReady && !scrolled && !checklistOpen && !focus && !labEntry}
-          text={t("life.guide.scroll")}
-          rotate={90}
-          arrowH="8vh"
-          fontSize="2.8vh"
-          bold
-          tag
-          textSide="left"
-          style={{ right: "4vh", bottom: "17vh", zIndex: 20 }}
-        />
 
         {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口 */}
         <AnimatePresence>

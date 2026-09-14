@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import type { TargetAndTransition } from "framer-motion";
-import HintPing from "./HintPing";
+import HandHint from "./HandHint";
 import { playLightOn } from "../../audio/sfx";
 
 /**
@@ -57,6 +57,8 @@ const GROW: TargetAndTransition = {
 };
 
 const SNAP_SPRING = { type: "spring", stiffness: 420, damping: 30 } as const;
+/** 借火提示箭头的边长（长卷像素） */
+const ARROW_PX = 100;
 
 interface Props {
   /** 已点亮（room.candle，持久态） */
@@ -238,15 +240,15 @@ export default function CandleLight({ lit, active, onDone }: Props) {
         onPointerCancel={onUp}
       />
 
-      {/* 借火提示：点在白蜡烛身上，暗示"拿它" */}
-      {canGrab && !dragging && flame === "off" && (
-        <div
-          className="pointer-events-none absolute"
-          style={{ left: vh(GROUP.x + GROUP.w * 0.5), top: vh(GROUP.y + GROUP.h * 0.55), zIndex: 7 }}
-        >
-          <HintPing />
-        </div>
-      )}
+      {/* 借火提示：一支手绘箭头从左上方指着白蜡烛，暗示"拿它"（尺寸按长卷像素给，推近后是两倍大） */}
+      <HandHint
+        show={canGrab && !dragging && flame === "off"}
+        rotate={150}
+        arrowH={vh(ARROW_PX)}
+        bold
+        stroke={1.6}
+        style={{ left: vh(GROUP.x - ARROW_PX + 8), top: vh(GROUP.y - ARROW_PX + 60), zIndex: 7 }}
+      />
     </>
   );
 }

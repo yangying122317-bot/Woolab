@@ -5,6 +5,7 @@ import { isAllDone, isListDone } from "../../state/roomState";
 import type { RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { playStamp, playStrike } from "../../audio/sfx";
+import HandHint from "./HandHint";
 
 interface Props {
   room: RoomState;
@@ -50,6 +51,12 @@ const TAPE_BR = pic("tape-br.png", 250, 392.5, 46.585, 39.189);
 const CTA_BOX = pic("cta-box.webp", 141.76, 286.1, 119.314, 35.467);
 const CTA_TAPE = pic("cta-tape.png", 178.12, 278, 36.507, 20.344);
 const CTA_ARROW = pic("cta-arrow.png", 238, 298.5, 13.341, 8.266);
+
+/**
+ * 纸底下"往右走"那句：贴纸下缘、屏幕下缘之上（屏底约在稿子 y≈470），文案折两行，
+ * 围着纸的中线居中、再往左让 dodgeTape，躲开抽屉右下角那条胶带（胶带在 x≈263 起）。
+ */
+const GO_HINT = { y: 404, arrow: 22, fontZh: 13.5, fontEn: 14.5, dodgeTape: 20, color: "#2A1E10" };
 
 /** 虚线 / 编号从这儿起，到这儿止 */
 const ROW_X = 110;
@@ -449,6 +456,33 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
 
               {/* 纸右上角压着的那条胶带 */}
               <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(TAPE_TR)} />
+
+              {/* 纸底下写在牛皮上的一句："往右走，去把它们一件件做完" + 一支指向右边的手绘箭头。
+                  全做完那次纸被揭走，这句也不用再说 */}
+              {showList && (
+                <motion.div
+                  className="pointer-events-none absolute"
+                  style={{ ...box(SHEET_CX - GO_HINT.dodgeTape - 160, GO_HINT.y, 320), display: "flex", justifyContent: "center" }}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                >
+                  <HandHint
+                    show
+                    text={t("life.guide.scroll")}
+                    rotate={90}
+                    arrowH={`${GO_HINT.arrow}px`}
+                    fontSize={`${hand ? GO_HINT.fontZh : GO_HINT.fontEn}px`}
+                    color={GO_HINT.color}
+                    bold
+                    textSide="left"
+                    /* 文案里自己写了换行；max-content 让字框正好包住最长那行，居中才准 */
+                    maxWidth="max-content"
+                    /* HandHint 自己是 absolute 的，这里让它在 flex 里居中排 */
+                    style={{ position: "relative", gap: 6 }}
+                  />
+                </motion.div>
+              )}
             </div>
           </motion.div>
         </div>

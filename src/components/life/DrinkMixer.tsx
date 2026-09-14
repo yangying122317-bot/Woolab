@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { DRINKS, drinkOf } from "../../data/drinks";
 import type { DrinkChoice } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
-import HintPing from "./HintPing";
+import HandHint from "./HandHint";
 import {
   playIceClink,
   playKnifeChop,
@@ -65,6 +65,13 @@ const POUR_AT = { x: 8898, y: 1360 };
 const SNAP = 150;
 /** 倒酒时瓶子的姿势（左上角坐标 + 旋转，瓶口正好悬在杯口上方） */
 const POUR_POSE = { x: 8868, y: 1342, rot: -68 };
+
+/** 分步箭头的边长（长卷像素；推近 2 倍后屏幕上约 11vh）和加粗倍数（推近后线得跟着粗） */
+const ARROW_PX = 100;
+const ARROW_H = vh(ARROW_PX);
+const ARROW_STROKE = 1.6;
+/** 分步纸签的中线 x（长卷像素）：一口咩纸箱左半上方，右边给加冰那步的箭头留出冰桶上空 */
+const STEP_TAG_X = 9105;
 
 /** 坐标换算基准区（整张白圆桌一带） */
 const BOUNDS = { x: 8560, y: 1120, w: 1420, h: 610 };
@@ -591,26 +598,35 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
         );
       })}
 
-      {/* 切柠檬 / 加冰的光点提示 */}
-      {active && !done && step === "lemon" && !chopping && !chopped && (
-        <div
-          className="pointer-events-none absolute"
-          style={{ left: vh(BOARD.x + BOARD.w * 0.42), top: vh(BOARD.y + BOARD.h * 0.42) }}
-        >
-          <HintPing />
-        </div>
-      )}
-      {active && !done && step === "ice" && !iced && !dragIce && (
-        <div
-          className="pointer-events-none absolute"
-          style={{
-            left: vh(BUCKET.x + BUCKET.w * 0.45),
-            top: vh(BUCKET.y + 66),
-          }}
-        >
-          <HintPing />
-        </div>
-      )}
+      {/* 分步的手绘箭头：挑瓶子 → 切柠檬 → 加冰。和房间里的站点箭头同一支，
+          尺寸按长卷像素给（推近时整个场景放大 2 倍，屏幕上看到的是两倍大） */}
+      {/* 挑瓶子：从中间那瓶的右上方斜指下来 */}
+      <HandHint
+        show={active && !done && step === "pick"}
+        rotate={200}
+        arrowH={ARROW_H}
+        bold
+        stroke={ARROW_STROKE}
+        style={{ left: vh(BOTTLE_POS["soda-white"].x + 24), top: vh(BOTTLE_POS["soda-white"].y - ARROW_PX - 10) }}
+      />
+      {/* 切柠檬：站在一口咩纸箱和柠檬盘之间那块空垫布上，斜指左下的柠檬 */}
+      <HandHint
+        show={active && !done && step === "lemon" && !chopping && !chopped}
+        rotate={222}
+        arrowH={ARROW_H}
+        bold
+        stroke={ARROW_STROKE}
+        style={{ left: vh(9268), top: vh(1322) }}
+      />
+      {/* 加冰：冰桶正上方直指桶口 */}
+      <HandHint
+        show={active && !done && step === "ice" && !iced && !dragIce}
+        rotate={180}
+        arrowH={ARROW_H}
+        bold
+        stroke={ARROW_STROKE}
+        style={{ left: vh(BUCKET.x + BUCKET.w / 2 - ARROW_PX / 2), top: vh(BUCKET.y - ARROW_PX + 14) }}
+      />
 
       {/* 拖近杯口时：杯口亮起光晕 */}
       {drag && (
@@ -716,7 +732,7 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
       <div
         className="pointer-events-none absolute"
         style={{
-          left: vh(9270),
+          left: vh(STEP_TAG_X),
           top: vh(1100),
           transform: "translateX(-50%)",
           zIndex: 20,
