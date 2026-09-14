@@ -1298,10 +1298,10 @@ const SPOT_HINT: Record<
   string,
   { rotate: number; flip?: boolean; at: React.CSSProperties; text: DictKey; textSide: "left" | "right" | "above" | "below"; maxWidth: string }
 > = {
-  /* 软木板右边缘，箭头指向左边散落的碎片；纸签挂在箭头下面、骑在板子边上（右边是花瓶和搁板，放不下） */
+  /* 软木板右边一点的白墙上，箭头指向左边散落的碎片；纸签挂在箭头下面，落在板子和花瓶之间那块空墙 */
   photo: {
     rotate: -90,
-    at: { left: "calc(100% - 3vh)", top: "34%" },
+    at: { left: "calc(100% + 4vh)", top: "34%" },
     text: "life.guide.photo",
     textSide: "below",
     maxWidth: "21vh",
