@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import type { TargetAndTransition } from "framer-motion";
 import HintPing from "./HintPing";
 import { playLightOn } from "../../audio/sfx";
 
 /**
  * 点蜡烛互动（candle 任务）：
- * 推近蜡烛角后点白蜡烛，白蜡烛被"拿起来"——离开烛台，
- * 悬到小羊香薰蜡烛的烛芯旁，倾斜着把火凑上去；烛芯先冒一小簇火，
- * 白蜡烛放回烛台后火苗长大成完整火苗（常驻，刷新仍亮）。
+ * 推近蜡烛角后，把白蜡烛从烛台上拖起来、拖到小羊香薰蜡烛的罐口——
+ * 拖得越远蜡烛越倾斜，火苗尖一靠近烛芯就被"吸"过去摆成凑火的姿势，烛芯先冒一小簇火；
+ * 松手后白蜡烛自己弹回烛台，小羊蜡烛的火长大成完整火苗（常驻，刷新仍亮）。
+ * 没凑到就松手，白蜡烛弹回原位，可以再试。
  * candle-wax / candle-holder / aroma-candle 图层和火苗由本组件接管渲染
  * （小羊蜡烛的火苗画在罐子后面）。
  * 坐标全部是长卷素材像素（画板高 1800px = 100vh）。
@@ -20,10 +21,16 @@ const url = (name: string) => `/assets/life/seg03/${name}.webp`;
 /** 白蜡烛整图（蜡体+火苗一体，补充素材/蜡烛.png） */
 const GROUP = { x: 11148, y: 450, w: 122, h: 214 };
 
-/** 凑火姿势（参考图2）：蜡烛几乎横过来悬在罐口上方，火苗尖够到烛芯尖（11396, 437） */
+/** 凑火姿势（参考图2）：蜡烛几乎横过来悬在罐口上方，火苗尖够到烛芯尖（11396, 437）。x / y 是相对烛台位置的位移 */
 const POSE = { x: 93, y: -95, rot: 72 };
-/** 借火全程时长（拿起 → 凑火 → 停一拍 → 放回） */
-const LIGHT_MS = 2400;
+/** 拖到离凑火位这么近（长卷像素）就吸过去 */
+const SNAP_R = 34;
+/** 吸住后拖出这么远才松开磁吸 */
+const UNSNAP_R = 70;
+/** 拖起来后最多倾斜到 POSE.rot：按拖离烛台的距离线性给，走到凑火位那么远就完全倾斜 */
+const POSE_DIST = Math.hypot(POSE.x, POSE.y);
+/** 松手回烛台的时长 */
+const RETURN_MS = 700;
 
 /** 小羊香薰蜡烛罐（画在自己火苗前面） */
 const AROMA = { x: 11286, y: 437, w: 200, h: 221 };
@@ -37,26 +44,19 @@ const FLICKER: TargetAndTransition = {
   transition: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
 };
 
-/** 拿起 → 移到烛芯旁凑火 → 停一拍 → 放回 */
-const LIGHTING_KF: TargetAndTransition = {
-  x: ["0vh", vh(14), vh(POSE.x), vh(POSE.x), vh(14), "0vh"],
-  y: ["0vh", vh(-95), vh(POSE.y), vh(POSE.y), vh(-95), "0vh"],
-  rotate: [0, 14, POSE.rot, POSE.rot, 14, 0],
-  transition: {
-    duration: LIGHT_MS / 1000,
-    times: [0, 0.2, 0.4, 0.62, 0.84, 1],
-    ease: "easeInOut",
-  },
-};
-
-const REST: TargetAndTransition = { x: "0vh", y: "0vh", rotate: 0 };
-
 /** 烛芯火苗：先冒一小簇，白蜡烛放回后长大 */
-const GROW_KF: TargetAndTransition = {
-  opacity: [0, 1, 1, 1],
-  scale: [0.2, 0.42, 0.42, 1],
-  transition: { duration: 1.7, times: [0, 0.15, 0.62, 1], ease: "easeInOut" },
+const SPARK: TargetAndTransition = {
+  opacity: 1,
+  scale: 0.42,
+  transition: { duration: 0.3, ease: "easeOut" },
 };
+const GROW: TargetAndTransition = {
+  opacity: 1,
+  scale: 1,
+  transition: { duration: 0.9, ease: "easeInOut" },
+};
+
+const SNAP_SPRING = { type: "spring", stiffness: 420, damping: 30 } as const;
 
 interface Props {
   /** 已点亮（room.candle，持久态） */
@@ -68,41 +68,110 @@ interface Props {
 }
 
 export default function CandleLight({ lit, active, onDone }: Props) {
-  /** 借火动画进行中 */
-  const [lighting, setLighting] = useState(false);
-  /** 小羊蜡烛的火苗（凑火到位那一刻点起来） */
-  const [flame, setFlame] = useState(lit);
+  /** 正拖着白蜡烛 */
+  const [dragging, setDragging] = useState(false);
+  /** 松手后白蜡烛正在飞回烛台 */
+  const [returning, setReturning] = useState(false);
+  /** 小羊蜡烛的火苗：凑火到位那一刻点起来；spark = 小簇，grow = 放回后长大 */
+  const [flame, setFlame] = useState<"off" | "spark" | "grow">(lit ? "grow" : "off");
   const timers = useRef<number[]>([]);
-
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };
   useEffect(() => () => timers.current.forEach(window.clearTimeout), []);
 
+  /* 白蜡烛相对烛台的位移 / 倾斜（单位：元素自己坐标系里的 px；长卷像素 × pxPerUnit） */
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rot = useMotionValue(0);
+  const el = useRef<HTMLImageElement>(null);
+  /** 这次拖动的起点、缩放换算（推近时整个房间被放大，指针移 1px 蜡烛只该走 1/scale px） */
+  const grab = useRef<{ px: number; py: number; ox: number; oy: number; k: number; unit: number } | null>(null);
+  const snapped = useRef(false);
+
   // 重新过一晚：熄掉
   useEffect(() => {
     if (!lit) {
-      setLighting(false);
-      setFlame(false);
+      setFlame("off");
+      setDragging(false);
+      setReturning(false);
+      snapped.current = false;
+      x.set(0);
+      y.set(0);
+      rot.set(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lit]);
 
-  const light = () => {
-    if (!active || lit || lighting || flame) return;
-    setLighting(true);
+  const canGrab = active && !lit && flame !== "grow" && !returning;
+
+  const onDown = (e: ReactPointerEvent<HTMLImageElement>) => {
+    if (!canGrab || !el.current) return;
+    e.preventDefault();
+    const rect = el.current.getBoundingClientRect();
+    // 元素自己 1 个长卷像素 = 多少 px；屏幕上看到的又被祖先放大了 k 倍
+    const unit = window.innerHeight / 1800;
+    const k = rect.width / (GROUP.w * unit) || 1;
+    grab.current = { px: e.clientX, py: e.clientY, ox: x.get(), oy: y.get(), k, unit };
+    el.current.setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+
+  const onMove = (e: ReactPointerEvent<HTMLImageElement>) => {
+    const g = grab.current;
+    if (!g) return;
+    // 指针位移换成长卷像素
+    const dx = g.ox / g.unit + (e.clientX - g.px) / (g.k * g.unit);
+    const dy = g.oy / g.unit + (e.clientY - g.py) / (g.k * g.unit);
+    const toPose = Math.hypot(dx - POSE.x, dy - POSE.y);
+
+    if (!snapped.current && toPose < SNAP_R) {
+      // 火苗尖够到烛芯：吸到凑火位，烛芯冒一小簇火
+      snapped.current = true;
+      animate(x, POSE.x * g.unit, SNAP_SPRING);
+      animate(y, POSE.y * g.unit, SNAP_SPRING);
+      animate(rot, POSE.rot, SNAP_SPRING);
+      if (flame === "off") {
+        playLightOn();
+        setFlame("spark");
+      }
+      return;
+    }
+    if (snapped.current) {
+      if (toPose < UNSNAP_R) return;
+      snapped.current = false;
+    }
+    x.set(dx * g.unit);
+    y.set(dy * g.unit);
+    // 拖得越远越倾斜，像手把它举起来凑过去
+    rot.set(Math.min(Math.hypot(dx, dy) / POSE_DIST, 1) * POSE.rot);
+  };
+
+  const onUp = (e: ReactPointerEvent<HTMLImageElement>) => {
+    if (!grab.current) return;
+    grab.current = null;
+    snapped.current = false;
+    el.current?.releasePointerCapture(e.pointerId);
+    setDragging(false);
+    // 松手：白蜡烛飞回烛台；烛芯已经点着的话，火苗跟着长大，这件事就算做完了
+    setReturning(true);
+    const back = { duration: RETURN_MS / 1000, ease: [0.33, 1, 0.68, 1] } as const;
+    animate(x, 0, back);
+    animate(y, 0, back);
+    animate(rot, 0, back);
+    const done = flame !== "off";
     later(() => {
-      playLightOn();
-      setFlame(true); // 凑火到位，烛芯先冒一小簇
-    }, LIGHT_MS * 0.46);
-    later(() => setLighting(false), LIGHT_MS);
-    later(onDone, LIGHT_MS + 700);
+      setReturning(false);
+      if (done) setFlame("grow");
+    }, RETURN_MS);
+    if (done) later(onDone, RETURN_MS + 900);
   };
 
   return (
     <>
       {/* 小羊蜡烛的火苗：画在罐子后面，从罐口探出；先冒一小簇，白蜡烛放回后长大 */}
       <AnimatePresence>
-        {flame && (
+        {flame !== "off" && (
           <motion.div
             key="aroma-flame"
             className="pointer-events-none absolute"
@@ -114,7 +183,7 @@ export default function CandleLight({ lit, active, onDone }: Props) {
               transformOrigin: "50% 92%",
             }}
             initial={lit ? false : { opacity: 0, scale: 0.2 }}
-            animate={lit ? { opacity: 1, scale: 1 } : GROW_KF}
+            animate={lit ? { opacity: 1, scale: 1 } : flame === "spark" ? SPARK : GROW}
           >
             <motion.img
               src={url("candle-flame")}
@@ -142,13 +211,14 @@ export default function CandleLight({ lit, active, onDone }: Props) {
         }}
       />
 
-      {/* 白蜡烛整图：点它借火，被拿起来凑到烛芯旁 */}
+      {/* 白蜡烛整图：拖着它去罐口借火 */}
       <motion.img
+        ref={el}
         src={url("candle-lit")}
         alt=""
         draggable={false}
         className={`absolute max-w-none select-none ${
-          active && !flame && !lighting ? "cursor-pointer" : "pointer-events-none"
+          canGrab ? (dragging ? "cursor-grabbing" : "cursor-grab") : "pointer-events-none"
         }`}
         style={{
           left: vh(GROUP.x),
@@ -157,17 +227,22 @@ export default function CandleLight({ lit, active, onDone }: Props) {
           height: vh(GROUP.h),
           transformOrigin: "50% 50%",
           zIndex: 6,
+          touchAction: "none",
+          x,
+          y,
+          rotate: rot,
         }}
-        initial={false}
-        animate={lighting ? LIGHTING_KF : REST}
-        onClick={light}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
       />
 
-      {/* 借火提示 */}
-      {active && !flame && !lighting && (
+      {/* 借火提示：点在白蜡烛身上，暗示"拿它" */}
+      {canGrab && !dragging && flame === "off" && (
         <div
           className="pointer-events-none absolute"
-          style={{ left: vh(GROUP.x + GROUP.w * 0.55), top: vh(GROUP.y + 125) }}
+          style={{ left: vh(GROUP.x + GROUP.w * 0.5), top: vh(GROUP.y + GROUP.h * 0.55), zIndex: 7 }}
         >
           <HintPing />
         </div>

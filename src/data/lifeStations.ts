@@ -71,8 +71,8 @@ export const lifeStations: LifeStation[] = [
     name: { zh: "床头的蜡烛", en: "The bedside candle" },
     task: { zh: "点亮蜡烛。", en: "Light the candle" },
     howto: {
-      zh: "借白蜡烛的火，点亮小羊蜡烛。",
-      en: "Borrow the white candle's flame to light the sheep candle.",
+      zh: "把白蜡烛拖到小羊蜡烛上，借个火。",
+      en: "Drag the white candle over to light the sheep candle.",
     },
     result: { zh: "一直亮着", en: "Still burning" },
     // 段03 蜡烛角的置物板：白蜡烛 + 小羊香薰蜡烛（舞台 11090,430 起）

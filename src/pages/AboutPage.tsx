@@ -8,6 +8,7 @@ import { config } from "../config";
 import { A, CARD_H, CARD_W, FRAME_PAD, WINDOW, box, noiseBg, type Box } from "../components/about/geom";
 import MarkedText, { decoDelay } from "../components/about/MarkedText";
 import NextPage from "../components/about/NextPage";
+import { whenAboutReady } from "../data/pageAssets";
 
 /**
  * About 页：一台拍立得。
@@ -90,15 +91,14 @@ export default function AboutPage() {
     };
   }, []);
 
-  /* 后面几拍的照片先取回来解码好，出片时不闪 */
+  /* 相机、快门、第一张相纸先解码齐（没预热到最多等 2.5s）再整体露出来；后面几拍的照片随后在后台拉，出片时不闪 */
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    const imgs = aboutShots.map((s) => {
-      const im = new Image();
-      im.src = s.photo;
-      im.decode().catch(() => {});
-      return im;
-    });
-    return () => imgs.forEach((im) => (im.src = ""));
+    let alive = true;
+    void whenAboutReady().then(() => alive && setShown(true));
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const s = Math.min(vp.w / FW, vp.h / FH);
@@ -125,8 +125,9 @@ export default function AboutPage() {
     });
   };
 
-  /* 进页面先自己拍一张：第一张是这页的开场，看完才提示可以按。站点开屏还在的话等它结束再拍 */
+  /* 画面露出后先自己拍一张：第一张是这页的开场，看完才提示可以按。站点开屏还在的话等它结束再拍 */
   useEffect(() => {
+    if (!shown) return;
     let t = 0;
     const shoot = () => {
       t = window.setTimeout(() => {
@@ -143,7 +144,7 @@ export default function AboutPage() {
       window.removeEventListener(INTRO_DISMISSED_EVENT, shoot);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [shown]);
 
   const press = () => {
     if (!canPress) return;
@@ -221,6 +222,13 @@ export default function AboutPage() {
       className="relative h-screen overflow-hidden select-none"
       style={{ backgroundColor: BG, ...noiseBg("cream", s) }}
     >
+      {/* 相机那几张图到齐再一起露出来 */}
+      <motion.div
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: shown ? 1 : 0 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+      >
       <div
         className="absolute"
         style={{
@@ -375,6 +383,7 @@ export default function AboutPage() {
           </motion.span>
         </AnimatePresence>
       </div>
+      </motion.div>
 
       {/* 最后一张出完：屏幕底部正中「( scroll )」+ 一支往下点的手绘小箭头（贴屏幕底边，不跟稿走） */}
       <AnimatePresence>

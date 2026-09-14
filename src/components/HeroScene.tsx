@@ -30,7 +30,8 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { loadImage, warmLifeFirst } from "./life/preload";
+import { loadImage, loadImages, warmLifeFirst } from "./life/preload";
+import { warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 
@@ -205,6 +206,13 @@ const BIRD_STAND = { src: "/assets/hero-bird-stand.png", w: 119, h: 91 };
 
 /** 小鸟容器（画板像素），所有姿态在容器内底部居中对齐 */
 const BIRD_BOX = { w: 120, h: 97 };
+
+/** 开门动画那三张：不在开机必等清单里，幕布飞走后 / 悬停大门时提前拉好 */
+const DOOR_OPEN_ASSETS = [
+  SPRITES.doorOpen.back.src,
+  SPRITES.doorOpen.left.src,
+  SPRITES.doorOpen.right.src,
+];
 
 /** 首页第一屏要先下好的图（开场加载页拿这份清单等它们全部解码完，滑开时首页已经是完整的） */
 export const HERO_PRELOAD: string[] = [
@@ -408,7 +416,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 幕布拉开后：先把小羊的待机动画换上（850KB，让它独占带宽），换完再顺手把 Life 页第一屏的图拉进缓存（3.5MB，只拉第一屏） */
+  /* 幕布拉开后：先把小羊的待机动画换上（850KB，让它独占带宽），换完先把开门那三张图拉好（点门时门框、门板得同时到，
+     不然冷缓存下门板先滑、门框后到，底图里关着的门会露出来），再顺手把 Life 页第一屏的图拉进缓存（3.5MB，只拉第一屏） */
   const [sheepAnim, setSheepAnim] = useState(false);
   useEffect(() => {
     if (curtainUp) return;
@@ -416,7 +425,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     loadImage(SPRITES.sheep.anim).then(() => {
       if (!alive) return;
       setSheepAnim(true);
-      warmLifeFirst(1500);
+      void loadImages(DOOR_OPEN_ASSETS);
+      // Life 第一屏拉完，再静默把 Contact / About 的图拉进缓存（共 1.4MB），从首页进这两页就不用等
+      warmLifeFirst(1500, () => warmPages(1000));
     });
     return () => {
       alive = false;
@@ -688,6 +699,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       return;
     }
 
+    // 万一开门图还没到（没预热成功），最多等 600ms 让门框和门板一起出现，别让门板先滑、露出底图的闭门
+    await Promise.race([loadImages(DOOR_OPEN_ASSETS), sleep(600)]);
     setEntering(true);
     setHovered(null);
     // 收回热区上的焦点，避免浏览器在缩放时自动滚动容器去追焦点元素
@@ -713,6 +726,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     /* 开门过场中、开场蓝布还盖着时都不响应（布是 pointer-events-none，鼠标能穿到底下的热区） */
     if (enteringRef.current || curtainUpRef.current) return;
     setHovered(id);
+    // 碰到大门就把开门图兜底拉一次（已经在缓存里的话是空操作）
+    if (id === "life") void loadImages(DOOR_OPEN_ASSETS);
     // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
     if (id === "about" || id === "life") playLightOn();
     else if (id === "contact") playMailboxOpen();

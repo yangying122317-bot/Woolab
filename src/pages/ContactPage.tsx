@@ -13,6 +13,7 @@ import { contactEmail, socialLinks } from "../data/contact";
 import { useLanguage } from "../i18n/LanguageContext";
 import { PHONE, playPhonePickup, preloadPhoneHello } from "../audio/sfx";
 import { noiseBg, type Box } from "../components/about/geom";
+import { whenContactReady } from "../data/pageAssets";
 
 /**
  * Contact 页：一封摊开的信。
@@ -206,13 +207,24 @@ export default function ContactPage() {
     }
   });
 
-  /* 进场：弹簧放下来；顺手把电话里那句 hello 的录音先解码好 */
+  /* 信封那几张图先解码齐（没预热到最多等 2.5s）再整体淡入，别一片一片冒出来 */
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void whenContactReady().then(() => alive && setShown(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /* 进场：画面露出后弹簧把电话放下来；顺手把电话里那句 hello 的录音先解码好 */
   useEffect(() => {
     preloadPhoneHello();
+    if (!shown) return;
     const c = animate(y, 0, { type: "spring", stiffness: 100, damping: 13, mass: 1.1, delay: HANG_DROP_DELAY });
     return () => c.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [shown]);
 
   const copyEmail = async () => {
     try {
@@ -281,6 +293,13 @@ export default function ContactPage() {
       className="relative h-screen overflow-hidden select-none"
       style={{ backgroundColor: BG, ...noiseBg("cream", s) }}
     >
+      {/* 整个画面等信封的图到齐再一起露出来 */}
+      <motion.div
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: shown ? 1 : 0 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+      >
       <div
         className="absolute"
         style={{ left: ox, top: oy, width: FW, height: FH, transform: `scale(${s})`, transformOrigin: "0 0" }}
@@ -496,6 +515,7 @@ export default function ContactPage() {
           </AnimatePresence>
         </div>
       </div>
+      </motion.div>
     </div>
   );
 }

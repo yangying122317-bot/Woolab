@@ -15,6 +15,7 @@ import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
 import { warmLife } from "./life/preload";
+import { warmAbout, warmContact } from "../data/pageAssets";
 import { playMenuDrop } from "../audio/sfx";
 
 /* ---------------- 设计稿坐标（720 × 450 的 0.5x 稿，下面全按 s 倍放） ---------------- */
@@ -549,7 +550,12 @@ function Tag({
           aria-label={tag.title}
           className="pointer-events-auto absolute cursor-pointer"
           style={box(tag.body)}
-          onPointerEnter={() => onHover(true)}
+          onPointerEnter={() => {
+            onHover(true);
+            // 碰到哪块牌子就把那页的图先拉好，点进去不用等
+            if (tag.id === "contact") void warmContact();
+            else if (tag.id === "about") void warmAbout();
+          }}
           onPointerLeave={() => onHover(false)}
           onClick={onPick}
           disabled={phase !== "in"}

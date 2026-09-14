@@ -9,6 +9,7 @@ import {
   useTransform,
 } from "framer-motion";
 import Checklist from "../components/life/Checklist";
+import HandHint from "../components/life/HandHint";
 import PaperTag, { PAPER_TAG } from "../components/life/PaperTag";
 import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import { useIdle } from "../components/life/useIdle";
@@ -32,8 +33,8 @@ const photoStation = lifeStations.find((s) => s.id === "photo")!;
 type ListReason = "guide" | "stamp" | "user" | "done";
 /** 做完一件后抽屉停多久自己收（划线 0.4s + 盖章 0.95s 之后还留一秒多） */
 const STAMP_STAY = 2800;
-/** 引导那次停多久 */
-const GUIDE_STAY = 2500;
+/** 抽屉收回后，指着墙上那张清单的箭头提示停多久 */
+const LIST_HINT_STAY = 5000;
 
 /**
  * 小羊的生活：横向滚动的房间剖面（交互原型骨架）。
@@ -123,7 +124,7 @@ export default function LifePage() {
   /* ---------------- 清单 ---------------- */
   /**
    * 抽屉只有一个开关 showList / hideList，谁要弹都从这儿走，按"谁推出来的"分四种：
-   *   guide  第一次进门（一件都没做过）自动推出来看几秒——不锁滚，人一滚就收
+   *   guide  第一次进门（一件都没做过）自动推出来——不自己收、不锁滚，人有动作（点外面 / Esc / 滚动）才收
    *   stamp  刚做完一件，推出来划线盖章，几秒后自己收——鼠标放上去就等着，移开再倒数
    *   user   自己点开的（墙上那张 / 左边缘一角）——锁滚，点空处 / Esc 收
    *   done   四件全做完那次——不自动收，底下浮出"带我过去"
@@ -163,12 +164,11 @@ export default function LifePage() {
   };
   /** 鼠标进了抽屉：自动收的先别倒数 */
   const onListEnter = () => {
-    if (list.reason === "stamp" || list.reason === "guide") stopCollapse();
+    if (list.reason === "stamp") stopCollapse();
   };
   /** 鼠标离开抽屉：接着倒数，至少再留一秒多 */
   const onListLeave = () => {
-    if (list.open && (list.reason === "stamp" || list.reason === "guide"))
-      startCollapse(Math.max(collapseLeft.current, 1200));
+    if (list.open && list.reason === "stamp") startCollapse(Math.max(collapseLeft.current, 1200));
   };
   /** 在抽屉里点了什么：这就是人家要看的东西了，不再自动收，按自己点开的算 */
   const onListInteract = () => {
@@ -228,7 +228,7 @@ export default function LifePage() {
     if (guideHint.current) {
       guideHint.current = false;
       setEntryHint(true);
-      hintTimer.current = window.setTimeout(() => setEntryHint(false), 2600);
+      hintTimer.current = window.setTimeout(() => setEntryHint(false), LIST_HINT_STAY);
     }
   };
 
@@ -278,14 +278,27 @@ export default function LifePage() {
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;
     if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
-    if (Math.abs(v) > 8) guideDone.current = true;
+    if (Math.abs(v) > 8) {
+      guideDone.current = true;
+      setScrolled(true);
+    }
   });
+  /** 人已经滚过房间：右下角"往右走"的提示就不用再出了 */
+  const [scrolled, setScrolled] = useState(false);
+  /** 揭开后稍等一下再出"往右走"，别和白光散开挤在同一秒 */
+  const [scrollCueReady, setScrollCueReady] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const t = window.setTimeout(() => setScrollCueReady(true), 1200);
+    return () => window.clearTimeout(t);
+  }, [ready]);
 
   /* ---------------- 引导 ---------------- */
   /**
    * 引导只看进度，不另记标记：
-   *  - 一件都没做过：房间揭开后，人停下来 1.5s 没动，清单抽屉从左边推出来让人看几秒（四件小事）→
-   *    自己收回去、墙上那张荡两下 → 一支手绘箭头指着它"今晚的清单住在这儿"。
+   *  - 一件都没做过：房间揭开后，人停下来 1.5s 没动，清单抽屉从左边推出来让人看（四件小事），不自己收，
+   *    人一有动作（点外面 / Esc / 滚动）才收 → 墙上那张荡两下 → 一支手绘箭头指着它"今晚的清单住在这儿"→
+   *    再出一个"往右滑"的提示，人一滚就没。
    *    每次进来都这样；但揭开后人已经自己滚了 / 点了站点，说明会玩了，这次就不弹。
    *  - 做过任何一件（没做完）：不弹抽屉，只让墙上那张晃两下 + 箭头，提醒清单在这儿。
    *  - 全做完：什么都不提醒。
@@ -298,7 +311,7 @@ export default function LifePage() {
     if (!guideIdle || guideDone.current) return;
     guideDone.current = true;
     guideHint.current = true;
-    showList("guide", GUIDE_STAY);
+    showList("guide");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guideIdle]);
   useEffect(() => {
@@ -306,7 +319,7 @@ export default function LifePage() {
     const t = window.setTimeout(() => {
       setListKick((n) => n + 1);
       setEntryHint(true);
-      hintTimer.current = window.setTimeout(() => setEntryHint(false), 2600);
+      hintTimer.current = window.setTimeout(() => setEntryHint(false), LIST_HINT_STAY);
     }, 900);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -516,6 +529,19 @@ export default function LifePage() {
             style={{ scaleX: scrollYProgress, transformOrigin: "0 50%" }}
           />
         </div>
+
+        {/* 往右走：还没滚过房间时，右下角一支箭头指向右边 + 纸签；人一滚就没，之后不再出 */}
+        <HandHint
+          show={scrollCueReady && !scrolled && !checklistOpen && !focus && !labEntry}
+          text={t("life.guide.scroll")}
+          rotate={90}
+          arrowH="8vh"
+          fontSize="2.8vh"
+          bold
+          tag
+          textSide="left"
+          style={{ right: "4vh", bottom: "17vh", zIndex: 20 }}
+        />
 
         {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口 */}
         <AnimatePresence>

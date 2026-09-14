@@ -70,11 +70,15 @@ export function warmLife(delayMs = 2500): void {
   }, delayMs);
 }
 
-/** 只热第一屏（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满 */
-export function warmLifeFirst(delayMs = 2500): void {
-  if (first) return;
+/** 只热第一屏（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满。then：第一屏拉完后接着做的事 */
+export function warmLifeFirst(delayMs = 2500, then?: () => void): void {
+  if (first) {
+    if (then) void first.then(then);
+    return;
+  }
   window.setTimeout(() => {
-    void preloadLifeFirst();
+    const p = preloadLifeFirst();
+    if (then) void p.then(then);
   }, delayMs);
 }
 
