@@ -79,6 +79,8 @@ const TV_TEXT = { size: 12, color: "#5E5B58" };
 const SNOW = { w: 120, h: 66, alpha: 0.34 };
 /** 关机收尾：先压成一条亮线，再从两边缩没 */
 const SHUTOFF_T = 0.34;
+/** 电视两边那根手写签名线：先收起来（看着有点怪），加载进度只留屏幕里的雪花 + 那句话；想要回来改成 true */
+const SHOW_SIGN = false;
 /**
  * 手写签名线：稿里是一根 1.5 描边的矢量，带一个斜切变换（写字的倾斜）。
  * 路径已按书写顺序接成一笔（左端从画板外进来 → 中间 → 右端出画板外），
@@ -286,6 +288,7 @@ export default function HeroCurtain({
           height: BOARD_H * u,
         }}
       >
+        {SHOW_SIGN && (
         <svg
           className="absolute inset-0 overflow-visible"
           width={BOARD_W * u}
@@ -315,6 +318,7 @@ export default function HeroCurtain({
             />
           </g>
         </svg>
+        )}
 
         <img
           src={TV.src}

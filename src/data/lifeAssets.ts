@@ -8,9 +8,10 @@
  *   python3 scripts/gen-life-assets.py
  */
 
-/** 第一屏：111 个文件 */
+/** 第一屏：112 个文件 */
 export const lifeFirstAssets: readonly string[] = [
   "/assets/life/room-bg-tile.webp",
+  "/assets/life/room-floor-tile.webp",
   "/assets/life/seg01/bird.webp",
   "/assets/life/seg01/cabinet-door-l.webp",
   "/assets/life/seg01/cabinet-door-r.webp",

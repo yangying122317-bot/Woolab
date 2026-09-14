@@ -19,7 +19,7 @@ def files(sub, skip=()):
     return out
 
 
-first = ["/assets/life/room-bg-tile.webp"] + files("seg01", skip=("dress-anim",)) + files("list")
+first = ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"] + files("seg01", skip=("dress-anim",)) + files("list")
 rest = files("seg02", skip=("paint-anim",)) + files("seg03")
 
 

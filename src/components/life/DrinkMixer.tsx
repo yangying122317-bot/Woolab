@@ -10,6 +10,7 @@ import {
   playMailboxOpen,
   playPour,
 } from "../../audio/sfx";
+import { PAPER_TAG } from "./PaperTag";
 
 /**
  * 白圆桌调酒互动（drink 任务）：
@@ -725,7 +726,8 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
           {active && !done && stepHint && (
             <motion.span
               key={`hint-${step}`}
-              className="font-hand block whitespace-nowrap rounded-full bg-white/90 px-4 py-1 text-base text-neutral-700 shadow"
+              className="font-hand block whitespace-nowrap text-neutral-900"
+              style={{ ...PAPER_TAG, fontSize: "1.6vh", lineHeight: 1.25, padding: "0.5vh 1.2vh 0.65vh" }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}

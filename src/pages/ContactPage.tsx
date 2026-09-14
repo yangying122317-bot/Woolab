@@ -157,7 +157,20 @@ export default function ContactPage() {
 
   const copyEmail = async () => {
     try {
-      await navigator.clipboard.writeText(contactEmail);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(contactEmail);
+      } else {
+        /* 非 https 环境没有 clipboard API：退回选中一段隐藏文字再 execCommand */
+        const ta = document.createElement("textarea");
+        ta.value = contactEmail;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
       setCopied(true);
       at(1400, () => setCopied(false));
     } catch {
@@ -339,9 +352,10 @@ export default function ContactPage() {
           transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
         />
 
-        {/* 电话线 + 听筒：线顶钉在视口顶边，整组绕它摆；线只竖向拉长，粗细不变 */}
+        {/* 电话线 + 听筒：线顶钉在视口顶边，整组绕它摆；线只竖向拉长，粗细不变。
+            这层和整封信一样宽、叠在信上面，自己不能接鼠标，不然邮箱那行点不到（只有听筒接） */}
         <motion.div
-          className="absolute"
+          className="pointer-events-none absolute"
           style={{
             left: hangX,
             top: hangTop,
@@ -384,7 +398,7 @@ export default function ContactPage() {
               onClick={pickUp}
               onMouseEnter={touch}
               animate={handset}
-              className={`absolute inset-0 block border-0 bg-transparent p-0 ${hung && call === "idle" ? "cursor-pointer" : "cursor-default"}`}
+              className={`pointer-events-auto absolute inset-0 block border-0 bg-transparent p-0 ${hung && call === "idle" ? "cursor-pointer" : "cursor-default"}`}
               style={{ transformOrigin: "50% 4%" }}
             >
               <img src={`${C}/handset.webp`} alt="" draggable={false} className="block h-full w-full max-w-none" />

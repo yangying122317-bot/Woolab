@@ -15,6 +15,7 @@ import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
 import { warmLife } from "./life/preload";
+import { playMenuDrop } from "../audio/sfx";
 
 /* ---------------- 设计稿坐标（720 × 450 的 0.5x 稿，下面全按 s 倍放） ---------------- */
 
@@ -243,8 +244,14 @@ export default function MenuOverlay({
   const s = Math.min(vp.w / FRAME_W, vp.h / FRAME_H);
   const ox = (vp.w - FRAME_W * s) / 2;
 
-  /* 打开：布盖下来，略微欠阻尼，落地轻轻一顿 */
+  /* 打开：布盖下来，略微欠阻尼，落地轻轻一顿；吊牌落下来的声音跟着起 */
+  const dropPlayed = useRef(false);
   useEffect(() => {
+    /* 开发模式 StrictMode 会把挂载 effect 跑两遍，声音只响一次 */
+    if (!dropPlayed.current) {
+      dropPlayed.current = true;
+      playMenuDrop();
+    }
     const c = animate(dropY, 0, { type: "spring", stiffness: 62, damping: 15, mass: 1 });
     return () => c.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps

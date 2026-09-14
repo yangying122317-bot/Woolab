@@ -14,6 +14,8 @@
  * 两个中文字体都是子集：只含 src/i18n/dict.ts、src/data/*.ts 等文案里出现过的汉字 + 全量 ASCII + 常用标点
  * （提取时已去掉代码注释）。新增文案后如果有字回退到系统黑体，需要重新生成子集：
  *   pyftsubset 源字体.ttf --text-file=用到的字.txt --flavor=woff2 --layout-features='*'
+ * 源字体：喜脉喜欢体在 ~/Desktop/工作/字体/字制区喜脉喜欢体.ttf；Noto Sans SC 可变字体从
+ * github.com/notofonts/noto-cjk（Sans/Variable/TTF/Subset/NotoSansSC-VF.ttf）下载。
  * 喜脉喜欢体原文件把基线放在字的中间（字形整体压在基线下方），子集时把所有字形抬高了 0.31em
  * （630/2048；抬到 0.43em 时中文字面比拉丁字高约 0.12em，在圆角标签里看着偏上）、
  * 并把 ascent/descent 改成 1em / 0.25em，这样才能和 Nothing You Could Do 排在同一条线上。
@@ -27,7 +29,7 @@
 /** 喜脉喜欢体的字形只占 em 的八成、笔画又细，放大 130% 才和 Nothing You Could Do 同样大小 */
 @font-face {
   font-family: "HandZh";
-  src: url("/assets/fonts/hand-zh.woff2") format("woff2");
+  src: url("/assets/fonts/hand-zh.woff2?v=20260914") format("woff2");
   size-adjust: 130%;
   font-display: swap;
 }
@@ -43,7 +45,7 @@
 /** Noto Sans SC（可变字重 100–900） */
 @font-face {
   font-family: "SansZh";
-  src: url("/assets/fonts/sans-zh.woff2") format("woff2");
+  src: url("/assets/fonts/sans-zh.woff2?v=20260914") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }

@@ -1,5 +1,7 @@
 /**
- * 轻量音效模块：基本都用 Web Audio 现场合成；只有背景环境音和电话里那句「hello?」是音频文件。
+ * 轻量音效模块：一部分用 Web Audio 现场合成（开灯、切柠檬、倒水、快门这类），
+ * 一部分是真录音（顶栏点击、目录吊牌、小羊打招呼、清单抽屉 / 划线 / 盖章、任务完成，见 SAMPLES），
+ * 背景环境音（首页白天 / 夜晚、Life 屋里）是循环播放的音频文件。
  * - 浏览器要求用户先有点击/按键等手势才允许出声，
  *   模块会在第一次手势时自动解锁；解锁前的音效静默跳过。
  * - 静音状态存在 localStorage，全站共享。
@@ -77,9 +79,14 @@ function ready(): boolean {
  * 在这里加一条，再在场景组件里 startAmbient("night") 即可。
  */
 const AMBIENTS = {
+  /** 首页白天：自然环境（「白天自然」30s 起截 2 分钟做成无缝循环，这段有鸟叫） */
   day: { src: "/assets/audio/ambient-day.m4a", volume: 0.9 },
-  /** 夜晚暂时还是白天那条，只是压低；有了虫鸣/夜风的素材换 src 即可 */
-  night: { src: "/assets/audio/ambient-day.m4a", volume: 0.45 },
+  /** 首页清晨 / 傍晚：同一条「白天自然」里 355s 起那段安静的，没有鸟叫 */
+  calm: { src: "/assets/audio/ambient-calm.m4a", volume: 0.9 },
+  /** 首页夜晚：蝉鸣 */
+  night: { src: "/assets/audio/ambient-night.m4a", volume: 0.6 },
+  /** Life 页：屋里的背景音（素材本身就是循环） */
+  life: { src: "/assets/audio/ambient-life.m4a", volume: 0.7 },
 } as const;
 
 export type AmbientId = keyof typeof AMBIENTS;
@@ -410,6 +417,109 @@ export function playPhotoDrop() {
   click(0.3);
   tone("sine", 210, 130, 0.07, 0.12, 0.004);
   noise(0.45, "bandpass", 900, 380, 0.8, (p) => Math.sin(p * Math.PI) ** 1.4, 0.13, 0.05);
+}
+
+/* ------------------------------------------------------------------ */
+/* 录音素材做的音效                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 一批真录音的短音效（public/assets/audio/*.mp3，都从原素材里截好、归一过音量）。
+ * 走 Web Audio 的 buffer 播放、接在同一个 master 上，喇叭静音 / 总音量对它们一样管用。
+ * 第一次要播时才去拉文件；拉到之前这一下就跳过，之后都在内存里。
+ */
+const SAMPLES = {
+  /** 顶栏 MENU / CN·EN / 喇叭 */
+  navClick: { src: "/assets/audio/nav-click.mp3", gain: 0.6 },
+  /** 目录打开、蓝布连吊牌盖下来 */
+  menuDrop: { src: "/assets/audio/menu-drop.mp3", gain: 0.9 },
+  /** 首页点小羊 */
+  hello: { src: "/assets/audio/hello.mp3", gain: 1 },
+  /** Life 清单抽屉推出 / 收回 */
+  drawerOpen: { src: "/assets/audio/drawer-open.mp3", gain: 0.8 },
+  drawerClose: { src: "/assets/audio/drawer-close.mp3", gain: 0.8 },
+  /** Life 每件互动做完那一刻 */
+  taskDone: { src: "/assets/audio/task-done.mp3", gain: 1 },
+  /** 清单上划掉那一笔、盖章 */
+  strike: { src: "/assets/audio/strike.mp3", gain: 0.9 },
+  stamp: { src: "/assets/audio/stamp.mp3", gain: 0.9 },
+} as const;
+type SampleId = keyof typeof SAMPLES;
+
+const sampleBufs = new Map<SampleId, AudioBuffer>();
+const sampleLoading = new Map<SampleId, Promise<void>>();
+
+function loadSample(id: SampleId): Promise<void> {
+  const hit = sampleLoading.get(id);
+  if (hit) return hit;
+  ensureContext();
+  const c = ctx;
+  if (!c) return Promise.resolve();
+  const p = fetch(SAMPLES[id].src)
+    .then((r) => r.arrayBuffer())
+    .then((b) => c.decodeAudioData(b))
+    .then((buf) => {
+      sampleBufs.set(id, buf);
+    })
+    .catch(() => {
+      sampleLoading.delete(id);
+    });
+  sampleLoading.set(id, p);
+  return p;
+}
+
+/** 提前把一批录音拉好（页面挂上来时调；不调也行，第一次播会自己去拉） */
+export function preloadSamples(ids: readonly SampleId[]) {
+  ids.forEach((id) => void loadSample(id));
+}
+/* 全部加起来才 100KB 左右：一进站就在后台拉好，第一下点击就有声 */
+if (typeof window !== "undefined") {
+  window.setTimeout(() => preloadSamples(Object.keys(SAMPLES) as SampleId[]), 1500);
+}
+
+/** 播一段录音；还没拉到就先去拉、这一下不响 */
+function sample(id: SampleId, startAt = 0, gainMul = 1) {
+  if (!ready() || !ctx || !master) return;
+  const buf = sampleBufs.get(id);
+  if (!buf) {
+    void loadSample(id);
+    return;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  g.gain.value = SAMPLES[id].gain * gainMul;
+  src.connect(g).connect(master);
+  src.start(ctx.currentTime + startAt);
+}
+
+/** 顶栏上点了什么（MENU / 切语言 / 喇叭） */
+export function playNavClick() {
+  sample("navClick");
+}
+/** 目录打开：蓝布连吊牌盖下来 */
+export function playMenuDrop() {
+  sample("menuDrop");
+}
+/** 首页点小羊：它跟你打招呼 */
+export function playHello() {
+  sample("hello");
+}
+/** Life 清单抽屉推出 / 收回 */
+export function playDrawer(open: boolean) {
+  sample(open ? "drawerOpen" : "drawerClose");
+}
+/** Life 某件互动做完了 */
+export function playTaskDone() {
+  sample("taskDone");
+}
+/** 清单上划掉那一笔（startAt 秒后响，和划线动画对时） */
+export function playStrike(startAt = 0) {
+  sample("strike", startAt);
+}
+/** 盖章"啪" */
+export function playStamp(startAt = 0) {
+  sample("stamp", startAt);
 }
 
 /* ------------------------------------------------------------------ */

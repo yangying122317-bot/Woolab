@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   playDoorSlide,
+  playHello,
   playLightOff,
   playLightOn,
   playMailboxClose,
@@ -335,10 +336,11 @@ const LEAF_IMGS = [
 ] as const;
 
 export default function HeroScene() {
-  // 场景环境背景音（白天/夜晚两条），离开首页时淡出
+  // 场景环境背景音，离开首页时淡出：
+  // 白天 = 自然环境（有鸟叫）；清晨 / 傍晚 = 同一条里没鸟叫的安静段；夜里 = 蝉鸣
   const { phase } = useTimeOfDay();
   useEffect(() => {
-    startAmbient(phase === "night" ? "night" : "day");
+    startAmbient(phase === "day" ? "day" : phase === "night" ? "night" : "calm");
   }, [phase]);
   useEffect(() => () => stopAmbient(), []);
 
@@ -693,8 +695,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const activateHotspot = (id: string, path: string) => {
     if (enteringRef.current || curtainUpRef.current) return;
     if (id === "sheep") {
+      /* 点小羊：它跟你打个招呼；身份卡开着的话再弹卡 */
+      playHello();
       if (!config.identityCardEnabled) return;
-      playMailboxOpen();
       setCardOpen(true);
       return;
     }
@@ -1096,11 +1099,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             role="link"
             tabIndex={0}
             aria-label={t(h.labelKey)}
-            className={`group absolute z-20 outline-none ${
-              h.id === "sheep" && !config.identityCardEnabled
-                ? "cursor-default"
-                : "cursor-pointer"
-            } ${entering || curtainUp ? "pointer-events-none" : ""}`}
+            className={`group absolute z-20 cursor-pointer outline-none ${entering || curtainUp ? "pointer-events-none" : ""}`}
             style={{
               left: `${h.left}%`,
               top: `${h.top}%`,

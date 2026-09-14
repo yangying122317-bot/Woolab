@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLanguage } from "../i18n/LanguageContext";
-import { isMuted, onMutedChange, setMuted } from "../audio/sfx";
+import { isMuted, onMutedChange, playNavClick, setMuted } from "../audio/sfx";
 
 /**
  * 顶栏本体：左 logo，右 MENU / CN · EN / 喇叭。
@@ -101,6 +101,7 @@ function NavHit({
       onClickCapture={() => {
         next();
         setFlash((f) => f + 1);
+        playNavClick();
       }}
       onPointerEnter={() => {
         next();
@@ -237,7 +238,11 @@ export default function NavBar({
 
         <button
           type="button"
-          onClick={() => setMuted(!muted)}
+          onClick={() => {
+            /* 先切状态再响：静音→开声时这一下就能听见，开声→静音时自然是安静的 */
+            setMuted(!muted);
+            playNavClick();
+          }}
           aria-label={muted ? t("menu.sound.on") : t("menu.sound.off")}
           title={muted ? t("menu.sound.on") : t("menu.sound.off")}
           className="relative flex cursor-pointer items-center justify-center transition-opacity"

@@ -268,6 +268,38 @@ function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
 }
 
 /**
+ * 窗外斜进来的光：几条宽窄、明暗、软硬都不一样的亮带（窗光本来就不规整），125° 斜着横贯整屏，screen 混合——落在石墙上是把石纹照亮，
+ * 不是盖一层白（soft-light 在这么深的底上几乎看不出来）。整层用 blur 把边缘揉软，再极慢地左右挪一点（像云飘过太阳）。压在所有内容之上，画框和字也被照到。
+ * 亮带位置按屏宽写（vw），窄屏 / 宽屏都是同一副构图。
+ */
+const BEAMS =
+  "linear-gradient(125deg," +
+  /* 1：最亮的一条，边也最硬——离窗最近的那道 */
+  " transparent 0vw, transparent 9vw, rgba(255,244,222,0.36) 12vw, rgba(255,244,222,0.36) 17vw, transparent 21vw," +
+  /* 2：很淡很散的一条，只是一点余光 */
+  " transparent 34vw, rgba(255,244,222,0.09) 42vw, rgba(255,244,222,0.09) 46vw, transparent 55vw," +
+  /* 画框附近不放光，主角那块留干净 */
+  /* 4：一条细线，亮一点，像窗框分出来的 */
+  " transparent 80vw, rgba(255,244,222,0.28) 82vw, rgba(255,244,222,0.28) 83.5vw, transparent 86vw," +
+  /* 5：最边上一条宽而暗的 */
+  " transparent 98vw, rgba(255,244,222,0.12) 104vw, rgba(255,244,222,0.12) 110vw, transparent 116vw)";
+
+function LightBeams({ animate = true }: { animate?: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" style={{ mixBlendMode: "screen" }}>
+      <motion.div
+        className="absolute inset-0"
+        animate={animate ? { x: ["-2vw", "2vw", "-2vw"] } : undefined}
+        transition={{ duration: 70, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {/* 贯穿整屏的几条；四边各多出一截，blur 和位移时边上不露底 */}
+        <div className="absolute" style={{ inset: "-20%", background: BEAMS, filter: "blur(28px)" }} />
+      </motion.div>
+    </div>
+  );
+}
+
+/**
  * 详情页第一屏的"空墙"：石纹 + 水印，和 DetailPage 刚打开时（滚动为 0）的背景逐像素一样。
  * 画廊里点画框翻面、放大那一段，框形遮罩里露的就是这块；放大到满屏后换成真正的 DetailPage，接缝看不出来。
  */
@@ -283,6 +315,7 @@ export function DetailBackdrop() {
     <div className="relative h-full w-full overflow-hidden">
       <StoneWall u={u} />
       <Watermark u={u} cy={vh / 2} />
+      <LightBeams />
     </div>
   );
 }
@@ -1540,6 +1573,8 @@ export function DetailPage({
     /* data-lenis-prevent：整页盖在画廊上面，滚轮别再传给外面 window 那份丝滑滚动 */
     <div className="relative h-full w-full overflow-hidden text-white" data-lenis-prevent="">
       <StoneWall u={u} />
+      {/* 窗光：压在内容之上（z-20），顶栏那层（z-30）不受影响 */}
+      <LightBeams />
       {/* 返回按钮钉在角上、两边标签钉在竖直正中，其余都跟着页面滚。
           刚从画廊翻进来时别一下全在：标题先浮出来，这两样跟在后面淡进来（翻转卡片里那份不动） */}
       <motion.div

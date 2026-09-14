@@ -9,18 +9,17 @@ import {
   useTransform,
 } from "framer-motion";
 import Checklist from "../components/life/Checklist";
-import HandHint from "../components/life/HandHint";
+import PaperTag, { PAPER_TAG } from "../components/life/PaperTag";
 import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import { useIdle } from "../components/life/useIdle";
-import StationFocus from "../components/life/StationFocus";
-import { LAB_DOOR, ROOM_TOTAL_VH, lifeStations, type StationId } from "../data/lifeStations";
+import { LAB_DOOR, ROOM_TILE_W_VH, ROOM_TOTAL_VH, lifeStations, type StationId } from "../data/lifeStations";
 import type { LifeStation } from "../data/lifeStations";
 import { useLenis } from "lenis/react";
-import { useReportPlainLogo } from "../state/chrome";
+import { useReportPlainLogo, useReportPlainNav } from "../state/chrome";
 import { seg01Layers } from "../data/seg01Layers";
-import { DEFAULT_ROOM, isAllDone, isListDone, isStationDone, loadRoomState, saveRoomState } from "../state/roomState";
+import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } from "../state/roomState";
 import type { DrinkChoice, RoomState } from "../state/roomState";
-import { playNavigate } from "../audio/sfx";
+import { playDrawer, playNavigate, playTaskDone, startAmbient, stopAmbient } from "../audio/sfx";
 import { useLanguage } from "../i18n/LanguageContext";
 import { preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
 
@@ -34,13 +33,13 @@ type ListReason = "guide" | "stamp" | "user" | "done";
 /** 做完一件后抽屉停多久自己收（划线 0.4s + 盖章 0.95s 之后还留一秒多） */
 const STAMP_STAY = 2800;
 /** 引导那次停多久 */
-const GUIDE_STAY = 3600;
+const GUIDE_STAY = 2500;
 
 /**
  * 小羊的生活：横向滚动的房间剖面（交互原型骨架）。
  *
  * 三种页面状态：
- * - 漫游：纵向滚动驱动长卷横移，站点呼吸提示；
+ * - 漫游：纵向滚动驱动长卷横移，没做的站点滚进画面就有小箭头指着；
  * - 专注：点击站点 → 镜头推近 + 锁滚动 → 占位互动 → 完成后拉回并盖章；
  * - 入夜：四件小事集齐 → 夜色淡入 + 一句话 + 尽头 LAB 门亮起。
  *
@@ -52,17 +51,28 @@ export default function LifePage() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
 
-  // 长卷宽度按素材比例用 vh 定义，横移距离 =长卷实宽 - 视口宽，
-  // 需要换算成像素（随窗口尺寸变化更新）
+  // 横移距离 = 长卷实宽 - 视口宽。两个都直接量 DOM（不用 innerHeight × 7.33 去算）：
+  // 算出来的和浏览器真实铺出来的差几像素，长卷就会多移一点，尽头的沙发右边露一条底。
+  // 用 ResizeObserver 盯着舞台而不是听 window resize：进页面后原生滚动条被藏掉（见下面那个 effect），
+  // 有常显滚动条的机器上舞台会宽出一条滚动条，这个变化 resize 事件不报，只有 ResizeObserver 知道。
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const [maxShift, setMaxShift] = useState(0);
   useEffect(() => {
     const update = () => {
-      const stripW = (ROOM_TOTAL_VH / 100) * window.innerHeight;
-      setMaxShift(Math.max(0, stripW - window.innerWidth));
+      const stripW = stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
+      const viewW = stageRef.current?.clientWidth ?? document.documentElement.clientWidth;
+      setMaxShift(Math.max(0, Math.floor(stripW - viewW)));
     };
     update();
+    const ro = new ResizeObserver(update);
+    if (stageRef.current) ro.observe(stageRef.current);
+    if (stripRef.current) ro.observe(stripRef.current);
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, []);
 
   // 末尾留 8% 进度作"到站缓冲"
@@ -84,6 +94,13 @@ export default function LifePage() {
       alive = false;
     };
   }, []);
+  /* 屋里的背景音：不自动放，点唱片机才转起来、才有音乐；再点一下停。离开这页淡出 */
+  const [music, setMusic] = useState(false);
+  useEffect(() => {
+    if (!music) return;
+    startAmbient("life");
+    return () => stopAmbient();
+  }, [music]);
 
   /* ---------------- 房间状态（持久化） ---------------- */
   // 带 ?reset 打开时清空进度（引导只看进度，清了自然重演），方便从头体验一遍
@@ -163,6 +180,13 @@ export default function LifePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, room]);
   useEffect(() => () => window.clearTimeout(collapseTimer.current), []);
+  /* 抽屉推出 / 收回的声音（不管是谁推的），首次挂载那次不算 */
+  const listWasOpen = useRef(list.open);
+  useEffect(() => {
+    if (list.open === listWasOpen.current) return;
+    listWasOpen.current = list.open;
+    playDrawer(list.open);
+  }, [list.open]);
 
   /** 专注态里刚完成了一项，拉回后要弹清单盖章 */
   const pendingStamp = useRef(false);
@@ -211,7 +235,7 @@ export default function LifePage() {
   /** 房间横移到某个横向位置（长卷里的 vh 坐标居中到画面中央），走 Lenis 的缓动 */
   const scrollRoomTo = (centerVh: number) => {
     const vh = window.innerHeight;
-    const vw = window.innerWidth;
+    const vw = stageRef.current?.clientWidth ?? document.documentElement.clientWidth;
     const el = scrollRef.current;
     if (!el) return;
     const shift = Math.min(Math.max((centerVh / 100) * vh - vw / 2, 0), maxShift);
@@ -240,8 +264,6 @@ export default function LifePage() {
   // 墙上的清单滚出画面后，右下角浮出它的小缩影当入口
   const listLayer = seg01Layers.find((l) => l.src === "list")!;
   const [miniList, setMiniList] = useState(false);
-  /** 画面右边缘在长卷里的位置（vh），判断右边还有没有没做的事 */
-  const [viewRight, setViewRight] = useState(() => (window.innerWidth / window.innerHeight) * 100);
   /** 抽屉推出来时房间在哪：自动弹出的那两种，房间一动（滚了 8px 以上）就当人不想看，收掉 */
   const xAtOpen = useRef(0);
   useEffect(() => {
@@ -253,7 +275,6 @@ export default function LifePage() {
   useMotionValueEvent(x, "change", (v) => {
     const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight;
     setMiniList(-v > listRightPx);
-    setViewRight(((-v + window.innerWidth) / window.innerHeight) * 100);
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;
     if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
@@ -268,7 +289,7 @@ export default function LifePage() {
    *    每次进来都这样；但揭开后人已经自己滚了 / 点了站点，说明会玩了，这次就不弹。
    *  - 做过任何一件（没做完）：不弹抽屉，只让墙上那张晃两下 + 箭头，提醒清单在这儿。
    *  - 全做完：什么都不提醒。
-   * 之后靠"停下来就出箭头"的站点引导接力。
+   * 之后靠站点旁的小箭头接力（滚进画面就出，不用等人停下来）。
    */
   const [entryHint, setEntryHint] = useState(false);
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
@@ -303,6 +324,8 @@ export default function LifePage() {
   /** 点击站点：镜头以站点为原点推近，锁住滚动 */
   const openStation = (station: LifeStation, el: HTMLElement) => {
     if (focus) return;
+    /* 做完的那件不再推近（以前会弹一张占位卡片）；站点自己会给个小反应 */
+    if (isStationDone(room, station.id)) return;
     /* 人已经自己上手点站点了，这次不用再推引导 */
     guideDone.current = true;
     const wrap = wrapRef.current;
@@ -368,28 +391,10 @@ export default function LifePage() {
     }
   };
 
-  /** 占位互动完成：写入房间状态（真互动接入后调用同一入口） */
-  const completeStation = (choice?: DrinkChoice) => {
-    if (!focus) return;
-    playNavigate();
-    pendingStamp.current = true;
-    const id = focus.id;
-    setRoom((r) => {
-      switch (id) {
-        case "tee":
-          return { ...r, tee: true };
-        case "photo":
-          return { ...r, photo: true };
-        case "drink":
-          return { ...r, drink: choice ?? "a" };
-        case "candle":
-          return { ...r, candle: true };
-      }
-    });
-  };
-
   /** 拼图进行中：推近软木板但没有面板，互动就在画面里 */
   const photoFocus = focus?.id === "photo" && !isStationDone(room, "photo");
+  /* 软木板是棕的，白字 difference 混上去成了蓝字：推近着的时候顶栏改画纯白 */
+  useReportPlainNav(photoFocus);
 
   /** 调酒进行中：推近白圆桌但没有面板，互动就在画面里 */
   const drinkFocus = focus?.id === "drink" && !isStationDone(room, "drink");
@@ -400,7 +405,7 @@ export default function LifePage() {
 
   /** 拼图完成（化形动画播完）：镜头拉回 → 画家小羊原位播作画动画 → 播完盖章 */
   const completePhoto = () => {
-    playNavigate();
+    playTaskDone();
     setRoom((r) => ({ ...r, photo: true }));
     setPaint("wait");
     void closeFocus().then(() => setPaint("play"));
@@ -414,7 +419,7 @@ export default function LifePage() {
 
   /** 调酒完成（名字浮现后）：盖章 + 镜头拉回 + 弹清单 */
   const completeDrink = (choice: DrinkChoice) => {
-    playNavigate();
+    playTaskDone();
     pendingStamp.current = true;
     setRoom((r) => ({ ...r, drink: choice }));
     void closeFocus();
@@ -422,7 +427,7 @@ export default function LifePage() {
 
   /** 点蜡烛完成（白蜡烛回正后）：盖章 + 镜头拉回 + 弹清单 */
   const completeCandle = () => {
-    playNavigate();
+    playTaskDone();
     pendingStamp.current = true;
     setRoom((r) => ({ ...r, candle: true }));
     void closeFocus();
@@ -430,7 +435,7 @@ export default function LifePage() {
 
   /** 六件衣服挂好（场景内直接完成，不经过专注态）：先只记状态，白T变成可拖给小羊 */
   const completeTee = () => {
-    playNavigate();
+    playTaskDone();
     setRoom((r) => ({ ...r, tee: true }));
   };
 
@@ -440,17 +445,9 @@ export default function LifePage() {
     showList("stamp", STAMP_STAY);
   };
 
-  /* 站点引导 / 往右走：都要用户停下来才出，正在专注 / 看清单 / 进 LAB 时不出 */
-  const calm = !focus && !checklistOpen && !labEntry && !entryHint;
-  const idle = useIdle(1500, calm);
-  const idleLong = useIdle(6000, calm);
-  /** 右边还有没做完的事，且用户停了一会儿没往右走 → 右下角提示往右走 */
-  const moreRight = lifeStations.some((s) => !isListDone(room, s.id) && s.left > viewRight);
-  const scrollCue = idleLong && moreRight;
-
   return (
     <div ref={scrollRef} className="relative" style={{ height: `${Math.round(ROOM_TOTAL_VH * 0.9)}vh` }}>
-      <div className="sticky top-0 h-screen overflow-hidden">
+      <div ref={stageRef} className="sticky top-0 h-screen overflow-hidden">
         {/* 镜头层：专注态时以站点为原点推近 */}
         <motion.div
           ref={wrapRef}
@@ -459,15 +456,27 @@ export default function LifePage() {
           style={{ transformOrigin: zoomOrigin }}
         >
           {/* 房间长卷：滚动驱动横移；willChange 让它独立成层，横移时不重绘整条墙 */}
-          <motion.div className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
-            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白 */}
-            <div className="absolute left-0 w-full" style={{ top: "100%", height: "60vh", background: "#43A0CC" }} />
+          <motion.div ref={stripRef} className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
+            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白。用墙面贴图裁下来的那段地板噪点，和上面接得上 */}
+            <div
+              className="absolute left-0"
+              style={{
+                top: "100%",
+                height: "60vh",
+                width: "calc(100% + 10vw)",
+                backgroundImage: "url(/assets/life/room-floor-tile.webp)",
+                backgroundSize: `${ROOM_TILE_W_VH}vh auto`,
+                backgroundRepeat: "repeat",
+              }}
+            />
             {/* 第一屏的图解码完才挂房间：否则三百多张图一起抢带宽、抢主线程，揭开时滚不动 */}
             {ready && (
               <RoomStage
                 room={room}
                 interactive={!focus}
-                guide={{ entry: entryHint && !checklistOpen, idle }}
+                music={music}
+                onToggleMusic={() => setMusic((m) => !m)}
+                guide={{ entry: entryHint && !checklistOpen, hints: !checklistOpen && !entryHint && !labEntry }}
                 onOpen={openStation}
                 onChecklist={openChecklist}
                 listKick={listKick}
@@ -508,21 +517,7 @@ export default function LifePage() {
           />
         </div>
 
-        {/* 往右走：停了一会儿、右边还有没做的事 → 右下角一支手绘箭头（有小清单时让到它上面） */}
-        <div className="pointer-events-none absolute z-20" style={{ right: "3vh", bottom: miniList ? "17vh" : "5vh" }}>
-          <HandHint
-            show={scrollCue}
-            text={t("life.guide.scroll")}
-            rotate={90}
-            textSide="left"
-            arrowH="6vh"
-            fontSize="2.4vh"
-            tag
-            style={{ right: 0, bottom: 0 }}
-          />
-        </div>
-
-        {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口（往右走的箭头会让到它上面） */}
+        {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口 */}
         <AnimatePresence>
           {miniList && !checklistOpen && !focus && (
             <motion.button
@@ -561,37 +556,30 @@ export default function LifePage() {
           onInteract={onListInteract}
         />
 
-        {/* 场景内互动模式（拼图/调酒）：一句提示 + 「先离开」 */}
+        {/* 场景内互动模式（拼图/调酒/蜡烛）：一张小纸签写着怎么做（调酒有自己的分步提示，不写）+ 「先离开」 */}
         <AnimatePresence>
           {sceneFocus && (
             <motion.div
               key={`scene-ui-${sceneFocus.id}`}
-              className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex flex-col items-center gap-3"
+              className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center"
+              style={{ bottom: "4vh", gap: "1.6vh" }}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.4, delay: 0.5 }}
             >
-              <p className="font-hand rounded-full bg-white/90 px-5 py-1.5 text-xl text-neutral-700 shadow-md">
-                {pick(sceneFocus.hint)}
-              </p>
+              {sceneFocus.howto && <PaperTag>{pick(sceneFocus.howto)}</PaperTag>}
+              {/* 「先离开」：一张更小的纸签，直接印在花花绿绿的房间上看不清 */}
               <button
                 onClick={() => void closeFocus()}
-                className="pointer-events-auto rounded-full border border-neutral-300 bg-white/95 px-4 py-1 text-sm text-neutral-500 shadow-sm transition hover:bg-white"
+                className="font-look pointer-events-auto text-neutral-800 transition hover:-translate-y-[0.2vh]"
+                style={{ ...PAPER_TAG, rotate: "1deg", padding: "0.35vh 1.3vh 0.45vh", fontSize: "1.6vh", letterSpacing: "0.04em" }}
               >
                 {t("life.focus.back")}
               </button>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* 专注态互动面板（拼图/调酒站不用面板，互动在画面里） */}
-        <StationFocus
-          station={sceneFocus ? null : focus}
-          done={focus ? isStationDone(room, focus.id) : false}
-          onComplete={completeStation}
-          onClose={() => void closeFocus()}
-        />
 
         {/* 进场：接住开门过场，等第一屏的图就位再淡出露出房间（示意稿用中性白光）；从目录来的不放 */}
         {!fromMenu && (

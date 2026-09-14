@@ -14,6 +14,7 @@ import HandHint from "./HandHint";
 import { isStationDone } from "../../state/roomState";
 import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
+import type { DictKey } from "../../i18n/dict";
 import {
   playLightOff,
   playLightOn,
@@ -26,8 +27,14 @@ interface Props {
   room: RoomState;
   /** 漫游态可点击站点；专注态期间禁用 */
   interactive: boolean;
-  /** 引导：entry = 第一次进门时指一下墙上的清单；idle = 用户停下来了，没做完的站点旁边出手绘箭头 */
-  guide: { entry: boolean; idle: boolean };
+  /** 唱片机开着（屋里的背景音在放）；点唱片切换 */
+  music: boolean;
+  onToggleMusic: () => void;
+  /**
+   * 引导：entry = 第一次进门时指一下墙上的清单；
+   * hints = 站点旁的箭头现在能不能出（滚进画面就自己出，但清单抽屉开着 / 正在指清单时先让一让）
+   */
+  guide: { entry: boolean; hints: boolean };
   onOpen: (station: LifeStation, el: HTMLElement) => void;
   /** 点墙上挂着的清单 → 打开「今晚的小事」 */
   onChecklist: () => void;
@@ -71,9 +78,6 @@ const DRINK_TAKEN = new Set([
   // 案板换成含柠檬和刀的两状态素材（整颗→切开），由 DrinkMixer 渲染
   "bread-board",
 ]);
-
-/** 场景上的文字提示（玄关便签、站点标签、完成文字）。先隐藏，需要时改回 true */
-const SHOW_SCENE_TEXT = false;
 
 /** 素材像素 → vh（画板高 1800px = 100vh） */
 const vh = (px: number) => `${px / 18}vh`;
@@ -213,20 +217,30 @@ const RECORD_FPS = 6; // 36帧 ÷ 6fps = 6秒一圈
 const recordFrameSrc = (i: number) =>
   `/assets/life/seg01/record-anim/f${String(i).padStart(2, "0")}.webp`;
 
-function RecordPlayer() {
+function RecordPlayer({
+  playing,
+  interactive,
+  onToggle,
+}: {
+  /** 唱片在转（= 屋里的背景音开着）；默认不转，点唱片才开 */
+  playing: boolean;
+  interactive: boolean;
+  onToggle: () => void;
+}) {
   const [frame, setFrame] = useState(0);
-  const [running, setRunning] = useState(false);
+  const [inView, setInView] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // 滚出视野时停播
+  // 滚出视野时停播（省 CPU，音乐不停）
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setRunning(e.isIntersecting));
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting));
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
+  const running = playing && inView;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(
@@ -282,6 +296,25 @@ function RecordPlayer() {
           top: vh(RECORD_ARM.y),
           width: vh(RECORD_ARM.w),
           height: vh(RECORD_ARM.h),
+        }}
+      />
+      {/* 点唱片：开 / 关音乐（热区盖住唱片 + 唱臂） */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={playing ? "Stop the record" : "Play the record"}
+        aria-pressed={playing}
+        className={`absolute outline-none ${interactive ? "cursor-pointer" : "pointer-events-none"}`}
+        style={{
+          left: vh(RECORD_DISC.x - 20),
+          top: vh(RECORD_ARM.y - 30),
+          width: vh(RECORD_ARM.x + RECORD_ARM.w - RECORD_DISC.x + 30),
+          height: vh(RECORD_DISC.y + RECORD_DISC.h - RECORD_ARM.y + 40),
+          zIndex: 5,
+        }}
+        onClick={() => interactive && onToggle()}
+        onKeyDown={(e) => {
+          if (interactive && (e.key === "Enter" || e.key === " ")) onToggle();
         }}
       />
     </>
@@ -442,9 +475,9 @@ function PendulumSprite({
 }
 
 /**
- * 布帘：鼠标碰到就被撩起来（以顶部固定边为轴向上收拢），
- * 露出柜子里的碗碟，移开后弹落回来。感应区固定在布帘
- * 原本盖住的位置，撩起后 hover 状态不会跟着抖。
+ * 布帘：鼠标碰到就整幅往右边拢过去（以右边那条边为轴横向收拢），
+ * 露出柜子里的碗碟，移开后弹回来盖上。感应区固定在布帘
+ * 原本盖住的位置，拉开后 hover 状态不会跟着抖。
  */
 function LiftSprite({
   layer,
@@ -453,7 +486,7 @@ function LiftSprite({
   layer: SceneLayer;
   interactive: boolean;
 }) {
-  const [lifted, setLifted] = useState(false);
+  const [open, setOpen] = useState(false);
   const rect = {
     left: vh(layer.x),
     top: vh(layer.y),
@@ -467,20 +500,20 @@ function LiftSprite({
         alt=""
         draggable={false}
         className="pointer-events-none absolute max-w-none select-none"
-        style={{ ...rect, transformOrigin: "50% 2%" }}
+        style={{ ...rect, transformOrigin: "100% 50%" }}
         initial={false}
-        animate={{ scaleY: lifted ? 0.24 : 1 }}
+        animate={{ scaleX: open ? 0.22 : 1 }}
         transition={
-          lifted
-            ? { type: "spring", stiffness: 320, damping: 22 }
-            : { type: "spring", stiffness: 170, damping: 15 }
+          open
+            ? { type: "spring", stiffness: 320, damping: 24 }
+            : { type: "spring", stiffness: 170, damping: 16 }
         }
       />
       <div
         className="absolute"
         style={{ ...rect, pointerEvents: interactive ? "auto" : "none" }}
-        onMouseEnter={() => setLifted(true)}
-        onMouseLeave={() => setLifted(false)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
       />
     </>
   );
@@ -1101,16 +1134,27 @@ function HangClothes({
         show={hintOn && inView && !done && nextPiece >= 0 && !drag}
         text={t("life.guide.hang")}
         rotate={6}
+        arrowH="7vh"
+        fontSize="2.8vh"
+        maxWidth="22vh"
+        tag
+        bold
         textSide="left"
-        style={{ left: vh(1400), top: vh(1040) }}
+        /* 字在左、箭头在右：按右边缘定位，中英文字长不一样箭头也钉在右边那几个挂钩下面 */
+        style={{ left: vh(2020), top: vh(1000), translate: "-100% 0" }}
       />
       {/* 引导 2：挂满了、还没换装——写在衣架上方的空墙上，箭头斜着指向右下的小羊 */}
       <HandHint
         show={hintOn && inView && canDress && whiteSlot >= 0 && !dressDrag}
         text={t("life.guide.dress")}
         rotate={135}
+        arrowH="7vh"
+        fontSize="2.8vh"
+        maxWidth="20vh"
+        tag
+        bold
         textSide="left"
-        style={{ left: vh(1420), top: vh(300) }}
+        style={{ left: vh(2020), top: vh(300), translate: "-100% 0" }}
       />
     </>
   );
@@ -1244,13 +1288,41 @@ function Watering({ interactive }: { interactive: boolean }) {
  * - 圆桌上方是咖啡机和台面，字抬到冰箱顶上的空墙，箭头斜着往左下指回桌子；
  * - 蜡烛架子上头是空墙，正上方指下来。
  */
+/** 站点箭头的大小（以前 12vh 太抢，现在只要能看见指哪就行） */
+const SPOT_ARROW = "8vh";
+/**
+ * 站点引导：箭头指到哪（相对站点热区的位置 + 朝向，素材原本朝上）+ 一句写在小纸签上的话放箭头哪一边。
+ * 不指热区中心，指具体那件东西——散落的碎片 / 桌上的酒瓶 / 小羊蜡烛罐。
+ */
 const SPOT_HINT: Record<
   string,
-  { side: "left" | "above"; rotate: number; at: React.CSSProperties & { x?: string } }
+  { rotate: number; flip?: boolean; at: React.CSSProperties; text: DictKey; textSide: "left" | "right" | "above" | "below"; maxWidth: string }
 > = {
-  photo: { side: "left", rotate: 90, at: { right: "100%", top: "52%", marginRight: "1vh" } },
-  drink: { side: "above", rotate: 230, at: { left: "80%", bottom: "calc(100% + 34vh)", x: "-50%" } },
-  candle: { side: "above", rotate: 180, at: { left: "50%", bottom: "100%", x: "-50%", marginBottom: "0.5vh" } },
+  /* 软木板右边缘，箭头指向左边散落的碎片；纸签挂在箭头下面、骑在板子边上（右边是花瓶和搁板，放不下） */
+  photo: {
+    rotate: -90,
+    at: { left: "calc(100% - 3vh)", top: "34%" },
+    text: "life.guide.photo",
+    textSide: "below",
+    maxWidth: "21vh",
+  },
+  /* 桌子左端那三瓶的正上方，箭头指下去，字在箭头上面（字比箭头宽，整体按中线对齐，箭头才不会被字挤偏） */
+  drink: {
+    rotate: 180,
+    at: { left: `calc(12% + ${SPOT_ARROW} / 2)`, bottom: "100%", marginBottom: "0.5vh", translate: "-50% 0" },
+    text: "life.guide.drink",
+    textSide: "above",
+    maxWidth: "28vh",
+  },
+  /* 小羊蜡烛罐正上方，箭头指下去（镜像一下让弧弯向字那边）；上面就是屏幕顶，字放箭头左边那块空墙（冰箱顶上方） */
+  candle: {
+    rotate: 180,
+    flip: true,
+    at: { right: `calc(34% - ${SPOT_ARROW})`, bottom: "100%", marginBottom: "0.5vh" },
+    text: "life.guide.candle",
+    textSide: "left",
+    maxWidth: "34vh",
+  },
 };
 
 function StationSpot({
@@ -1259,18 +1331,18 @@ function StationSpot({
   interactive,
   hintOn,
   onOpen,
-  children,
 }: {
   station: LifeStation;
   done: boolean;
   interactive: boolean;
   hintOn: boolean;
   onOpen: (station: LifeStation, el: HTMLElement) => void;
-  children: React.ReactNode;
 }) {
-  const { pick } = useLanguage();
+  const { pick, t } = useLanguage();
   const ref = useRef<HTMLDivElement>(null);
+  /* 滚到画面里就出箭头（不等人停下来）；鼠标已经放上去了就不用指了 */
   const inView = useInView(ref, { amount: 0.6 });
+  const [hovered, setHovered] = useState(false);
   const spot = SPOT_HINT[s.id] ?? SPOT_HINT.candle;
   return (
     <div
@@ -1279,37 +1351,48 @@ function StationSpot({
       role="button"
       tabIndex={0}
       aria-label={pick(s.name)}
-      className={`group absolute outline-none ${
-        interactive ? "cursor-pointer" : "pointer-events-none"
-      }`}
+      className={`group absolute outline-none ${interactive ? "cursor-pointer" : "pointer-events-none"}`}
       style={{
         left: `${s.left}vh`,
         top: `${s.top}vh`,
         width: `${s.width}vh`,
         height: `${s.height}vh`,
+        /* 拼图碎片 / 桌上东西的精灵带 z-index，箭头和纸签要压在它们上面 */
+        zIndex: 15,
       }}
-      onClick={(e) => interactive && onOpen(s, e.currentTarget)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => {
+        /* 做完的站点再点就不推近了，没别的反应 */
+        if (!interactive || done) return;
+        onOpen(s, e.currentTarget);
+      }}
       onKeyDown={(e) => {
-        if (interactive && (e.key === "Enter" || e.key === " ")) {
+        if (interactive && !done && (e.key === "Enter" || e.key === " ")) {
           onOpen(s, e.currentTarget);
         }
       }}
     >
-      {/* 没做完 + 在画面里 + 用户停下来了 → 手绘箭头指过来，字是站点自己那句 hint */}
+      {/* 没做完 + 滚进画面 → 一支小箭头指着那件东西 + 纸签上一句"要做什么"（怎么做推近了再说） */}
       <HandHint
-        show={!done && hintOn && inView}
-        text={pick(s.hint)}
+        show={!done && interactive && hintOn && inView && !hovered}
+        text={t(spot.text)}
+        textSide={spot.textSide}
+        maxWidth={spot.maxWidth}
+        fontSize="2.8vh"
+        tag
         rotate={spot.rotate}
-        textSide={spot.side}
+        flip={spot.flip}
+        arrowH={SPOT_ARROW}
+        bold
         style={spot.at}
       />
-      {children}
     </div>
   );
 }
 
-export default function RoomStage({ room, interactive, guide, onOpen, onChecklist, listKick, onTeeDone, photoActive, onPhotoDone, drinkActive, onDrinkDone, candleActive, onCandleDone, onDressed, paint, onPaintEnd, onEnterLab }: Props) {
-  const { t, pick } = useLanguage();
+export default function RoomStage({ room, interactive, music, onToggleMusic, guide, onOpen, onChecklist, listKick, onTeeDone, photoActive, onPhotoDone, drinkActive, onDrinkDone, candleActive, onCandleDone, onDressed, paint, onPaintEnd, onEnterLab }: Props) {
+  const { t } = useLanguage();
   // 挂杆感应区内的鼠标位置（素材像素坐标），离开时归位到远处
   const swingMouseX = useMotionValue(MOUSE_AWAY);
 
@@ -1367,10 +1450,11 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
 
   return (
     <>
-      {/* 墙面 + 地板：无缝平铺，长卷多长它就铺多长 */}
+      {/* 墙面 + 地板：无缝平铺，长卷多长它就铺多长；右边多铺一截，长卷尽头就算和视口边差一点也不露底 */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-y-0 left-0"
         style={{
+          right: "-10vw",
           backgroundImage: "url(/assets/life/room-bg-tile.webp)",
           backgroundSize: "auto 100%",
           backgroundRepeat: "repeat-x",
@@ -1404,6 +1488,17 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
               animate={{ opacity: dressActive ? 0 : 1 }}
               transition={{ duration: 0.5 }}
             />
+          ) : layer.src.startsWith("note-") ? (
+            /* 唱片机上飘的音符：唱片转起来才有 */
+            <motion.div
+              key={`${layer.src}-${i}`}
+              className="pointer-events-none absolute inset-0"
+              initial={false}
+              animate={{ opacity: music ? 1 : 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <SceneSprite layer={layer} />
+            </motion.div>
           ) : layer.hoverSwing ? (
             <SwingSprite key={`${layer.src}-${i}`} layer={layer} mouseX={swingMouseX} />
           ) : layer.hoverPendulum ? (
@@ -1425,6 +1520,9 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
         show={guide.entry && interactive}
         text={t("life.guide.list")}
         rotate={-80}
+        arrowH="8vh"
+        fontSize="2.8vh"
+        bold
         textSide="right"
         style={{ left: vh(1200), top: vh(292) }}
       />
@@ -1646,7 +1744,7 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
       <HangClothes
         done={isStationDone(room, "tee")}
         interactive={interactive}
-        hintOn={guide.idle && interactive}
+        hintOn={interactive && guide.hints}
         mouseX={swingMouseX}
         onDone={onTeeDone}
         canDress={canDress}
@@ -1655,7 +1753,7 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
       />
 
       {/* 唱片机：转动的唱片 + 唱臂 */}
-      <RecordPlayer />
+      <RecordPlayer playing={music} interactive={interactive} onToggle={onToggleMusic} />
 
       {/* 柜子的推拉门：可以拖着左右滑 */}
       <CabinetDoor interactive={interactive} />
@@ -1680,60 +1778,19 @@ export default function RoomStage({ room, interactive, guide, onOpen, onChecklis
         onMouseLeave={() => swingMouseX.set(MOUSE_AWAY)}
       />
 
-      {/* 玄关引导：像贴在墙上的一张便签（衣架上方空墙） */}
-      {SHOW_SCENE_TEXT && (
-        <div className="absolute left-[72vh] top-[5vh] max-w-[38vh] -rotate-1 rounded-xl bg-white/90 p-4 shadow-md">
-          <h2 className="font-hand text-2xl text-neutral-800">{t("nav.life")}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-            {t("life.entry.hint")}
-          </p>
-          <motion.p
-            className="font-hand mt-3 text-neutral-500"
-            animate={{ x: [0, 8, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-          >
-            {t("life.entry.cue")} →
-          </motion.p>
-        </div>
-      )}
-
-      {/* 互动站点（分层素材到位前用虚线框示意）；tee 已改为场景内挂衣互动 */}
-      {lifeStations.filter((s) => s.id !== "tee").map((s) => {
-        const done = isStationDone(room, s.id);
-        return (
+      {/* 互动站点（拼图 / 小桌 / 蜡烛）；tee 是场景内挂衣互动，不走这里 */}
+      {lifeStations
+        .filter((s) => s.id !== "tee")
+        .map((s) => (
           <StationSpot
             key={s.id}
             station={s}
-            done={done}
+            done={isStationDone(room, s.id)}
             interactive={interactive}
-            hintOn={guide.idle && interactive}
+            hintOn={guide.hints}
             onOpen={onOpen}
-          >
-            {/* 悬停：手写体名称气泡（完成的带勾） */}
-            <span
-              className="font-hand pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-[5.5vh] whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 opacity-0 shadow-md transition-opacity duration-300 group-hover:opacity-100"
-            >
-              {done ? "✓ " : ""}
-              {pick(s.name)}
-            </span>
-
-            {/* 完成痕迹：结果物占位 + 小印章 */}
-            {SHOW_SCENE_TEXT && done && (
-              <>
-                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 translate-y-full whitespace-nowrap rounded-full bg-white/90 px-3 py-0.5 text-xs text-neutral-500 shadow-sm">
-                  ✓ {pick(s.result)}
-                  {s.id === "drink" && room.drink
-                    ? ` · ${room.drink.toUpperCase()}`
-                    : ""}
-                </span>
-                <span className="font-hand absolute -right-3 -top-3 flex h-9 w-9 -rotate-12 items-center justify-center rounded-full border-2 border-neutral-700/80 bg-white/90 text-sm text-neutral-700 shadow">
-                  咩
-                </span>
-              </>
-            )}
-          </StationSpot>
-        );
-      })}
+          />
+        ))}
 
       {/* LAB 门直通：任务没完成时点关着的门，也会亮灯牌开门进 LAB */}
       {!room.candle && !doorOpen && interactive && (

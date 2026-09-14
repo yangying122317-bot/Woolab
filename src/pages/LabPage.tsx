@@ -140,6 +140,7 @@ function EntranceWall({
   frame: ShellFrame;
   paintingHidden: boolean;
 }) {
+  const { t } = useLanguage();
   const u = frame.g;
   const [lampOn, setLampOn] = useState(false);
   const { x, scale, opacity } = usePieceMotion(camDepth, camX, ENT_Z, ENT_CX, frame, "cut");
@@ -230,7 +231,7 @@ function EntranceWall({
           WebkitTextStroke: `${px(1)}px #7E4218`,
         }}
       >
-        ( Scroll )
+        {t("lab.entry.scroll")}
       </span>
     </motion.div>
   );

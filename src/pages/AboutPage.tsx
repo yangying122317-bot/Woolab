@@ -66,7 +66,7 @@ const FLIP_AT = 0.3;
 const SCROLL_HINT_BOTTOM = 14;
 
 export default function AboutPage() {
-  const { lang, pick } = useLanguage();
+  const { lang, pick, t } = useLanguage();
   const [vp, setVp] = useState(() => ({
     w: window.innerWidth,
     h: window.innerHeight,
@@ -389,7 +389,7 @@ export default function AboutPage() {
             transition={{ delay: scrollHintAt, duration: 0.5 }}
           >
             <span className="font-hand whitespace-nowrap" style={{ fontSize: 11 * s, color: "#8B8680" }}>
-              ( scroll )
+              {t("about.scroll")}
             </span>
             <motion.div
               style={{

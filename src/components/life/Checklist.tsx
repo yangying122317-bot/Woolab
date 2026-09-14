@@ -4,6 +4,7 @@ import { lifeStations, type StationId } from "../../data/lifeStations";
 import { isAllDone, isListDone } from "../../state/roomState";
 import type { RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { playStamp, playStrike } from "../../audio/sfx";
 
 interface Props {
   room: RoomState;
@@ -209,6 +210,22 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
     if (open) seen.current = new Set(done);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  /*
+   * 划线 / 盖章的声音不按秒表放，而是听动画的：划线那张图第一次真的开始擦出来时起铅笔声（正好 0.45s，
+   * 和擦出的时长一样），印章缩到落纸那一刻（scale 回到 1 附近）才"啪"。这样开抽屉那几帧掉了也不会错拍。
+   */
+  const sfxDone = useRef({ strike: false, stamp: false });
+  if (open !== wasOpen) sfxDone.current = { strike: false, stamp: false };
+  const onStrikeUpdate = () => {
+    if (sfxDone.current.strike) return;
+    sfxDone.current.strike = true;
+    playStrike();
+  };
+  const onStampUpdate = (latest: { scale?: number }) => {
+    if (sfxDone.current.stamp || typeof latest.scale !== "number" || latest.scale > 1.04) return;
+    sfxDone.current.stamp = true;
+    playStamp();
+  };
 
   /* 四行全划完：刚划完最后一行的那次，等章盖稳再把纸揭走；之后再打开直接就是底下那张 */
   const allDone = isAllDone(room);
@@ -352,10 +369,14 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                                   {l}
                                 </span>
                               ))}
-                              <span
+                              {/* hover 的线：用清单自己那根手绘划线（做完第一件时划掉那一笔的同一张图），从左往右画出来 */}
+                              <img
                                 aria-hidden
-                                className="absolute left-0 right-0 origin-left scale-x-0 transition-transform duration-300 ease-out group-hover:scale-x-100"
-                                style={{ bottom: 0, height: 0.7, background: "rgba(148, 84, 28, 0.75)", borderRadius: 1 }}
+                                src={`${A}/strike-01.png`}
+                                alt=""
+                                draggable={false}
+                                className="pointer-events-none absolute transition-[clip-path] duration-300 ease-out [clip-path:inset(-10%_100%_-10%_0)] group-hover:[clip-path:inset(-10%_0_-10%_0)]"
+                                style={{ left: "-2%", width: "104%", maxWidth: "none", bottom: -9, height: "auto" }}
                               />
                             </span>
                           </span>
@@ -398,6 +419,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                               initial={play ? { clipPath: "inset(-10% 100% -10% 0)" } : false}
                               animate={{ clipPath: "inset(-10% 0% -10% 0)" }}
                               transition={{ duration: 0.45, ease: "easeInOut", delay: 0.4 }}
+                              onUpdate={play ? onStrikeUpdate : undefined}
                             />
                             {/* 印章：划完再"啪"地盖上 */}
                             <motion.div
@@ -411,6 +433,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                               initial={play ? { opacity: 0, scale: 1.9, rotate: STAMP.rotate - 16 } : false}
                               animate={{ opacity: STAMP.opacity, scale: 1, rotate: STAMP.rotate }}
                               transition={{ type: "spring", stiffness: 520, damping: 20, delay: 0.95 }}
+                              onUpdate={play ? onStampUpdate : undefined}
                             >
                               <img src={`${A}/stamp.webp`} alt="" draggable={false} className="h-full w-full" style={{ maxWidth: "none" }} />
                             </motion.div>
