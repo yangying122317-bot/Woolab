@@ -53,10 +53,12 @@ const CTA_TAPE = pic("cta-tape.png", 178.12, 278, 36.507, 20.344);
 const CTA_ARROW = pic("cta-arrow.png", 238, 298.5, 13.341, 8.266);
 
 /**
- * 纸底下"往右走"那句：贴纸下缘、屏幕下缘之上（屏底约在稿子 y≈470），文案折两行，
- * 围着纸的中线居中、再往左让 dodgeTape，躲开抽屉右下角那条胶带（胶带在 x≈263 起）。
+ * 纸底下"往右走"那句：一行写完，围着纸的中线居中，贴在纸下缘和抽屉右下角那条胶带之间
+ * （胶带压在屏幕更底下，见 TAPE_BR_TOP；屏底约在稿子 y≈470）。
  */
-const GO_HINT = { y: 404, arrow: 22, fontZh: 13.5, fontEn: 14.5, dodgeTape: 20, color: "#2A1E10" };
+const GO_HINT = { y: 394, arrow: 22, fontZh: 13.5, fontEn: 14.5, color: "#2A1E10" };
+/** 抽屉右下角那条胶带离屏顶多少（屏高的比例）：放到"往右走"那句下面 */
+const TAPE_BR_TOP = 0.885;
 
 /** 虚线 / 编号从这儿起，到这儿止 */
 const ROW_X = 110;
@@ -291,7 +293,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
               className="pointer-events-none absolute"
               style={{
                 left: dw * 0.74,
-                top: vh * 0.8,
+                top: vh * TAPE_BR_TOP,
                 width: (TAPE_BR.w + PAD * 2) * k,
                 height: (TAPE_BR.h + PAD * 2) * k,
                 maxWidth: "none",
@@ -462,7 +464,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
               {showList && (
                 <motion.div
                   className="pointer-events-none absolute"
-                  style={{ ...box(SHEET_CX - GO_HINT.dodgeTape - 160, GO_HINT.y, 320), display: "flex", justifyContent: "center" }}
+                  style={{ ...box(SHEET_CX - 160, GO_HINT.y, 320), display: "flex", justifyContent: "center" }}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
                   exit={{ opacity: 0, transition: { duration: 0.2 } }}
@@ -476,8 +478,6 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                     color={GO_HINT.color}
                     bold
                     textSide="left"
-                    /* 文案里自己写了换行；max-content 让字框正好包住最长那行，居中才准 */
-                    maxWidth="max-content"
                     /* HandHint 自己是 absolute 的，这里让它在 flex 里居中排 */
                     style={{ position: "relative", gap: 6 }}
                   />
