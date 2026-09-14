@@ -569,35 +569,63 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       });
     };
 
+    /** 从右边画外飞进来（起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"），扇着翅膀 */
+    const takeOffFromRight = (cruiseTop: number) => {
+      setBirdStanding(false);
+      birdStandingRef.current = false;
+      birdControls.set({
+        left: "135%",
+        top: `${cruiseTop}%`,
+        opacity: 1,
+        y: 0,
+      });
+      startFlap();
+    };
+
+    /** 从右边飞进来 → 飞到房顶中间（带节奏起伏）→ 边扇翅膀边缓缓降到栏杆上 → 歇一会再飞走 */
+    const flyInAndPerch = async (cruiseTop: number) => {
+      takeOffFromRight(cruiseTop);
+      await birdControls.start({
+        left: ["135%", "72%"],
+        top: [
+          `${cruiseTop}%`,
+          `${cruiseTop - 2}%`,
+          `${cruiseTop + 1.5}%`,
+          "24%",
+        ],
+        transition: { duration: 2.6, ease: "easeOut" },
+      });
+      if (!alive) return;
+      await birdControls.start({
+        left: ["72%", PERCH.left],
+        top: ["24%", PERCH.top],
+        transition: { duration: 1.1, ease: "easeOut" },
+      });
+      if (!alive) return;
+      await perchAndLeave();
+    };
+
     (async () => {
-      /* ---- 开场电视：小鸟先藏着（电视里的房子上还没有它），镜头推到位后才在栏杆上现身，歇一会再飞走 ---- */
+      /* ---- 开场电视：小鸟先藏着（电视里的房子上还没有它），镜头推到位后从右边飞进来落到栏杆上，歇一会再飞走；夜里不飞 ---- */
       if (curtainUpRef.current) {
-        // 预览重播时上一轮可能还在飞（动画没停），先停掉再摆位
+        // 预览重播时上一轮可能还在飞（动画没停），先停掉再藏起来
         birdControls.stop();
         stopFlap();
-        setBirdStanding(true);
+        setBirdStanding(false);
         birdStandingRef.current = false;
-        birdControls.set({
-          left: PERCH.left,
-          top: PERCH.top,
-          opacity: 0,
-          y: 0,
-        });
+        birdControls.set({ left: "135%", top: "12%", opacity: 0, y: 0 });
         while (alive && curtainUpRef.current) {
           await sleep(100);
         }
         if (!alive) return;
-        await sleep(400);
-        if (!alive) return;
-        await birdControls.start({
-          opacity: 1,
-          transition: { duration: 0.35 },
-        });
-        if (!alive) return;
-        await perchAndLeave();
-        if (!alive) return;
-        stopFlap();
-        birdControls.set({ opacity: 0 });
+        if (phaseRef.current !== "night") {
+          await sleep(300);
+          if (!alive) return;
+          await flyInAndPerch(rand(9, 19));
+          if (!alive) return;
+          stopFlap();
+          birdControls.set({ opacity: 0 });
+        }
       }
 
       while (alive) {
@@ -606,43 +634,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         // 夜里小鸟不出来
         if (phaseRef.current === "night") continue;
 
-        // 起降点放在 ±35% 场景宽度之外：宽屏两侧的延伸区也看不到"凭空出现"
         const cruiseTop = rand(9, 19);
-        setBirdStanding(false);
-        birdStandingRef.current = false;
-        birdControls.set({
-          left: "135%",
-          top: `${cruiseTop}%`,
-          opacity: 1,
-          y: 0,
-        });
-        startFlap();
-
         if (Math.random() < 0.5) {
-          // 飞到房顶中间（带节奏起伏），落在栏杆上歇一会
-          await birdControls.start({
-            left: ["135%", "72%"],
-            top: [
-              `${cruiseTop}%`,
-              `${cruiseTop - 2}%`,
-              `${cruiseTop + 1.5}%`,
-              "24%",
-            ],
-            transition: { duration: 2.6, ease: "easeOut" },
-          });
-          if (!alive) break;
-
-          // 边扇翅膀边缓缓降到栏杆上
-          await birdControls.start({
-            left: ["72%", PERCH.left],
-            top: ["24%", PERCH.top],
-            transition: { duration: 1.1, ease: "easeOut" },
-          });
-          if (!alive) break;
-
-          await perchAndLeave();
+          await flyInAndPerch(cruiseTop);
           if (!alive) break;
         } else {
+          takeOffFromRight(cruiseTop);
           // 直接横穿画面：带扇翅节奏的波浪路线
           const c = cruiseTop;
           await birdControls.start({
