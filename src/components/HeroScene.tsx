@@ -29,7 +29,7 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { warmLife } from "./life/preload";
+import { loadImage, warmLifeFirst } from "./life/preload";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 
@@ -113,14 +113,15 @@ const py = (y: number) => `${(y / FRAME_H) * 100}%`;
 const SPRITES = {
   // 新云图（1024x461，比旧图更扁）：y 按"云底贴原落地线 819"折算
   cloudBig: { src: "/assets/hero-cloud-big.png", x: 0, y: 151.5, w: 1440 },
-  base: { src: "/assets/hero-base.png" },
+  base: { src: "/assets/hero-base.webp" },
   openSign: { src: "/assets/hero-open-sign.png", x: 611.8, y: 554.9, w: 98.8 },
   /**
    * 小羊：透明动画 WebP（由手绘视频抠底合成，自带待机动作循环）。
    * 画布比原静态图（341x543 @ x828.2 y588 w170.2）四周略大，坐标已折算。
    * 脚下影子是独立静态层（与原静态图同画布），叠在身体下面。
    */
-  sheep: { src: "/assets/hero-sheep-idle.webp", x: 825.2, y: 587, w: 176.2 },
+  /* 小羊：开场只等 37KB 的静帧（就是待机动画的第一帧），850KB 的待机动画拉开幕布后再换上去——两张第一帧一样，换的时候看不出来 */
+  sheep: { src: "/assets/hero-sheep-still.webp", anim: "/assets/hero-sheep-idle.webp", x: 825.2, y: 587, w: 176.2 },
   sheepShadow: {
     src: "/assets/hero-sheep-shadow.png",
     x: 828.2,
@@ -391,9 +392,19 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 首页站稳后顺手把 Life 页第一屏的图拉进缓存：推门进屋基本不用等 */
+  /* 幕布拉开后：先把小羊的待机动画换上（850KB，让它独占带宽），换完再顺手把 Life 页第一屏的图拉进缓存（3.5MB，只拉第一屏） */
+  const [sheepAnim, setSheepAnim] = useState(false);
   useEffect(() => {
-    if (!curtainUp) warmLife(2500);
+    if (curtainUp) return;
+    let alive = true;
+    loadImage(SPRITES.sheep.anim).then(() => {
+      if (!alive) return;
+      setSheepAnim(true);
+      warmLifeFirst(1500);
+    });
+    return () => {
+      alive = false;
+    };
   }, [curtainUp]);
   /* 预览入口的 REPLAY：重新盖上布、状态机重跑 */
   useEffect(() => {
@@ -978,7 +989,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             draggable={false}
           />
           <img
-            src={SPRITES.sheep.src}
+            src={sheepAnim ? SPRITES.sheep.anim : SPRITES.sheep.src}
             alt=""
             className="pointer-events-none absolute select-none"
             style={{

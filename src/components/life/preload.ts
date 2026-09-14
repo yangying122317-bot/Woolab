@@ -64,9 +64,17 @@ export function preloadLifeRest(): Promise<void> {
  * 幂等，随便调。
  */
 export function warmLife(delayMs = 2500): void {
-  if (first) return;
+  if (rest) return;
   window.setTimeout(() => {
     void preloadLifeRest();
+  }, delayMs);
+}
+
+/** 只热第一屏（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满 */
+export function warmLifeFirst(delayMs = 2500): void {
+  if (first) return;
+  window.setTimeout(() => {
+    void preloadLifeFirst();
   }, delayMs);
 }
 
