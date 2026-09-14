@@ -17,10 +17,10 @@ import { useLanguage } from "../i18n/LanguageContext";
  * 白布在屏幕那块是挖空的（mask），只是加载期间被雪花屏那层盖着，看不出来。
  *
  * 流程：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 电视"开机"：雪花一闪白、屏幕那层淡掉，
- * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕，看到的是一片天 + 云）→ 报 onLoaded；
- * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：白布、电视机、字、屏幕里的天空
- * 是一整张画一起绕屏幕里的一点放大（先慢后快），电视边框自然长出画面外、天空正好长到 1:1 铺满
- *（人往里走的感觉，不是电视朝你涨大）→ 广播离场事件（房子地面浮上来、东西一个个弹出）→ 写会话标记、报 onDone。
+ * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕：天空 + 那栋空房子）→ 报 onLoaded；
+ * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：白布、电视机、字、屏幕里的场景
+ * 是一整张画一起绕屏幕中心放大（先慢后快），场景长到 1:1 就停住、电视边框以同样的速度继续飞出画面
+ *（人往里走的感觉，不是电视朝你涨大）→ 场景到位时广播离场事件（东西一个个弹出）→ 写会话标记、报 onDone。
  * 布盖着期间顶栏整条藏起来。
  *
  * 场景那边的缩放 / 位移不在这个组件里，用 camera 那三个 MotionValue 传过去驱动（HeroScene 把它们挂在场景外面那层上）。
@@ -37,18 +37,14 @@ const TURN_ON_T = 0.42;
 /** 开机后停一下再推镜头：让人看清电视里是个房子 */
 const HOLD_T = 0.75;
 /**
- * 推镜头总时长。白布 + 电视 + 字 + 屏幕里的天空是一整张画，绕同一个点、同一个倍率一起放大：
- * 起步几乎不动，越来越快，最后一下天空正好 1:1 铺满整屏——像人朝屏幕走进去，而不是电视朝你涨大。
+ * 推镜头总时长。白布 + 电视 + 字 + 屏幕里的场景是一整张画，绕屏幕中心、同一个倍率一起放大：
+ * 起步几乎不动，越来越快——像人朝屏幕走进去，而不是电视朝你涨大。
+ * 场景放到 1:1 就停住，电视边框以同样的速度继续飞出画面，一段动画到底、中间不停。
  */
-const ZOOM_T = 1.7;
-/** 先慢后快，落地只略收一点（带着速度到 1:1，才有"走进去"的劲；收太多末尾会像卡住） */
-const ZOOM_EASE: [number, number, number, number] = [0.7, 0, 0.75, 0.85];
-/**
- * 天空到 1:1 时，屏幕的洞差不多正好和视口一样大，四边还剩一点电视边框；
- * 白布单独再顺势冲这么久把边框扫出画面（这时只剩四边一丝，看不出和场景脱节）。
- */
-const TAIL_T = 0.2;
-/** 尾段要把洞放到盖过整个视口：屏幕形状是手绘的不规则边，多放一点余量 */
+const ZOOM_T = 1.8;
+/** 先慢后快；末尾的收是给边框出画用的，场景到 1:1 时曲线还在快段，带着速度落定 */
+const ZOOM_EASE: [number, number, number, number] = [0.7, 0, 0.4, 1];
+/** 白布最后要放到洞把整个视口盖过：屏幕形状是手绘的不规则边，多放一点余量 */
 const HOLE_COVER = 1.12;
 
 /* ---- 稿子（720×450 画板）上的东西 ---- */
@@ -373,30 +369,27 @@ export default function HeroCurtain({
       window.dispatchEvent(new Event(INTRO_DISMISSED_EVENT));
     };
     const hold = window.setTimeout(() => {
-      // 主段：整张画一起绕 pivot 放大，天空正好到 1:1、位移归零
-      animate(1, sceneEnd, {
+      // 一段到底：整张画绕 pivot 一路放到边框完全出画。场景到 1:1 就停住（夹在 sceneEnd），
+      // 白布和电视以同样的速度继续飞出去——到位和出画是同一个动作，中间没有缝
+      animate(1, clothEnd, {
         duration: ZOOM_T,
         ease: ZOOM_EASE,
-        onUpdate: setZoom,
-      })
-        .then(() => {
-          setZoom(sceneEnd);
+        onUpdate: (k) => {
+          if (k < sceneEnd) {
+            setZoom(k);
+            return;
+          }
+          clothScale.set(k);
           camera.scale.set(1);
           camera.x.set(0);
           camera.y.set(0);
           dismiss();
-          // 尾段：只剩四边一点白布毛边，白布自己顺势再冲一下扫出画面
-          return animate(sceneEnd, clothEnd, {
-            duration: TAIL_T,
-            ease: "easeOut",
-            onUpdate: (k) => clothScale.set(k),
-          });
-        })
-        .then(() => {
-          if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
-          dismiss();
-          onDone();
-        });
+        },
+      }).then(() => {
+        if (!preview) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
+        dismiss();
+        onDone();
+      });
     }, HOLD_T * 1000);
     return () => window.clearTimeout(hold);
     // eslint-disable-next-line react-hooks/exhaustive-deps

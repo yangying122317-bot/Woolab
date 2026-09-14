@@ -274,14 +274,14 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
  * 时刻（秒）；整段约 2 秒，播完后 OPEN 吊牌接着晃第一下。
  */
 const INTRO_AT = {
-  bushLeft: 0.55,
-  bushRight: 0.65,
-  bush: 0.75,
-  board: 0.9,
-  mailbox: 1.05,
-  sheep: 1.25,
-  woolab: 1.45,
-  openSign: 1.6,
+  bushLeft: 0.25,
+  bushRight: 0.35,
+  bush: 0.45,
+  board: 0.6,
+  mailbox: 0.75,
+  sheep: 0.95,
+  woolab: 1.15,
+  openSign: 1.3,
 } as const;
 
 /**
@@ -382,8 +382,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
   /*
    * 开场加载页就是压在这个场景上的一块白布（HeroCurtain：小电视 + 雪花屏进度）。
-   * 图下完电视"开机"，屏幕里出现的是这个场景（缩小了、只有空房子），然后镜头往屏幕里推，
-   * 场景放大到占满整屏、白布飞出画面；推到位时场景里的东西才一个个弹出来。
+   * 图下完电视"开机"，屏幕里出现的是这个场景（缩小了、只有天空和空房子），然后镜头往屏幕里推：
+   * 白布、电视和屏幕里的场景一起放大，场景到 1:1 停住、电视边框飞出画面；推到位时场景里的东西才一个个弹出来。
    * 缩放 / 位移由幕布那边驱动这三个 MotionValue，挂在场景外面那层上。
    * 只在桌面端整屏场景（cover）里做；/intro 预览路由不看会话标记、可反复播。
    */
@@ -449,10 +449,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       (curtainUp ||
         (introGo && !sessionStorage.getItem("heroIntroPlayed"))),
   );
-  // 有电视开场时云不藏：电视屏幕里是一片天 + 飘着的云；房子地面和要弹出来的东西都等镜头推到位再出
+  // 有电视开场时云和房子地面都不藏：电视屏幕里就是这栋房子（只是树丛、邮箱、小羊那些还没弹出来），
+  // 推进去看到的还是同一个画面，才像走近了它；要弹出来的东西等镜头推到位再出
   const [tvIntro] = useState(() => intro && curtainUp);
   const cloudHidden = intro && !introGo && !tvIntro;
-  const baseHidden = intro && !introGo;
+  const baseHidden = cloudHidden;
   useEffect(() => {
     sessionStorage.setItem("heroIntroPlayed", "1");
   }, []);
@@ -569,7 +570,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
 
     (async () => {
-      /* ---- 开场电视：小鸟先藏着（屏幕里只有天空，房子还没出来），镜头推到位、房子浮上来后才在栏杆上现身，歇一会再飞走 ---- */
+      /* ---- 开场电视：小鸟先藏着（电视里的房子上还没有它），镜头推到位后才在栏杆上现身，歇一会再飞走 ---- */
       if (curtainUpRef.current) {
         // 预览重播时上一轮可能还在飞（动画没停），先停掉再摆位
         birdControls.stop();
@@ -877,7 +878,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             出场时从下方轻轻浮现，随后各物件依次弹出 */}
           <motion.div
             className="pointer-events-none absolute inset-0"
-            initial={intro ? { opacity: 0, y: "3%" } : false}
+            initial={intro && !tvIntro ? { opacity: 0, y: "3%" } : false}
             animate={
               baseHidden ? { opacity: 0, y: "3%" } : { opacity: 1, y: "0%" }
             }
