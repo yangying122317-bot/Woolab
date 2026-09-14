@@ -441,11 +441,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   );
   // 首次进入主页（本次会话内）才播"物件依次弹出"的出场动画，之后进来直接呈现完整场景。
   // 有开场电视的那一次也弹：电视里先只有空房子，镜头推到位了东西再一个个弹出来（introGo 由幕布快推到位时打开）。
+  // 有电视开场（白布还在）的那一次一定弹：不看 heroIntroPlayed——它在首页一挂载就写了，
+  // 电视没推完就刷新 / 进别的页再回来，白布还会出，但电视里不能是完整场景、推进去也得弹出
   const [intro] = useState(
     () =>
       !reducedMotion &&
-      (introGo || curtainUp) &&
-      !sessionStorage.getItem("heroIntroPlayed"),
+      (curtainUp ||
+        (introGo && !sessionStorage.getItem("heroIntroPlayed"))),
   );
   // 有电视开场时云不藏：电视屏幕里是一片天 + 飘着的云；房子地面和要弹出来的东西都等镜头推到位再出
   const [tvIntro] = useState(() => intro && curtainUp);
