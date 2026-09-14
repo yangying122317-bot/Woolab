@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AnimatePresence,
   animate,
@@ -84,12 +84,70 @@ const KICK = 24;
  */
 const HANG_SHIFT = -12;
 
+/** 手绘圈素材：长句用 Lab 那种扁长的圈，短词（RED）用 About 那种接近椭圆的圈（加深过一版，About 原版是很淡的铅笔），按字的宽高比自动挑 */
+const WIDE_CIRCLE = { src: `${C}/circle-email.svg`, ar: 38 / 178 };
+const ROUND_CIRCLE = { src: `${C}/circle-round.png`, ar: 124 / 272 };
+
+/**
+ * hover 时用手绘圈把里面的字圈起来：圈从左往右画出来（0.45s），移开就淡掉。
+ * 圈的大小按字的实际尺寸算，所以进来时量一下。
+ */
+function Circled({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [on, setOn] = useState(false);
+  const [box, setBox] = useState<{ src: string; l: number; t: number; w: number; h: number } | null>(null);
+
+  const enter = () => {
+    const el = ref.current;
+    if (el) {
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      if (w / h > 4) {
+        const cw = w * 1.22;
+        const ch = cw * WIDE_CIRCLE.ar;
+        setBox({ src: WIDE_CIRCLE.src, l: (w - cw) / 2, t: h * 0.52 - ch / 2, w: cw, h: ch });
+      } else {
+        /* 短词：圈按素材比例放，宽度至少比字宽出一截、高度至少罩住整行 */
+        const cw = Math.max(w + h * 1.1, (h + 4) / ROUND_CIRCLE.ar);
+        const ch = cw * ROUND_CIRCLE.ar;
+        setBox({ src: ROUND_CIRCLE.src, l: (w - cw) / 2, t: h / 2 - ch / 2 + 1, w: cw, h: ch });
+      }
+    }
+    setOn(true);
+  };
+
+  return (
+    <span ref={ref} className="relative inline-block" onMouseEnter={enter} onMouseLeave={() => setOn(false)}>
+      {children}
+      {box && (
+        <motion.img
+          src={box.src}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none"
+          style={{ left: box.l, top: box.t, width: box.w, height: box.h }}
+          initial={false}
+          animate={
+            on
+              ? { clipPath: "inset(-6px -6px -6px -6px)", opacity: 1 }
+              : { clipPath: "inset(-6px 100% -6px -6px)", opacity: 0 }
+          }
+          transition={
+            on
+              ? { clipPath: { duration: 0.45, ease: "easeOut" }, opacity: { duration: 0 } }
+              : { opacity: { duration: 0.2 }, clipPath: { delay: 0.2, duration: 0 } }
+          }
+        />
+      )}
+    </span>
+  );
+}
+
 export default function ContactPage() {
   const { t, lang } = useLanguage();
   const zh = lang === "zh";
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const [copied, setCopied] = useState(false);
-  const [emailHover, setEmailHover] = useState(false);
   /** 电话：idle → 已拿起（ring 嘟 / hello 对面说话、底下冒字）→ 放回去 */
   const [call, setCall] = useState<"idle" | "ring" | "hello">("idle");
   /** 拿起 / 放回：听筒被拎歪那层 */
@@ -291,12 +349,7 @@ export default function ContactPage() {
               className={`${bodyFont} absolute text-center text-black`}
               style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
             >
-              {/* hover 不加粗下划线，改成手绘圈从左往右把邮箱圈起来；移开就淡掉 */}
-              <span
-                className="relative inline-block"
-                onMouseEnter={() => setEmailHover(true)}
-                onMouseLeave={() => setEmailHover(false)}
-              >
+              <Circled>
                 <button
                   type="button"
                   onClick={() => void copyEmail()}
@@ -306,31 +359,7 @@ export default function ContactPage() {
                 >
                   {copied ? t("contact.copied") : contactEmail}
                 </button>
-                <motion.img
-                  src={`${C}/circle-email.svg`}
-                  alt=""
-                  draggable={false}
-                  className="pointer-events-none absolute max-w-none"
-                  style={{
-                    left: "-11%",
-                    width: "122%",
-                    top: "52%",
-                    aspectRatio: "178 / 38",
-                    translateY: "-50%",
-                  }}
-                  initial={false}
-                  animate={
-                    emailHover
-                      ? { clipPath: "inset(-6px -6px -6px -6px)", opacity: 1 }
-                      : { clipPath: "inset(-6px 100% -6px -6px)", opacity: 0 }
-                  }
-                  transition={
-                    emailHover
-                      ? { clipPath: { duration: 0.45, ease: "easeOut" }, opacity: { duration: 0 } }
-                      : { opacity: { duration: 0.2 }, clipPath: { delay: 0.2, duration: 0 } }
-                  }
-                />
-              </span>
+              </Circled>
             </div>
 
             <Head font={headFont} weight={headWeight} y={FIND.y}>
@@ -342,15 +371,17 @@ export default function ContactPage() {
             >
               {socialLinks.map((l, i) => (
                 <span key={l.id}>
-                  {i > 0 && " / "}
-                  <a
-                    href={l.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline decoration-solid underline-offset-2 hover:decoration-2"
-                  >
-                    {l.label}
-                  </a>
+                  {i > 0 && <span className="mx-[0.45em]">/</span>}
+                  <Circled>
+                    <a
+                      href={l.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline decoration-solid underline-offset-2"
+                    >
+                      {l.label}
+                    </a>
+                  </Circled>
                 </span>
               ))}
             </div>
