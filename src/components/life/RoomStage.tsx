@@ -474,10 +474,94 @@ function PendulumSprite({
   );
 }
 
+/** 客厅那盏挂得低的蓝吊灯下面的光锥（借厨房 CHEERS 吊灯的光锥素材；顶端藏在灯泡后面） */
+const LONG_PENDANT_LIGHT = { src: "pendant-light", dir: "seg03", x: 3498, y: 604, w: 720, h: 408 } as const;
+
 /**
- * 布帘：鼠标碰到就整幅往右边拢过去（以右边那条边为轴横向收拢），
+ * 会亮的吊灯：鼠标碰到时以顶部吊线为轴荡几下，同时灯亮起来，光锥跟着灯体一起摆；
+ * 移开后灯灭、荡完自然停回。
+ */
+function PendantLamp({
+  layer,
+  light,
+}: {
+  layer: SceneLayer;
+  light: typeof LONG_PENDANT_LIGHT;
+}) {
+  const [lit, setLit] = useState(false);
+  const controls = useAnimationControls();
+  /* 外框把灯体和光锥一起框住，转轴仍在灯体顶部吊线上 */
+  const box = {
+    x: Math.min(layer.x, light.x),
+    y: layer.y,
+    w: Math.max(layer.x + layer.w, light.x + light.w) - Math.min(layer.x, light.x),
+    h: light.y + light.h - layer.y,
+  };
+  const pivot = { x: layer.x + layer.w / 2 - box.x, y: layer.h * 0.03 };
+  const swing = (e: React.MouseEvent<HTMLImageElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const dir = e.clientX < r.left + r.width / 2 ? 1 : -1;
+    void controls.start({
+      rotate: [6 * dir, -4.5 * dir, 3 * dir, -1.5 * dir, 0.6 * dir, 0],
+      transition: { duration: 1.8, ease: "easeInOut" },
+    });
+  };
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{
+        left: vh(box.x),
+        top: vh(box.y),
+        width: vh(box.w),
+        height: vh(box.h),
+        transformOrigin: `${vh(pivot.x)} ${vh(pivot.y)}`,
+      }}
+      animate={controls}
+    >
+      <motion.img
+        src={`/assets/life/${light.dir}/${light.src}.webp`}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={{
+          left: vh(light.x - box.x),
+          top: vh(light.y - box.y),
+          width: vh(light.w),
+          height: vh(light.h),
+        }}
+        initial={false}
+        animate={{ opacity: lit ? 1 : 0 }}
+        transition={{ duration: lit ? 0.25 : 0.5 }}
+      />
+      <img
+        src={layerUrl(layer)}
+        alt=""
+        draggable={false}
+        className="pointer-events-auto absolute max-w-none select-none"
+        style={{
+          left: vh(layer.x - box.x),
+          top: 0,
+          width: vh(layer.w),
+          height: vh(layer.h),
+        }}
+        onMouseEnter={(e) => {
+          swing(e);
+          setLit(true);
+          playLightOn();
+        }}
+        onMouseLeave={() => {
+          setLit(false);
+          playLightOff();
+        }}
+      />
+    </motion.div>
+  );
+}
+
+/**
+ * 布帘：鼠标碰到就往上掀起来（以顶边为轴竖向收拢），
  * 露出柜子里的碗碟，移开后弹回来盖上。感应区固定在布帘
- * 原本盖住的位置，拉开后 hover 状态不会跟着抖。
+ * 原本盖住的位置，掀开后 hover 状态不会跟着抖。
  */
 function LiftSprite({
   layer,
@@ -500,13 +584,13 @@ function LiftSprite({
         alt=""
         draggable={false}
         className="pointer-events-none absolute max-w-none select-none"
-        style={{ ...rect, transformOrigin: "100% 50%" }}
+        style={{ ...rect, transformOrigin: "50% 2%" }}
         initial={false}
-        animate={{ scaleX: open ? 0.22 : 1 }}
+        animate={{ scaleY: open ? 0.24 : 1 }}
         transition={
           open
-            ? { type: "spring", stiffness: 320, damping: 24 }
-            : { type: "spring", stiffness: 170, damping: 16 }
+            ? { type: "spring", stiffness: 320, damping: 22 }
+            : { type: "spring", stiffness: 170, damping: 15 }
         }
       />
       <div
@@ -695,6 +779,40 @@ const HANG_PIECES = [
 ];
 type HangPiece = (typeof HANG_PIECES)[number];
 
+/**
+ * 叠着的衣服的透明度图：按到堆上时用它判断指尖压在哪件的布料上，
+ * 而不是谁的包围盒在最上面（几件叠在一起，包围盒大片重叠）。
+ */
+const flatAlpha = new Map<string, { w: number; h: number; a: Uint8ClampedArray }>();
+function loadFlatAlpha(id: string) {
+  if (flatAlpha.has(id)) return;
+  const img = new Image();
+  img.src = `/assets/life/seg01/flat-${id}.webp`;
+  img
+    .decode()
+    .then(() => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const g = c.getContext("2d");
+      if (!g) return;
+      g.drawImage(img, 0, 0);
+      const { data } = g.getImageData(0, 0, c.width, c.height);
+      const a = new Uint8ClampedArray(c.width * c.height);
+      for (let i = 0; i < a.length; i++) a[i] = data[i * 4 + 3];
+      flatAlpha.set(id, { w: c.width, h: c.height, a });
+    })
+    .catch(() => {});
+}
+/** (u, v) 是点在贴图里的归一化位置；没解出透明度图之前按"压中"算 */
+function hitFlat(id: string, u: number, v: number) {
+  const m = flatAlpha.get(id);
+  if (!m) return true;
+  const x = Math.min(m.w - 1, Math.max(0, Math.floor(u * m.w)));
+  const y = Math.min(m.h - 1, Math.max(0, Math.floor(v * m.h)));
+  return m.a[y * m.w + x] > 40;
+}
+
 /** 完成态的排列（槽位 → 衣服下标）：白T、条纹、黄T、Polo、蓝裤、紫裤 */
 const DONE_ORDER = [4, 2, 1, 0, 3, 5];
 
@@ -799,6 +917,8 @@ function HangClothes({
   const landing = useRef<{ slot: number; x: number; y: number } | null>(null);
   const [drag, setDrag] = useState<{ piece: number; x: number; y: number } | null>(null);
   const [flyback, setFlyback] = useState<{ piece: number; x: number; y: number; key: number } | null>(null);
+  /** 光标正压在堆里哪件衣服上（-1 = 没压着布料） */
+  const [hoverPiece, setHoverPiece] = useState(-1);
   /** 彩蛋：把挂着的白T拖在手里（长卷素材像素坐标） */
   const [dressDrag, setDressDrag] = useState<{ x: number; y: number } | null>(null);
   const pileRef = useRef<HTMLDivElement>(null);
@@ -814,7 +934,7 @@ function HangClothes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
-  /** 下一件可拿的 = 堆里最上面那件（取用顺序即数组顺序） */
+  /** 堆里还有没有衣服没挂（引导和光标用） */
   const nextPiece = HANG_PIECES.findIndex((_, p) => !hung.includes(p));
 
   /** 屏幕坐标 → 长卷素材像素坐标（以衣服堆热区为基准换算） */
@@ -824,12 +944,36 @@ function HangClothes({
     return { x: PILE.x + (clientX - r.left) / s, y: PILE.y + (clientY - r.top) / s };
   };
 
+  /** 还叠在堆里的：没挂上、不在手里、也不在飞回途中 */
+  const inPile = (p: number) =>
+    !hung.includes(p) && drag?.piece !== p && flyback?.piece !== p;
+
+  /* 透明度图提前解好，第一下按下去就能判断按中了谁 */
+  useEffect(() => {
+    if (!done) HANG_PIECES.forEach((h) => loadFlatAlpha(h.id));
+  }, [done]);
+
+  /** 指尖压在堆里哪件衣服的布料上（从最上层往下找；透明处穿透到下一件） */
+  const pieceAt = (q: { x: number; y: number }) => {
+    for (let p = 0; p < HANG_PIECES.length; p++) {
+      if (!inPile(p)) continue;
+      const { flat, pile, id } = HANG_PIECES[p];
+      const u = (q.x - pile.x) / flat.w;
+      const v = (q.y - pile.y) / flat.h;
+      if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+      if (hitFlat(id, u, v)) return p;
+    }
+    return -1;
+  };
+
+  /** 按到哪件就拎起哪件 */
   const startDrag = (e: React.PointerEvent) => {
-    if (!interactive || nextPiece < 0 || drag) return;
-    e.preventDefault();
-    const piece = nextPiece;
-    const hungNow = [...hung];
+    if (!interactive || drag) return;
     const p = toArt(e.clientX, e.clientY);
+    const piece = pieceAt(p);
+    if (piece < 0) return;
+    e.preventDefault();
+    const hungNow = [...hung];
     setDrag({ piece, x: p.x, y: p.y });
 
     const move = (ev: PointerEvent) => {
@@ -866,9 +1010,6 @@ function HangClothes({
   };
 
   const dragPiece = drag ? HANG_PIECES[drag.piece] : null;
-  /** 还叠在堆里的：没挂上、不在手里、也不在飞回途中 */
-  const inPile = (p: number) =>
-    !hung.includes(p) && drag?.piece !== p && flyback?.piece !== p;
 
   /** 彩蛋：从挂杆上拖起白T，丢到小羊身上换装，丢空了荡回原位 */
   const whiteSlot = hung.indexOf(WHITE_IDX);
@@ -979,7 +1120,7 @@ function HangClothes({
         );
       })}
 
-      {/* 衣服堆：还没拿走的衣服叠着（渲染顺序倒过来，先拿的在最上层） */}
+      {/* 衣服堆：还没拿走的衣服叠着（渲染顺序倒过来，数组靠前的在最上层） */}
       {[...HANG_PIECES.keys()].reverse().map(
         (p) =>
           inPile(p) && (
@@ -1106,19 +1247,26 @@ function HangClothes({
         />
       )}
 
-      {/* 衣服堆热区：还有衣服没挂完时可拖 */}
+      {/* 衣服堆热区：按到哪件衣服的布料就拎起哪件（光标也只在布料上变成小手） */}
       {!done && (
         <div
           ref={pileRef}
-          className={`absolute ${interactive && nextPiece >= 0 && !drag ? "cursor-grab" : ""}`}
+          className="absolute"
           style={{
             left: vh(PILE.x),
             top: vh(PILE.y),
             width: vh(PILE.w),
             height: vh(PILE.h),
             touchAction: "none",
+            cursor: interactive && !drag && hoverPiece >= 0 ? "grab" : "default",
           }}
           onPointerDown={startDrag}
+          onPointerMove={(e) => {
+            if (!interactive || drag) return;
+            const p = pieceAt(toArt(e.clientX, e.clientY));
+            if (p !== hoverPiece) setHoverPiece(p);
+          }}
+          onPointerLeave={() => setHoverPiece(-1)}
         />
       )}
 
@@ -1547,6 +1695,9 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
           paintHidden ? (
           // 作画动画播放中/定格后，小羊+画架由帧序列接管
           null
+        ) : layer.src === "pendant-long" ? (
+          // 右边挂得低的那盏：荡的时候灯也亮
+          <PendantLamp key={`s2-${layer.src}-${i}`} layer={layer} light={LONG_PENDANT_LIGHT} />
         ) : layer.hoverPendulum ? (
           <PendulumSprite key={`s2-${layer.src}-${i}`} layer={layer} />
         ) : (

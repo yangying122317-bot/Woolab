@@ -12,7 +12,7 @@ import Checklist from "../components/life/Checklist";
 import PaperTag, { PAPER_TAG } from "../components/life/PaperTag";
 import RoomStage, { type PaintPhase } from "../components/life/RoomStage";
 import { useIdle } from "../components/life/useIdle";
-import { LAB_DOOR, ROOM_TILE_W_VH, ROOM_TOTAL_VH, lifeStations, type StationId } from "../data/lifeStations";
+import { LAB_DOOR, ROOM_FLOOR_TILE_H_VH, ROOM_TILE_W_VH, ROOM_TOTAL_VH, lifeStations, type StationId } from "../data/lifeStations";
 import type { LifeStation } from "../data/lifeStations";
 import { useLenis } from "lenis/react";
 import { useReportPlainLogo, useReportPlainNav } from "../state/chrome";
@@ -457,12 +457,14 @@ export default function LifePage() {
         >
           {/* 房间长卷：滚动驱动横移；willChange 让它独立成层，横移时不重绘整条墙 */}
           <motion.div ref={stripRef} className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
-            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白。用墙面贴图裁下来的那段地板噪点，和上面接得上 */}
+            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白。用墙面贴图最底下那段地板噪点裁的，
+              从它在墙面贴图里的位置开始铺、往上盖住墙面贴图的下边缘：两张图在重叠区像素一致，
+              镜头推近时墙面贴图下边那条半透明的抗锯齿缝就压在同样的地板上，看不出拼接线 */}
             <div
               className="absolute left-0"
               style={{
-                top: "100%",
-                height: "60vh",
+                top: `calc(100% - ${ROOM_FLOOR_TILE_H_VH}vh)`,
+                height: `${60 + ROOM_FLOOR_TILE_H_VH}vh`,
                 width: "calc(100% + 10vw)",
                 backgroundImage: "url(/assets/life/room-floor-tile.webp)",
                 backgroundSize: `${ROOM_TILE_W_VH}vh auto`,

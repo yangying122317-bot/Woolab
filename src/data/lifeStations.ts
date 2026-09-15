@@ -39,6 +39,8 @@ export interface LifeStation {
 export const ROOM_TOTAL_VH = 730;
 /** 墙面贴图 room-bg-tile.webp 铺满 100vh 高时的宽度（5672 / 1800 × 100），地板延伸贴图按同一比例铺才接得上 */
 export const ROOM_TILE_W_VH = (5672 / 1800) * 100;
+/** 地板延伸贴图 room-floor-tile.webp 是墙面贴图最底下 240px 裁的；铺满 100vh 时它的高度 */
+export const ROOM_FLOOR_TILE_H_VH = (240 / 1800) * 100;
 
 export const lifeStations: LifeStation[] = [
   {

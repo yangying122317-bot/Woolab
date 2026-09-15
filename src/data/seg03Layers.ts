@@ -47,7 +47,7 @@ export const seg03Layers: SceneLayer[] = [
   { src: "cutting-board", x: 7836, y: 994, w: 304, h: 97, anim: "static", dir: "seg03" },
   { src: "board-carrots", x: 7884, y: 958, w: 224, h: 84, anim: "static", dir: "seg03" },
   { src: "counter-a", x: 8112, y: 925, w: 664, h: 630, anim: "static", dir: "seg03" },
-  // 厨房柜开放格上的蓝格纹小帘子；鼠标碰到会整幅往右拢开
+  // 厨房柜开放格上的蓝格纹小帘子；鼠标碰到会往上掀开
   { src: "curtain", x: 8160, y: 1010, w: 565, h: 449, anim: "static", dir: "seg03", hoverLift: true },
   { src: "carrot-basket", x: 8178, y: 666, w: 440, h: 282, anim: "static", dir: "seg03" },
 

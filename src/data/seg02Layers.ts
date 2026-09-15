@@ -42,6 +42,7 @@ export const seg02Layers: SceneLayer[] = [
   { src: "sofa", x: 3383, y: 1153, w: 602, h: 483, anim: "static", dir: "seg02" },
 
   // 两盏蓝吊灯（灯绳顶端在画面外）
+  // 挂得低的这盏 hover 时除了荡还会亮灯（光锥见 RoomStage 的 LONG_PENDANT_LIGHT）
   { src: "pendant-long", x: 3708, y: -32, w: 301, h: 681, anim: "static", dir: "seg02", hoverPendulum: true },
   { src: "pendant-short", x: 3320, y: -32, w: 301, h: 475, anim: "static", dir: "seg02", hoverPendulum: true },
 
