@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   playDoorSlide,
   playHello,
@@ -21,6 +21,7 @@ import {
   type TargetAndTransition,
 } from "framer-motion";
 import { useTimeOfDay, type TimePhase } from "../timeOfDay";
+import { useWeather } from "../weather";
 import { heroHotspots } from "../data/heroHotspots";
 import { config } from "../config";
 import {
@@ -354,13 +355,14 @@ const LEAF_IMGS = [
 
 export default function HeroScene() {
   // 场景环境背景音，离开首页时淡出：
-  // 白天 = 自然环境（有鸟叫）；清晨 / 傍晚 = 同一条里没鸟叫的安静段；夜里 = 蝉鸣
+  // 白天 = 自然环境（有鸟叫）；清晨 / 傍晚 = 同一条里没鸟叫的安静段；夜里 = 蝉鸣；下雨 = 雨声（不分时段）
   const { phase } = useTimeOfDay();
+  const rain = useWeather() === "rain";
   useEffect(() => {
     startAmbient(
-      phase === "day" ? "day" : phase === "night" ? "night" : "calm",
+      rain ? "rain" : phase === "day" ? "day" : phase === "night" ? "night" : "calm",
     );
-  }, [phase]);
+  }, [phase, rain]);
   useEffect(() => () => stopAmbient(), []);
 
   return (
@@ -388,6 +390,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const theme = TIME_THEMES[phase];
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  /* 天气和时段是两个维度：下雨时任何时段都开灯、落雨丝，飘叶 / 小鸟 / 萤火虫都收起来 */
+  const rain = useWeather() === "rain";
+  const rainRef = useRef(rain);
+  rainRef.current = rain;
+  /** 小鸟出不出来：夜里不出、下雨不出 */
+  const birdOut = () => phaseRef.current !== "night" && !rainRef.current;
 
   /*
    * 开场加载页就是压在这个场景上的一块白布（HeroCurtain：小电视 + 雪花屏进度）。
@@ -630,7 +638,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           await sleep(100);
         }
         if (!alive) return;
-        if (phaseRef.current !== "night") {
+        if (birdOut()) {
           await sleep(300);
           if (!alive) return;
           await flyInAndPerch(rand(9, 19));
@@ -643,8 +651,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       while (alive) {
         await sleep(rand(4000, 12000));
         if (!alive) break;
-        // 夜里小鸟不出来
-        if (phaseRef.current === "night") continue;
+        // 夜里、下雨小鸟不出来
+        if (!birdOut()) continue;
 
         const cruiseTop = rand(9, 19);
         if (Math.random() < 0.5) {
@@ -1141,10 +1149,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在调色层上面才会"发光"。
             首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
           <NightLights
-            on={theme.lights && !entering && !(intro && !introGo)}
+            on={(theme.lights || rain) && !entering && !(intro && !introGo)}
             delay={intro ? INTRO_AT.openSign + 0.6 : 0}
             signControls={signControls}
           />
+
+          {/* 下雨天屋里的窗也亮着（三扇窗的玻璃染成暖黄，叠在底图上） */}
+          <WindowLights on={rain && !entering && !(intro && !introGo)} delay={intro ? INTRO_AT.openSign + 0.6 : 0} />
 
           {/* 随风飘过的叶子：放在夜灯上面，不然晚上会飘到亮着的 WOOLAB 招牌后面去；
             自己带一份和调色层等价的染色，颜色和夜里的场景一致。进门时调色层褪掉，叶子也跟着不染 */}
@@ -1152,15 +1163,15 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             id={cover ? "d" : "m"}
             tint={theme.tint}
             tintAlpha={entering ? 0 : theme.tintAlpha}
+            on={!rain}
           />
 
           {/* 夜里灌木丛边飞的萤火虫：和夜灯一样等物件都摆好了再亮起来；身体借叶子那份染色，尾巴的光不染 */}
           <Fireflies
-            on={theme.stars && !entering && !(intro && !introGo)}
+            on={theme.stars && !rain && !entering && !(intro && !introGo)}
             delay={intro ? INTRO_AT.openSign + 1.2 : 0.4}
             tintFilter={!entering && theme.tintAlpha > 0 ? `url(#hero-leaf-tint-${cover ? "d" : "m"})` : undefined}
           />
-
           {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
           {heroHotspots.map((h) => (
             <div
@@ -1200,6 +1211,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           ))}
         </motion.div>
       </motion.div>
+
+      {/* 雨丝：铺满整个视口、压在场景最上面（房子前面也有），开场等物件都弹出来了再落下来；进门时先停 */}
+      <Rain
+        on={rain && !entering && !(intro && !introGo)}
+        delay={intro ? INTRO_AT.openSign + 0.8 : 0}
+        cover={cover}
+      />
 
       {/* 小羊的身份卡：点击小羊弹出，「去它家看看」直接接开门过场（config.identityCardEnabled 关着时不挂） */}
       {config.identityCardEnabled && (
@@ -1548,12 +1566,15 @@ function WindLeaves({
   id,
   tint,
   tintAlpha,
+  on = true,
 }: {
   /** 滤镜 id 后缀（桌面/移动两份场景各一个） */
   id: string;
   /** 当前时段的染色：叶子画在调色层和夜灯上面，自己补一份等价的染色 */
   tint: string;
   tintAlpha: number;
+  /** 下雨天不飘叶子（染色滤镜照常挂着，萤火虫也在用它） */
+  on?: boolean;
 }) {
   const reducedMotion = useReducedMotion();
   const filterId = `hero-leaf-tint-${id}`;
@@ -1583,7 +1604,7 @@ function WindLeaves({
           </filter>
         </svg>
       )}
-      {leaves.map((leaf, i) => (
+      {on && leaves.map((leaf, i) => (
         <motion.img
           key={i}
           src={leaf.src}
@@ -1619,6 +1640,155 @@ function WindLeaves({
         />
       ))}
     </>
+  );
+}
+
+/** 下雨天亮着的三扇窗：底图里窗玻璃抠出来染成暖黄的一张图，位置是画板像素 */
+const WINDOW_LIT = { src: "/assets/hero-window-lit.webp", x: 303, y: 352, w: 837 } as const;
+
+function WindowLights({ on, delay }: { on: boolean; delay: number }) {
+  return (
+    <motion.img
+      src={WINDOW_LIT.src}
+      alt=""
+      draggable={false}
+      className="pointer-events-none absolute select-none"
+      style={{ left: px(WINDOW_LIT.x), top: py(WINDOW_LIT.y), width: px(WINDOW_LIT.w), maxWidth: "none" }}
+      initial={false}
+      animate={{ opacity: on ? 1 : 0 }}
+      transition={{ duration: on ? TIME_FADE : 0.3, delay: on ? delay : 0, ease: "easeInOut" }}
+    />
+  );
+}
+
+/**
+ * 雨丝：Figma 里那组手绘短线（三种长度，1.5px 描边带噪点，#E4F3FF），已经转成竖直的透明图，
+ * 这里整层斜过来落。尺寸都按画板像素写，运行时乘场景缩放。
+ */
+const RAIN = {
+  /** 雨丝倾斜角（度）：右上 → 左下，Figma 里三根线约 16°~18° */
+  angle: 16.5,
+  /** 三种雨丝：图和它在画板里的尺寸（宽 5 是描边加噪点毛边） */
+  kinds: [
+    { src: "/assets/hero-rain-s.webp", w: 5, h: 70, weight: 0.2 },
+    { src: "/assets/hero-rain-m.webp", w: 5, h: 110.25, weight: 0.6 },
+    { src: "/assets/hero-rain-l.webp", w: 5, h: 265.75, weight: 0.2 },
+  ],
+  /** 密度：每平方画板像素多少根（参考图 1440x900 里约 90 根） */
+  density: 90 / (1440 * 900),
+  /** 落速：每秒落多少个画板高度 */
+  speed: 1.35,
+} as const;
+const RAIN_ASSETS = RAIN.kinds.map((k) => k.src);
+
+/** 一大池子归一化的雨滴（起点横坐标、相位、种类），窗口大小变了只改换算、不重新随机，雨不会跳 */
+const RAIN_POOL = Array.from({ length: 900 }, () => {
+  const r = Math.random();
+  let acc = 0;
+  let kind = 0;
+  for (let i = 0; i < RAIN.kinds.length; i++) {
+    acc += RAIN.kinds[i].weight;
+    if (r < acc) {
+      kind = i;
+      break;
+    }
+  }
+  return { u: Math.random(), phase: Math.random(), kind };
+});
+
+function Rain({ on, delay, cover }: { on: boolean; delay: number; cover: boolean }) {
+  const reducedMotion = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [ready, setReady] = useState(false);
+
+  // 图先下好再落（三张一共 30KB）
+  useEffect(() => {
+    if (!on) return;
+    let alive = true;
+    void loadImages(RAIN_ASSETS).then(() => alive && setReady(true));
+    return () => {
+      alive = false;
+    };
+  }, [on]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect;
+      setBox({ w: width, h: height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const drops = useMemo(() => {
+    if (!box.w || !box.h) return [];
+    // 场景缩放：整屏模式下场景按视口高度铺（宽 = 100vh * 16/10），移动端按宽度铺
+    const scale = cover ? (box.h * HERO_RATIO) / FRAME_W : box.w / FRAME_W;
+    const rad = (RAIN.angle * Math.PI) / 180;
+    const sin = Math.sin(rad);
+    const cos = Math.cos(rad);
+    // 雨滴从顶边上方出发，沿斜线落到底边下方；越靠右的起点才落得到右下角，所以起点范围往右多放 h·tanθ
+    const spanX = box.w + box.h * (sin / cos);
+    const n = Math.min(RAIN_POOL.length, Math.round(RAIN.density * (spanX * box.h) / (scale * scale)));
+    const speed = RAIN.speed * FRAME_H * scale; // px/s
+    return RAIN_POOL.slice(0, n).map((d, i) => {
+      const k = RAIN.kinds[d.kind];
+      const len = k.h * scale;
+      const travel = (box.h + len * 2) / cos;
+      const dur = travel / speed;
+      return {
+        key: i,
+        src: k.src,
+        w: k.w * scale,
+        h: len,
+        left: d.u * spanX,
+        top: -len,
+        dx: -travel * sin,
+        dy: travel * cos,
+        dur,
+        phase: -d.phase * dur,
+      };
+    });
+  }, [box, cover]);
+
+  if (reducedMotion) return null;
+
+  return (
+    <motion.div
+      ref={ref}
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      initial={false}
+      animate={{ opacity: on && ready ? 1 : 0 }}
+      transition={{ duration: on ? TIME_FADE : 0.4, delay: on ? delay : 0, ease: "easeInOut" }}
+    >
+      {on &&
+        ready &&
+        drops.map((d) => (
+          <img
+            key={d.key}
+            src={d.src}
+            alt=""
+            draggable={false}
+            className="hero-rain-drop absolute max-w-none select-none"
+            style={
+              {
+                left: d.left,
+                top: d.top,
+                width: d.w,
+                height: d.h,
+                "--rain-rot": `${RAIN.angle}deg`,
+                "--rain-dx": `${d.dx}px`,
+                "--rain-dy": `${d.dy}px`,
+                animationDuration: `${d.dur}s`,
+                animationDelay: `${d.phase}s`,
+              } as CSSProperties
+            }
+          />
+        ))}
+    </motion.div>
   );
 }
 

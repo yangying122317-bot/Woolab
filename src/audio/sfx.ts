@@ -85,6 +85,8 @@ const AMBIENTS = {
   calm: { src: "/assets/audio/ambient-calm.m4a", volume: 0.9 },
   /** 首页夜晚：蝉鸣 */
   night: { src: "/assets/audio/ambient-night.m4a", volume: 0.6 },
+  /** 首页下雨：雨声（先用程序合成的一段 72s 循环顶着，有真雨声素材直接替换这个文件） */
+  rain: { src: "/assets/audio/ambient-rain.m4a", volume: 0.7 },
   /** Life 页：屋里的背景音（素材本身就是循环） */
   life: { src: "/assets/audio/ambient-life.m4a", volume: 0.7 },
 } as const;

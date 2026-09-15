@@ -110,3 +110,22 @@ html * {
     image-set(url("/assets/cursor-1x.png") 1x, url("/assets/cursor-2x.png") 2x) 5 3,
     auto !important;
 }
+
+/**
+ * 首页雨丝：每根线沿自己的斜线从顶边上方落到底边下方，位移和倾角由 HeroScene 按窗口尺寸算好写在自定义属性里；
+ * 时长 / 负延迟（相位）也写在行内，所以这里只放不变的部分。纯 transform，交给合成器跑。
+ */
+.hero-rain-drop {
+  animation-name: hero-rain;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes hero-rain {
+  from {
+    transform: translate(0, 0) rotate(var(--rain-rot));
+  }
+  to {
+    transform: translate(var(--rain-dx), var(--rain-dy)) rotate(var(--rain-rot));
+  }
+}
