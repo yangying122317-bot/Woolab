@@ -860,15 +860,17 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             if (dist < STARTLE_RADIUS) birdStartledRef.current = true;
           }}
         >
-          {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入 */}
+          {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入；夜里不要云，只留星空 */}
           <motion.div
             className="pointer-events-none absolute inset-0"
             initial={intro && !tvIntro ? { opacity: 0 } : false}
-            animate={{ opacity: cloudHidden ? 0 : 1 }}
+            animate={{ opacity: cloudHidden || theme.stars ? 0 : 1 }}
             transition={
               cloudHidden
                 ? { duration: 0 }
-                : { delay: 0.3, duration: 0.9, ease: "easeOut" }
+                : theme.stars
+                  ? { duration: TIME_FADE, ease: "easeInOut" }
+                  : { delay: 0.3, duration: 0.9, ease: "easeOut" }
             }
           >
             <motion.img
