@@ -95,9 +95,9 @@ const TIME_THEMES: Record<
  * 天空写的是"被调色层乘过之后正好是参考图颜色"的值：#166EA0 → #4C9FC3 → #75C5DE。
  */
 const RAIN_THEME: (typeof TIME_THEMES)[TimePhase] = {
-  sky: "linear-gradient(to bottom, #187BBA 0%, #53B2E3 48%, #80DDFF 100%)",
-  tint: "#B8A88F",
-  tintAlpha: 0.32,
+  sky: "linear-gradient(to bottom, #15628E 0%, #4290B4 48%, #6FB5D2 100%)",
+  tint: "#8E96A6",
+  tintAlpha: 0.45,
   lights: true,
   stars: false,
 };
