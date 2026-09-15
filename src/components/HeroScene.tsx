@@ -9,6 +9,7 @@ import {
   playNavigate,
   startAmbient,
   stopAmbient,
+  warmAmbient,
 } from "../audio/sfx";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -726,8 +727,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     /* 开门过场中、开场蓝布还盖着时都不响应（布是 pointer-events-none，鼠标能穿到底下的热区） */
     if (enteringRef.current || curtainUpRef.current) return;
     setHovered(id);
-    // 碰到大门就把开门图兜底拉一次（已经在缓存里的话是空操作）
-    if (id === "life") void loadImages(DOOR_OPEN_ASSETS);
+    // 碰到大门就把开门图兜底拉一次（已经在缓存里的话是空操作），屋里的背景音也顺手拉起来
+    if (id === "life") {
+      void loadImages(DOOR_OPEN_ASSETS);
+      warmAmbient("life");
+    }
     // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
     if (id === "about" || id === "life") playLightOn();
     else if (id === "contact") playMailboxOpen();

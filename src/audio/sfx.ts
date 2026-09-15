@@ -79,7 +79,7 @@ function ready(): boolean {
  * 在这里加一条，再在场景组件里 startAmbient("night") 即可。
  */
 const AMBIENTS = {
-  /** 首页白天：自然环境（「白天自然」30s 起截 2 分钟做成无缝循环，这段有鸟叫） */
+  /** 首页白天：自然环境（「白天自然」30s 起截 75s 做成无缝循环，这段有鸟叫） */
   day: { src: "/assets/audio/ambient-day.m4a", volume: 0.9 },
   /** 首页清晨 / 傍晚：同一条「白天自然」里 355s 起那段安静的，没有鸟叫 */
   calm: { src: "/assets/audio/ambient-calm.m4a", volume: 0.9 },
@@ -93,14 +93,37 @@ export type AmbientId = keyof typeof AMBIENTS;
 
 /** 当前想要播放的场景背景音（null = 不播） */
 let ambientWanted: AmbientId | null = null;
+/** 正在出声（或正在淡出）的那条 */
 let ambientAudio: HTMLAudioElement | null = null;
 let ambientFade: ReturnType<typeof setInterval> | undefined;
+/**
+ * 每条环境音一个 <audio>，建好就常驻：切时段、离开再回来都不用重新下载。
+ * 下载不需要用户手势（只有 play() 需要），所以场景一挂上就先建好开始拉，
+ * 等用户第一下点击时前几秒已经缓冲好了，能立刻出声。
+ */
+const ambientEls = new Map<AmbientId, HTMLAudioElement>();
 
-/** 把背景音音量渐变到目标值，到 0 时暂停 */
-function fadeAmbientTo(target: number, ms: number) {
-  if (!ambientAudio) return;
+function ambientEl(id: AmbientId) {
+  let el = ambientEls.get(id);
+  if (!el) {
+    el = new Audio(AMBIENTS[id].src);
+    el.loop = true;
+    el.preload = "auto";
+    el.volume = 0;
+    ambientEls.set(id, el);
+  }
+  return el;
+}
+
+/** 提前把某条环境音拉起来（不出声）；比如首页换时段前、开门进 Life 前 */
+export function warmAmbient(id: AmbientId) {
+  if (typeof window === "undefined") return;
+  ambientEl(id);
+}
+
+/** 把某条背景音音量渐变到目标值，到 0 时暂停 */
+function fadeAmbientTo(audio: HTMLAudioElement, target: number, ms: number) {
   clearInterval(ambientFade);
-  const audio = ambientAudio;
   const from = audio.volume;
   const start = Date.now();
   ambientFade = setInterval(() => {
@@ -115,32 +138,34 @@ function fadeAmbientTo(target: number, ms: number) {
 
 /**
  * 让实际播放状态跟上「想播什么 + 是否静音 + 是否已解锁」。
- * 浏览器要求先有用户手势才能出声，解锁前先记下想播的场景，
+ * 浏览器要求先有用户手势才能出声，解锁前先记下想播的场景、把文件拉着，
  * 解锁（第一次点击/触摸）时会自动补播。
  */
 function syncAmbient() {
   const spec = ambientWanted ? AMBIENTS[ambientWanted] : null;
 
   if (!spec || muted || !unlocked) {
-    if (ambientAudio && !ambientAudio.paused) fadeAmbientTo(0, 600);
+    if (ambientAudio && !ambientAudio.paused) fadeAmbientTo(ambientAudio, 0, 600);
     return;
   }
 
-  if (!ambientAudio || !ambientAudio.src.endsWith(spec.src)) {
-    ambientAudio?.pause();
-    ambientAudio = new Audio(spec.src);
-    ambientAudio.loop = true;
+  const next = ambientEl(ambientWanted!);
+  if (ambientAudio && ambientAudio !== next) {
+    // 换场景：上一条直接停（淡出定时器只有一个，留给新的那条淡入）
+    ambientAudio.pause();
     ambientAudio.volume = 0;
   }
-  if (ambientAudio.paused) {
-    void ambientAudio.play().catch(() => {});
+  ambientAudio = next;
+  if (next.paused) {
+    void next.play().catch(() => {});
   }
-  fadeAmbientTo(spec.volume, 1500);
+  fadeAmbientTo(next, spec.volume, 1500);
 }
 
-/** 进入场景时调用：淡入该场景的背景音（自动等待音频解锁） */
+/** 进入场景时调用：淡入该场景的背景音（自动等待音频解锁；解锁前先把文件拉着） */
 export function startAmbient(id: AmbientId) {
   ambientWanted = id;
+  warmAmbient(id);
   syncAmbient();
 }
 
