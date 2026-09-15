@@ -29,10 +29,13 @@ export default function WeatherToggle() {
       className="flex cursor-pointer items-center justify-center transition-opacity hover:opacity-100"
       style={{ width: mu(20), height: mu(20), opacity: rain ? 1 : 0.55 }}
     >
-      <svg viewBox="1 4 22 19" className="h-[92%] w-[92%]" aria-hidden>
-        {/* 云：手绘感的一团 */}
-        <path
+      <svg viewBox="1 4 22 19" className="h-full w-full" aria-hidden>
+        {/* 云：手绘感的一团。晴天没有雨丝时整朵云往下挪到方框正中，和旁边的太阳、喇叭对齐；下雨时让位给雨丝 */}
+        <motion.path
           fill="currentColor"
+          initial={false}
+          animate={{ y: rain ? 0 : 2.5 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
           d="M5.1 15.6C3.3 15.7 2 14.3 2.1 12.8C2.2 11.4 3.4 10.3 4.9 10.4C5.1 7.8 7.3 5.9 9.9 6.1C11.6 6.2 13 7.3 13.7 8.7C14.6 8.1 15.7 8.1 16.6 8.8C17.6 9.5 18 10.6 17.8 11.6C19.5 11.5 20.8 12.7 20.7 14.1C20.6 15.2 19.6 15.9 18.4 15.9C16.2 15.8 14.1 16.1 12.2 16C9.9 15.9 7.4 16.2 5.1 15.6Z"
         />
         {/* 雨丝：下雨时依次落下来 */}
