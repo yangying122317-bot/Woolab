@@ -89,6 +89,19 @@ const TIME_THEMES: Record<
     stars: true,
   },
 };
+/**
+ * 雨天的景（照参考图）：天更深更沉的钢青蓝渐变、房子稍微压灰、没有云、灯全开。
+ * 白天 / 清晨 / 傍晚下雨都用这套；夜里下雨还是夜空（只加雨丝）。
+ * 天空写的是"被调色层乘过之后正好是参考图颜色"的值：#166EA0 → #4C9FC3 → #75C5DE。
+ */
+const RAIN_THEME: (typeof TIME_THEMES)[TimePhase] = {
+  sky: "linear-gradient(to bottom, #187BBA 0%, #53B2E3 48%, #80DDFF 100%)",
+  tint: "#B8A88F",
+  tintAlpha: 0.32,
+  lights: true,
+  stars: false,
+};
+
 /** 换景的过渡时长（秒）：天空交叉淡化、调色层、灯光都用它 */
 const TIME_FADE = 1.6;
 
@@ -387,11 +400,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const reducedMotion = useReducedMotion();
   const [hovered, setHovered] = useState<string | null>(null);
   const { phase } = useTimeOfDay();
-  const theme = TIME_THEMES[phase];
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
-  /* 天气和时段是两个维度：下雨时任何时段都开灯、落雨丝，飘叶 / 小鸟 / 萤火虫都收起来 */
+  /* 天气和时段是两个维度：下雨时任何时段都开灯、落雨丝，飘叶 / 小鸟 / 萤火虫都收起来；
+     白天段下雨换成雨天那套天色，夜里下雨还是夜空 */
   const rain = useWeather() === "rain";
+  const themeKey = rain && phase !== "night" ? "rain" : phase;
+  const theme = themeKey === "rain" ? RAIN_THEME : TIME_THEMES[phase];
   const rainRef = useRef(rain);
   rainRef.current = rain;
   /** 小鸟出不出来：夜里不出、下雨不出 */
@@ -810,7 +825,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       {/* 天空：按时段换渐变，新旧两层交叉淡化（渐变本身没法过渡） */}
       <AnimatePresence initial={false}>
         <motion.div
-          key={phase}
+          key={themeKey}
           className="pointer-events-none absolute inset-0"
           style={{ background: theme.sky }}
           initial={{ opacity: 0 }}
@@ -872,15 +887,15 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             if (dist < STARTLE_RADIUS) birdStartledRef.current = true;
           }}
         >
-          {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入；夜里不要云，只留星空 */}
+          {/* 云层（在建筑后面缓慢漂移）：出场时缓缓淡入；夜里不要云，只留星空；雨天也不要 */}
           <motion.div
             className="pointer-events-none absolute inset-0"
             initial={intro && !tvIntro ? { opacity: 0 } : false}
-            animate={{ opacity: cloudHidden || theme.stars ? 0 : 1 }}
+            animate={{ opacity: cloudHidden || theme.stars || rain ? 0 : 1 }}
             transition={
               cloudHidden
                 ? { duration: 0 }
-                : theme.stars
+                : theme.stars || rain
                   ? { duration: TIME_FADE, ease: "easeInOut" }
                   : { delay: 0.3, duration: 0.9, ease: "easeOut" }
             }
