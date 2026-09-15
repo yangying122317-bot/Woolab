@@ -1685,14 +1685,14 @@ const RAIN = {
   angle: 16.5,
   /** 三种雨丝：图和它在画板里的尺寸（宽 5 是描边加噪点毛边） */
   kinds: [
-    { src: "/assets/hero-rain-s.webp", w: 5, h: 70, weight: 0.2 },
-    { src: "/assets/hero-rain-m.webp", w: 5, h: 110.25, weight: 0.6 },
-    { src: "/assets/hero-rain-l.webp", w: 5, h: 265.75, weight: 0.2 },
+    { src: "/assets/hero-rain-s.webp", w: 5, h: 70, weight: 0.3 },
+    { src: "/assets/hero-rain-m.webp", w: 5, h: 110.25, weight: 0.55 },
+    { src: "/assets/hero-rain-l.webp", w: 5, h: 265.75, weight: 0.15 },
   ],
-  /** 密度：每平方画板像素多少根（参考图 1440x900 里约 90 根） */
-  density: 90 / (1440 * 900),
+  /** 密度：每平方画板像素多少根（参考图 1440x900 里约 90 根，实际按小雨来，一屏 55 根左右） */
+  density: 55 / (1440 * 900),
   /** 落速：每秒落多少个画板高度 */
-  speed: 1.35,
+  speed: 1.15,
 } as const;
 const RAIN_ASSETS = RAIN.kinds.map((k) => k.src);
 
