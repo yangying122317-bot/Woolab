@@ -1617,23 +1617,28 @@ function WindLeaves({
 }
 
 /**
- * 萤火虫：身体 / 上翅 / 下翅三张图（同一 58x52 画板，从 Figma 三个 Frame 各自渲染，直接叠放就对齐）。
- * 尾巴那团黄和两片翅膀根部在画板里的位置，单位是画板的百分比。素材原本头朝左。
+ * 萤火虫：身体 / 尾巴光 / 上翅 / 下翅四张图（同一张 219x190 画板，按 Figma 里各层的变换渲染，直接叠放就对齐）。
+ * 光晕已经画在尾巴那层里，不再用 CSS 叠光。翅膀根部的位置是画板的百分比。素材头朝左。
  */
 const FIREFLY = {
   body: "/assets/hero-firefly-body.webp",
+  tail: "/assets/hero-firefly-tail.webp",
   wingTop: "/assets/hero-firefly-wing-top.webp",
   wingBottom: "/assets/hero-firefly-wing-bottom.webp",
-  tail: { x: 78, y: 73 },
-  wingRoot: { x: 41, y: 63 },
+  /** 尾巴光的中心，尾巴呼吸时绕它缩放 */
+  tailCenter: { x: 74.4, y: 71.9 },
+  wingRoot: { x: 46, y: 57 },
 } as const;
-const FIREFLY_ASSETS = [FIREFLY.body, FIREFLY.wingTop, FIREFLY.wingBottom];
-/** 每只的活动范围（画面百分比）：左右两丛灌木、右边邮箱一带、房子左侧稍高的空中 */
+const FIREFLY_ASSETS = [FIREFLY.body, FIREFLY.tail, FIREFLY.wingTop, FIREFLY.wingBottom];
+/** 每只的活动范围（画面百分比）：左右两丛灌木、右边邮箱一带、房子左侧稍高的空中、招牌后面、右边灌木前的地上 */
 const FIREFLY_ZONES = [
   { left: [3, 17], top: [70, 86] },
   { left: [75, 92], top: [70, 86] },
   { left: [82, 97], top: [58, 78] },
   { left: [8, 26], top: [56, 74] },
+  { left: [14, 30], top: [74, 88] },
+  { left: [70, 84], top: [62, 76] },
+  { left: [88, 98], top: [78, 90] },
 ] as const;
 
 type Fly = {
@@ -1666,19 +1671,20 @@ function Fireflies({
         const pts = Array.from({ length: 6 }, () => ({ x: rand(z.left[0], z.left[1]), y: rand(z.top[0], z.top[1]) }));
         pts.push(pts[0]); // 绕一圈回到起点，循环才接得上
         return {
-          w: rand(2.5, 3.2),
+          /* 很小：远看只是一颗会呼吸的暖光，凑近才隐约有个小虫子的影子（画板里虫子占了约九成宽） */
+          w: rand(1.2, 1.6),
           pts,
-          duration: rand(20, 28),
+          duration: rand(16, 22),
           delay: rand(0, 4),
           bob: rand(1.4, 2.2),
-          glowDur: rand(2, 3.4),
+          glowDur: rand(1.8, 3.2),
           glowDelay: rand(0, 2),
           flap: rand(0.12, 0.16),
         };
       }),
     [],
   );
-  /* 图很小（共 19KB），一挂上就拉好，夜里第一次亮起来不闪 */
+  /* 图很小（共 13KB），一挂上就拉好，夜里第一次亮起来不闪 */
   useEffect(() => {
     void loadImages(FIREFLY_ASSETS);
   }, []);
@@ -1695,14 +1701,16 @@ function Firefly({ fly, delay, tintFilter }: { fly: Fly; delay: number; tintFilt
   /* 朝向：素材头朝左；往右飞就镜像过来。看 left 的变化方向定 */
   const [facing, setFacing] = useState<1 | -1>(1);
   const lastX = useRef<number | null>(null);
+  /* 翅膀半透明（设计里就是 50%）：抖得快的东西本来就看不实，也不抢身体 */
   const wingStyle = {
     transformOrigin: `${FIREFLY.wingRoot.x}% ${FIREFLY.wingRoot.y}%`,
     filter: tintFilter,
+    opacity: 0.5,
   };
   return (
     <motion.div
       className="pointer-events-none absolute"
-      style={{ width: `${fly.w}%`, aspectRatio: "58 / 52" }}
+      style={{ width: `${fly.w}%`, aspectRatio: "219 / 190" }}
       initial={{ left: `${fly.pts[0].x}%`, top: `${fly.pts[0].y}%`, opacity: 0 }}
       animate={{
         left: fly.pts.map((p) => `${p.x}%`),
@@ -1734,39 +1742,7 @@ function Firefly({ fly, delay, tintFilter }: { fly: Fly; delay: number; tintFilt
           animate={{ y: ["0%", "-9%", "0%"] }}
           transition={{ duration: fly.bob, repeat: Infinity, ease: "easeInOut" }}
         >
-          {/* 尾巴的光：一大团黄晕在身体底下呼吸（叠色，让夜色亮起来） */}
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              left: `${FIREFLY.tail.x}%`,
-              top: `${FIREFLY.tail.y}%`,
-              width: "200%",
-              aspectRatio: "1",
-              translate: "-50% -50%",
-              background:
-                "radial-gradient(circle, rgba(255,232,140,1) 0%, rgba(255,204,80,0.55) 24%, rgba(255,186,50,0) 64%)",
-              mixBlendMode: "screen",
-            }}
-            animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }}
-            transition={{ duration: fly.glowDur, repeat: Infinity, ease: "easeInOut", delay: fly.glowDelay }}
-          />
-          <img src={FIREFLY.body} alt="" draggable={false} className="absolute inset-0 h-full w-full max-w-none select-none" style={{ filter: tintFilter }} />
-          {/* 尾巴本身也跟着亮：一小点暖黄盖在染过色的黄尾巴上，把它从夜色里点出来 */}
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              left: `${FIREFLY.tail.x}%`,
-              top: `${FIREFLY.tail.y}%`,
-              width: "34%",
-              aspectRatio: "1",
-              translate: "-50% -50%",
-              background: "radial-gradient(circle, rgba(255,236,150,0.95) 0%, rgba(255,220,110,0.7) 45%, rgba(255,210,90,0) 100%)",
-              mixBlendMode: "screen",
-            }}
-            animate={{ opacity: [0.35, 1, 0.35] }}
-            transition={{ duration: fly.glowDur, repeat: Infinity, ease: "easeInOut", delay: fly.glowDelay }}
-          />
-          {/* 两片翅膀各自绕根部扇，一上一下错半拍 */}
+          {/* 图层顺序照 Figma：下翅、尾巴光、身体、上翅 */}
           <motion.img
             src={FIREFLY.wingBottom}
             alt=""
@@ -1776,6 +1752,24 @@ function Firefly({ fly, delay, tintFilter }: { fly: Fly; delay: number; tintFilt
             animate={{ rotate: [-9, 9] }}
             transition={{ duration: fly.flap, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
           />
+          {/* 尾巴的光：设计里单独一层，光晕已画在图里。一亮一灭、亮时稍微涨一点（最暗时几乎看不见，像真的萤火虫） */}
+          <motion.img
+            src={FIREFLY.tail}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full max-w-none select-none"
+            style={{ transformOrigin: `${FIREFLY.tailCenter.x}% ${FIREFLY.tailCenter.y}%` }}
+            animate={{ opacity: [0.08, 1, 0.08], scale: [0.9, 1.08, 0.9] }}
+            transition={{ duration: fly.glowDur, repeat: Infinity, ease: "easeInOut", delay: fly.glowDelay }}
+          />
+          <img
+            src={FIREFLY.body}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full max-w-none select-none"
+            style={{ filter: tintFilter, opacity: 0.85 }}
+          />
+          {/* 上翅绕根部扇，和下翅错半拍 */}
           <motion.img
             src={FIREFLY.wingTop}
             alt=""
