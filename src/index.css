@@ -7,6 +7,8 @@
  *   英文   Nothing You Could Do (ScrollHand)   DM Sans
  *   中文   字制区喜脉喜欢体 (HandZh)            Noto Sans SC (SansZh)
  *
+ * 现在全站三个类都走手写体，黑体那两格只在手写体缺字（破折号、引号等）时兜底。
+ *
  * 英文字体只有 ASCII，中文字体排在它后面兜底：浏览器逐字找字形，一句「跟 WOOLAB 打个招呼」
  * 里汉字自动落到中文字体、字母用英文字体，所以中英文共用 .font-hand / .font-look / .font-nav 三个类，
  * 组件里不用再按语言切。
@@ -29,7 +31,7 @@
 /** 喜脉喜欢体的字形只占 em 的八成、笔画又细，放大 130% 才和 Nothing You Could Do 同样大小 */
 @font-face {
   font-family: "HandZh";
-  src: url("/assets/fonts/hand-zh.woff2?v=20260914") format("woff2");
+  src: url("/assets/fonts/hand-zh.woff2?v=20260919") format("woff2");
   size-adjust: 130%;
   font-display: swap;
 }
@@ -52,20 +54,24 @@
 
 /**
  * 手写：提示、标注、清单、便条这类点缀文字。
- * 两款手写体都只有一档字重，加粗交给浏览器合成。破折号 / 单引号两款手写体里都没有，落到 DM Sans。
+ * 两款手写体都只有一档字重，加粗交给浏览器合成。破折号 / 单引号两款手写体里都没有（喜脉喜欢体里是空字形，
+ * 子集后已把这两个码位从 cmap 里删掉），落到 DM Sans。
  */
 .font-hand {
   font-family: "ScrollHand", "HandZh", "DM Sans", "SansZh", system-ui, sans-serif;
 }
 
-/** 黑体正文 / 标题：不改大小写，字重由使用处决定 */
+/**
+ * 正文 / 标题：不改大小写，字重由使用处决定。
+ * 全站已经统一换成手写体（原来这格是 DM Sans / Noto Sans SC 黑体），黑体只留作缺字的兜底。
+ */
 .font-look {
-  font-family: "DM Sans", "SansZh", system-ui, sans-serif;
+  font-family: "ScrollHand", "HandZh", "DM Sans", "SansZh", system-ui, sans-serif;
 }
 
-/** 黑体、强制大写：顶栏 MENU / CN / EN、目录吊牌、序号小标题 */
+/** 强制大写：顶栏 MENU / CN / EN、目录吊牌、序号小标题（同样是手写体） */
 .font-nav {
-  font-family: "DM Sans", "SansZh", system-ui, sans-serif;
+  font-family: "ScrollHand", "HandZh", "DM Sans", "SansZh", system-ui, sans-serif;
   text-transform: uppercase;
 }
 
@@ -92,7 +98,7 @@ body,
 }
 
 body {
-  font-family: "DM Sans", "SansZh", system-ui, -apple-system, "PingFang SC", sans-serif;
+  font-family: "ScrollHand", "HandZh", "DM Sans", "SansZh", system-ui, -apple-system, "PingFang SC", sans-serif;
 }
 
 /**
