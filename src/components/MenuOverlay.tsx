@@ -29,7 +29,8 @@ type Box = { x: number; y: number; w: number; h: number };
 type TagDef = {
   id: "about" | "lab" | "life" | "contact";
   path: string;
-  title: string;
+  /** 牌子上的大字（中英文各一份，英文由 .font-nav 转大写） */
+  title: DictKey;
   sub: DictKey;
   /** 绳子（从画面顶上垂下来） */
   string: Box;
@@ -52,7 +53,7 @@ const TAGS: TagDef[] = [
   {
     id: "about",
     path: "/about",
-    title: "About",
+    title: "menu.about.title",
     sub: "menu.about.sub",
     string: { x: 129.58, y: -36.66, w: 11.83, h: 221.74 },
     clip: { x: 122.77, y: 180.83, w: 16.54, h: 16.4 },
@@ -68,7 +69,7 @@ const TAGS: TagDef[] = [
   {
     id: "lab",
     path: "/lab",
-    title: "Lab",
+    title: "menu.lab.title",
     sub: "menu.lab.sub",
     string: { x: 272.6, y: -61.81, w: 7.52, h: 220.53 },
     clip: { x: 270.44, y: 155.83, w: 16.54, h: 16.4 },
@@ -84,7 +85,7 @@ const TAGS: TagDef[] = [
   {
     id: "life",
     path: "/life",
-    title: "Life",
+    title: "menu.life.title",
     sub: "menu.life.sub",
     string: { x: 422.57, y: -3.75, w: 7.28, h: 139.45 },
     clip: { x: 412.58, y: 131.9, w: 20.59, h: 20.39, big: true },
@@ -100,7 +101,7 @@ const TAGS: TagDef[] = [
   {
     id: "contact",
     path: "/contact",
-    title: "Contact",
+    title: "menu.contact.title",
     sub: "menu.contact.sub",
     string: { x: 566.71, y: -35.83, w: 9.7, h: 220.55 },
     clip: { x: 566.77, y: 181.83, w: 16.54, h: 16.4 },
@@ -352,6 +353,7 @@ export default function MenuOverlay({
             hovered={hovered === tag.id && !picked}
             dipped={picked === tag.id}
             dimmed={(picked ?? hovered) !== null && (picked ?? hovered) !== tag.id}
+            title={t(tag.title)}
             note={t(tag.sub)}
             onHover={(on) => phase === "in" && !picked && setHovered(on ? tag.id : null)}
             onPick={() => pick(tag)}
@@ -374,6 +376,7 @@ function Tag({
   hovered,
   dipped,
   dimmed,
+  title,
   note,
   onHover,
   onPick,
@@ -389,6 +392,7 @@ function Tag({
   dipped: boolean;
   /** 别的牌被 hover / 点了：这块退一步 */
   dimmed: boolean;
+  title: string;
   note: string;
   onHover: (on: boolean) => void;
   onPick: () => void;
@@ -523,10 +527,11 @@ function Tag({
             top: tag.head.top * s,
             transform: "translateX(-50%)",
             fontSize: 20 * s,
-            letterSpacing: 1 * s,
+            /* 中文标题字距放宽一点，两三个字才撑得住牌面 */
+            letterSpacing: (/[\u4e00-\u9fff]/.test(title) ? 3 : 1) * s,
           }}
         >
-          {tag.title}
+          {title}
         </span>
         <span
           className="font-hand absolute block text-center leading-[1.2] text-white"
@@ -547,7 +552,7 @@ function Tag({
         {/* 点击热区 = 牌身 */}
         <button
           type="button"
-          aria-label={tag.title}
+          aria-label={title}
           className="pointer-events-auto absolute cursor-pointer"
           style={box(tag.body)}
           onPointerEnter={() => {

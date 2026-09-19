@@ -204,7 +204,7 @@ export default function NavBar({
             aria-expanded={menuOpen}
             className="cursor-pointer"
           >
-            {menuOpen ? "CLOSE" : "MENU"}
+            {menuOpen ? t("menu.closeLabel") : t("menu.label")}
           </button>
         </NavHit>
 
