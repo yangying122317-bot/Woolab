@@ -44,8 +44,6 @@ const ART = {
 const CX = 360;
 /* 整块比稿子略往上收（标题 103 → 99），给"邮箱 → 也可以在这里找到我们"之间多留点空；链接那行不能再往下，底下就是信封前片 */
 const TITLE = { y: 99, size: 16 };
-/** 标题里那枚手写 WOOLAB（53×17） */
-const MARK = { w: 53, h: 17 };
 const SUB = { y: 127, w: 186, wZh: 230, size: 10 };
 const WRITE = { y: 168 };
 const EMAIL = { y: 191 };
@@ -323,7 +321,7 @@ export default function ContactPage() {
           />
           {/* 下面的坐标都换成相对信纸框 */}
           <div className="absolute" style={{ left: -ART.paper.x, top: -ART.paper.y, width: FW, height: FH }}>
-            {/* Say Hi to WOOLAB */}
+            {/* Say Hi to WOOLAB（WOOLAB 直接排文字，不再用那枚手写 logo 图） */}
             <div
               className={`${headFont} absolute flex items-start justify-center whitespace-nowrap text-black`}
               style={{
@@ -337,13 +335,7 @@ export default function ContactPage() {
               }}
             >
               <span>{t("contact.hi.pre")}</span>
-              <img
-                src={`${C}/mark.webp`}
-                alt="WOOLAB"
-                draggable={false}
-                className="block max-w-none"
-                style={{ width: MARK.w, height: MARK.h, marginTop: 1.6, mixBlendMode: "multiply" }}
-              />
+              <span>WOOLAB</span>
               {t("contact.hi.post") && <span>{t("contact.hi.post")}</span>}
             </div>
             <p

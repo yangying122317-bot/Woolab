@@ -11,7 +11,7 @@
 /** 翻过去的那页：标题 / 副标 / 底下那行手写字（同样的 *圈* _划线_ 标记）/ 页脚两个链接 */
 export const aboutNext = {
   title: { zh: "接下来", en: "What's Next" },
-  sub: { zh: "WOOLAB 仍在形成。", en: "WOOLAB is still taking shape." },
+  sub: { zh: "WOOLAB 仍在形成", en: "WOOLAB is still taking shape" },
   line: {
     zh: "*新的角色*、_作品_和*空间*，会继续慢慢加入这里。",
     en: "*New characters,* _works,_ and *spaces* will slowly find their way here.",
@@ -94,7 +94,7 @@ export const aboutShots: AboutShot[] = [
   {
     id: "part",
     photo: "/assets/about/photo-door.webp",
-    title: { zh: "来到这里的人", en: "Take Part" },
+    title: { zh: "走进来", en: "Take Part" },
     note: {
       left: {
         zh: "WOOLAB 不只是\n一个*被观看*的地方。",

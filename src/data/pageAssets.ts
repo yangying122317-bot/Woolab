@@ -14,7 +14,7 @@ const A = "/assets/about";
 
 /** Contact：信封 + 信纸 + 小羊先到齐再露；电话、水印、圈圈这些小件随后 */
 export const CONTACT_FIRST = [`${C}/env-back.webp`, `${C}/paper.webp`, `${C}/env-front.webp`, `${C}/fold.webp`, `${C}/sheep.webp`];
-export const CONTACT_REST = [`${C}/mark.webp`, `${C}/cord.webp`, `${C}/handset.webp`, `${A}/noise-cream.png`];
+export const CONTACT_REST = [`${C}/cord.webp`, `${C}/handset.webp`, `${A}/noise-cream.png`];
 
 /** About：相机、快门、第一张相纸的框和照片、水印先到齐；其余四张照片随后 */
 export const ABOUT_FIRST = [
