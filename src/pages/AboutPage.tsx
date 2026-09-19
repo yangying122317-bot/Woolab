@@ -385,26 +385,24 @@ export default function AboutPage() {
       </div>
       </motion.div>
 
-      {/* 最后一张出完：屏幕底部正中「( scroll )」+ 一支往下点的手绘小箭头（贴屏幕底边，不跟稿走） */}
+      {/* 最后一张出完：屏幕底部正中的滚动提示，和 Lab 入口那组一样——手绘小箭头 + ( 滚动 )，
+          横排、字带描边加粗；这里箭头朝下（往下滚），贴屏幕底边、不跟稿走 */}
       <AnimatePresence>
         {flipReady && (
           <motion.div
             key="scroll-hint"
-            className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
-            style={{ bottom: SCROLL_HINT_BOTTOM * s, gap: 2 * s }}
+            className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+            style={{ bottom: SCROLL_HINT_BOTTOM * s, gap: 8 * s }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.2 } }}
             transition={{ delay: scrollHintAt, duration: 0.5 }}
           >
-            <span className="font-hand whitespace-nowrap" style={{ fontSize: 11 * s, color: "#8B8680" }}>
-              {t("about.scroll")}
-            </span>
             <motion.div
               style={{
-                width: 11 * s,
-                height: 14.5 * s,
-                background: "#8B8680",
+                width: 14 * s,
+                height: 18.5 * s,
+                background: "#56504D",
                 WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
                 maskImage: "url(/assets/lab/scroll-arrow.svg)",
                 WebkitMaskSize: "100% 100%",
@@ -415,6 +413,12 @@ export default function AboutPage() {
               animate={{ y: [0, 3 * s, 0], opacity: [1, 0.55, 1] }}
               transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut" }}
             />
+            <span
+              className="font-hand whitespace-nowrap"
+              style={{ fontSize: 14 * s, color: "#56504D", WebkitTextStroke: `${1 * s}px #56504D` }}
+            >
+              {t("lab.entry.scroll")}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
