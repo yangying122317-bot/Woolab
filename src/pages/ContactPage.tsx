@@ -46,7 +46,8 @@ const ART = {
 const CX = 360;
 /* 字的坐标是舞台坐标，跟信纸一起挪（纸动 n，这里全部 ±n）。间距："副标 → 写张便条"、"邮箱 → 也可以在这里找到我们"刻意留松；链接那行底下就是信封前片的 V 口，别再往下 */
 const TITLE = { y: 91, size: 16 };
-const SUB = { y: 119, w: 186, wZh: 230, size: 10 };
+/* 副标字号跟邮箱那行一致（LINK_SIZE），宽度按 12 号放宽 */
+const SUB = { y: 119, w: 236, wZh: 276, size: 12 };
 const WRITE = { y: 174 };
 const EMAIL = { y: 197 };
 const FIND = { y: 243 };
@@ -77,6 +78,8 @@ const HANG_DROP_DELAY = 0.35;
 /** 进场：信纸（连字）先塞在信封里这么深，画面露出后弹簧往上抽出来 */
 const PAPER_TUCK = 110;
 const PAPER_POP_DELAY = 0.45;
+/** 信纸的裁切下沿：信封前片底边往上收一点描边 */
+const PAPER_CLIP_H = ART.envFront.y + ART.envFront.h - 6;
 /**
  * 摆动和目录吊牌同一套：落地那一下给角度弹簧一个初速度，自己晃出来、一次比一次小。
  * 电话线比吊牌的绳短，同样角度末端摆幅小，力度给大一点。
@@ -316,99 +319,97 @@ export default function ContactPage() {
           style={art(ART.envBack)}
         />
 
-        {/* 信纸：字都写在它上面；进场时连字一起从信封里往上弹出来 */}
-        <motion.div
-          className="absolute"
-          style={art(ART.paper)}
-          initial={{ y: PAPER_TUCK }}
-          animate={{ y: shown ? 0 : PAPER_TUCK }}
-          transition={{ type: "spring", stiffness: 90, damping: 14, mass: 1, delay: PAPER_POP_DELAY }}
-        >
-          <img
-            src={`${C}/paper.webp`}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute inset-0 h-full w-full max-w-none"
-          />
-          {/* 下面的坐标都换成相对信纸框 */}
-          <div className="absolute" style={{ left: -ART.paper.x, top: -ART.paper.y, width: FW, height: FH }}>
-            {/* Say Hi to WOOLAB（WOOLAB 直接排文字，不再用那枚手写 logo 图） */}
-            <div
-              className={`${headFont} absolute flex items-start justify-center whitespace-nowrap text-black`}
-              style={{
-                left: 0,
-                width: FW,
-                top: TITLE.y,
-                fontSize: TITLE.size,
-                lineHeight: 1.3,
-                gap: 5,
-                fontWeight: headWeight,
-              }}
-            >
-              <span>{t("contact.hi.pre")}</span>
-              <span>WOOLAB</span>
-              {t("contact.hi.post") && <span>{t("contact.hi.post")}</span>}
-            </div>
-            <p
-              className={`${handFont} absolute text-center text-black`}
-              style={{
-                left: CX - subW / 2,
-                width: subW,
-                top: SUB.y,
-                fontSize: SUB.size,
-                /* 中文手写体字面大（size-adjust 130%），行距要松一些 */
-                lineHeight: zh ? 1.55 : 1.2,
-                whiteSpace: "pre-line",
-              }}
-            >
-              {t("contact.sub")}
-            </p>
+        {/* 信纸：字都写在它上面；进场时连字一起从信封里往上弹出来。
+            外面套一层裁切到信封前片底边，弹出前塞在下面那截不会从信封底下漏出来 */}
+        <div className="pointer-events-none absolute overflow-hidden" style={{ left: 0, top: 0, width: FW, height: PAPER_CLIP_H }}>
+          <motion.div
+            className="pointer-events-auto absolute"
+            style={art(ART.paper)}
+            initial={{ y: PAPER_TUCK }}
+            animate={{ y: shown ? 0 : PAPER_TUCK }}
+            transition={{ type: "spring", stiffness: 90, damping: 14, mass: 1, delay: PAPER_POP_DELAY }}
+          >
+            <img
+              src={`${C}/paper.webp`}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute inset-0 h-full w-full max-w-none"
+            />
+            {/* 下面的坐标都换成相对信纸框 */}
+            <div className="absolute" style={{ left: -ART.paper.x, top: -ART.paper.y, width: FW, height: FH }}>
+              {/* Say Hi to WOOLAB（WOOLAB 直接排文字，不再用那枚手写 logo 图） */}
+              <div
+                className={`${headFont} absolute flex items-start justify-center whitespace-nowrap text-black`}
+                style={{
+                  left: 0,
+                  width: FW,
+                  top: TITLE.y,
+                  fontSize: TITLE.size,
+                  lineHeight: 1.3,
+                  gap: 5,
+                  fontWeight: headWeight,
+                }}
+              >
+                <span>{t("contact.hi.pre")}</span>
+                <span>WOOLAB</span>
+                {t("contact.hi.post") && <span>{t("contact.hi.post")}</span>}
+              </div>
+              <p
+                className={`${handFont} absolute text-center text-black`}
+                style={{
+                  left: CX - subW / 2,
+                  width: subW,
+                  top: SUB.y,
+                  fontSize: SUB.size,
+                  /* 中文手写体字面大（size-adjust 130%），行距要松一些 */
+                  lineHeight: zh ? 1.55 : 1.2,
+                  whiteSpace: "pre-line",
+                }}
+              >
+                {t("contact.sub")}
+              </p>
 
-            <Head font={headFont} weight={headWeight} y={WRITE.y}>
-              {t("contact.write")}
-            </Head>
-            <div
-              className={`${bodyFont} absolute text-center text-black`}
-              style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
-            >
-              <Circled>
-                <button
-                  type="button"
-                  onClick={() => void copyEmail()}
-                  title={t("contact.copy")}
-                  className="cursor-pointer border-0 bg-transparent p-0 underline decoration-solid underline-offset-2"
-                  style={{ color: "inherit", font: "inherit", letterSpacing: "inherit" }}
-                >
-                  {copied ? t("contact.copied") : contactEmail}
-                </button>
-              </Circled>
-            </div>
+              <Head font={headFont} weight={headWeight} y={WRITE.y}>
+                {t("contact.write")}
+              </Head>
+              <div
+                className={`${bodyFont} absolute text-center text-black`}
+                style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
+              >
+                <Circled>
+                  <button
+                    type="button"
+                    onClick={() => void copyEmail()}
+                    title={t("contact.copy")}
+                    className="cursor-pointer border-0 bg-transparent p-0"
+                    style={{ color: "inherit", font: "inherit", letterSpacing: "inherit" }}
+                  >
+                    {copied ? t("contact.copied") : contactEmail}
+                  </button>
+                </Circled>
+              </div>
 
-            <Head font={headFont} weight={headWeight} y={FIND.y}>
-              {t("contact.find")}
-            </Head>
-            <div
-              className={`${bodyFont} absolute text-center text-black`}
-              style={{ left: 0, width: FW, top: LINKS.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
-            >
-              {socialLinks.map((l, i) => (
-                <span key={l.id}>
-                  {i > 0 && <span className="mx-[0.45em]">/</span>}
-                  <Circled>
-                    <a
-                      href={l.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline decoration-solid underline-offset-2"
-                    >
-                      {l.label}
-                    </a>
-                  </Circled>
-                </span>
-              ))}
+              <Head font={headFont} weight={headWeight} y={FIND.y}>
+                {t("contact.find")}
+              </Head>
+              <div
+                className={`${bodyFont} absolute text-center text-black`}
+                style={{ left: 0, width: FW, top: LINKS.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
+              >
+                {socialLinks.map((l, i) => (
+                  <span key={l.id}>
+                    {i > 0 && <span className="mx-[0.45em]">/</span>}
+                    <Circled>
+                      <a href={l.href} target="_blank" rel="noreferrer">
+                        {zh ? l.label.zh : l.label.en}
+                      </a>
+                    </Circled>
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
 
         {/* 信封前片 + 折线 */}
         <img

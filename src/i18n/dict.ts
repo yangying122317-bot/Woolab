@@ -110,7 +110,7 @@ export const dict = {
     "news.figure": "动图 · 占位",
     "contact.hi.pre": "跟",
     "contact.hi.post": "打个招呼",
-    "contact.sub": "合作、项目、产品，或只是想打个招呼——\n给我们留张便条吧。",
+    "contact.sub": "合作、项目、产品，或只是想打个招呼，\n给我们留张便条吧。",
     "contact.write": "写张便条",
     "contact.find": "也可以在这里找到我们",
     "contact.copy": "点击复制邮箱",

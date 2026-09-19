@@ -31,7 +31,7 @@
 /** 喜脉喜欢体的字形只占 em 的八成、笔画又细，放大 130% 才和 Nothing You Could Do 同样大小 */
 @font-face {
   font-family: "HandZh";
-  src: url("/assets/fonts/hand-zh.woff2?v=20260919b") format("woff2");
+  src: url("/assets/fonts/hand-zh.woff2?v=20260919c") format("woff2");
   size-adjust: 130%;
   font-display: swap;
 }
@@ -47,7 +47,7 @@
 /** Noto Sans SC（可变字重 100–900） */
 @font-face {
   font-family: "SansZh";
-  src: url("/assets/fonts/sans-zh.woff2?v=20260919b") format("woff2");
+  src: url("/assets/fonts/sans-zh.woff2?v=20260919c") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }

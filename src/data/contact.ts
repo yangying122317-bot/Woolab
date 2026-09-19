@@ -7,11 +7,11 @@ export const contactEmail = "hello@woolab.example";
 
 export interface SocialLink {
   id: string;
-  label: string;
+  label: { zh: string; en: string };
   href: string;
 }
 
 export const socialLinks: SocialLink[] = [
-  { id: "instagram", label: "Instagram", href: "https://www.instagram.com/yuanabai/" },
-  { id: "xiaohongshu", label: "RED", href: "https://xhslink.cn/o/6HOWfVbZiG4" },
+  { id: "instagram", label: { zh: "Instagram", en: "Instagram" }, href: "https://www.instagram.com/yuanabai/" },
+  { id: "xiaohongshu", label: { zh: "小红书", en: "RED" }, href: "https://xhslink.cn/o/6HOWfVbZiG4" },
 ];
