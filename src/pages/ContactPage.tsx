@@ -85,6 +85,9 @@ const PAPER_CLIP_H = ART.envFront.y + ART.envFront.h - 6;
  * 电话线比吊牌的绳短，同样角度末端摆幅小，力度给大一点。
  */
 const KICK = 24;
+/** 挂着没人碰的时候，每隔这么久自己轻轻晃一下（像被穿堂风碰到），力度介于 hover 和落地之间 */
+const IDLE_SWAY_EVERY = 6000;
+const IDLE_SWAY = KICK * 0.5;
 /**
  * 整组（线 + 听筒 + 气泡）相对稿再往左挪一点：站点顶栏的 MENU / CN 排得比稿里稍开，
  * 按稿的位置线会贴着 CN，挪过去正好从 MENU 和 CN 正中间穿下去（顶栏高度处线心 ≈ MENU 右边和 CN 左边的中点）。
@@ -222,6 +225,14 @@ export default function ContactPage() {
       alive = false;
     };
   }, []);
+
+  /* 挂好且没在通话时，每 6 秒自己轻晃一下；hover / 拿起那些手动晃动会另外触发，通话时停掉 */
+  useEffect(() => {
+    if (!hung || call !== "idle") return;
+    const id = window.setInterval(() => swing(IDLE_SWAY), IDLE_SWAY_EVERY);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hung, call]);
 
   /* 进场：画面露出后弹簧把电话放下来；顺手把电话里那句 hello 的录音先解码好 */
   useEffect(() => {
