@@ -217,7 +217,8 @@ export default function NavBar({
               style={{ opacity: lang === "zh" ? 1 : 0.5 }}
               aria-pressed={lang === "zh"}
             >
-              CN
+              {/* 英文界面下这个入口写成「中」，让不认识 CN 的人也知道它是切中文 */}
+              {lang === "en" ? "中" : "CN"}
             </button>
           </NavHit>
           <span aria-hidden>/</span>
