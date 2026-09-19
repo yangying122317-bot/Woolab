@@ -32,7 +32,8 @@ const C = "/assets/contact";
 /* 各图层在稿里的包围盒（含描边溢出，图就是按这个框导出的） */
 const ART = {
   envBack: { x: 190.5, y: 122.5, w: 336, h: 235 },
-  paper: { x: 215.75, y: 82.5, w: 296, h: 259 },
+  /* 信纸比稿子往上抽出 24（82.5 → 58.5），多露一截，纸底（317.5）仍藏在信封前片（268 起）后面 */
+  paper: { x: 215.75, y: 58.5, w: 296, h: 259 },
   envFront: { x: 186.66, y: 268, w: 345, h: 104 },
   fold: { x: 215.75, y: 281.5, w: 296, h: 50 },
   sheep: { x: 128.7, y: 269.5, w: 85, h: 125 },
@@ -42,13 +43,13 @@ const ART = {
 
 /* 信纸上的字：都以 x=360 为中线 */
 const CX = 360;
-/* 整块比稿子略往上收（标题 103 → 99），给"邮箱 → 也可以在这里找到我们"之间多留点空；链接那行不能再往下，底下就是信封前片 */
-const TITLE = { y: 99, size: 16 };
-const SUB = { y: 127, w: 186, wZh: 230, size: 10 };
-const WRITE = { y: 168 };
-const EMAIL = { y: 191 };
-const FIND = { y: 229 };
-const LINKS = { y: 252 };
+/* 信纸抽高 24 之后整块字跟着上移，多出来的空间分给"副标 → 写张便条"（+14）和"邮箱 → 也可以在这里找到我们"（+22）；链接那行不能再往下，底下就是信封前片 */
+const TITLE = { y: 75, size: 16 };
+const SUB = { y: 103, w: 186, wZh: 230, size: 10 };
+const WRITE = { y: 158 };
+const EMAIL = { y: 181 };
+const FIND = { y: 227 };
+const LINKS = { y: 250 };
 const HEAD_SIZE = 14;
 const LINK_SIZE = 12;
 
