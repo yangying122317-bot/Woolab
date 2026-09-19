@@ -32,8 +32,9 @@ const C = "/assets/contact";
 /* 各图层在稿里的包围盒（含描边溢出，图就是按这个框导出的） */
 const ART = {
   envBack: { x: 190.5, y: 122.5, w: 336, h: 235 },
-  /* 信纸比稿子往上抽出 36.5（82.5 → 46），多露一截、标题离纸顶也留够空；纸底（305）仍藏在信封前片（268 起）后面 */
-  paper: { x: 215.75, y: 46, w: 296, h: 259 },
+  /* 信纸比稿子往上抽出 20.5（82.5 → 62），多露一截、标题离纸顶也留够空。
+   * 信封前片顶边是个 V 口，正中最低点在 y≈305，纸底（321）要压在它下面，不然纸的底边描线会从 V 口里露出来 */
+  paper: { x: 215.75, y: 62, w: 296, h: 259 },
   envFront: { x: 186.66, y: 268, w: 345, h: 104 },
   fold: { x: 215.75, y: 281.5, w: 296, h: 50 },
   sheep: { x: 128.7, y: 269.5, w: 85, h: 125 },
@@ -43,13 +44,13 @@ const ART = {
 
 /* 信纸上的字：都以 x=360 为中线 */
 const CX = 360;
-/* 信纸抽高后整块字跟着上移（字的坐标是舞台坐标，纸再往上抽时字不动，只是纸顶留白变多），多出来的空间分给"副标 → 写张便条"（+14）和"邮箱 → 也可以在这里找到我们"（+22）；链接那行不能再往下，底下就是信封前片 */
-const TITLE = { y: 75, size: 16 };
-const SUB = { y: 103, w: 186, wZh: 230, size: 10 };
-const WRITE = { y: 158 };
-const EMAIL = { y: 181 };
-const FIND = { y: 227 };
-const LINKS = { y: 250 };
+/* 字的坐标是舞台坐标，跟信纸一起挪（纸动 n，这里全部 ±n）。间距："副标 → 写张便条"、"邮箱 → 也可以在这里找到我们"刻意留松；链接那行底下就是信封前片的 V 口，别再往下 */
+const TITLE = { y: 91, size: 16 };
+const SUB = { y: 119, w: 186, wZh: 230, size: 10 };
+const WRITE = { y: 174 };
+const EMAIL = { y: 197 };
+const FIND = { y: 243 };
+const LINKS = { y: 266 };
 const HEAD_SIZE = 14;
 const LINK_SIZE = 12;
 
@@ -73,6 +74,9 @@ const BUBBLE_STAY = 3.2;
 const CORD_END = ART.cord.y + ART.cord.h;
 /** 进场：听筒从屏幕顶上放下来，线跟着放长，弹簧到位；进页面稍等一拍再开始 */
 const HANG_DROP_DELAY = 0.35;
+/** 进场：信纸（连字）先塞在信封里这么深，画面露出后弹簧往上抽出来 */
+const PAPER_TUCK = 110;
+const PAPER_POP_DELAY = 0.45;
 /**
  * 摆动和目录吊牌同一套：落地那一下给角度弹簧一个初速度，自己晃出来、一次比一次小。
  * 电话线比吊牌的绳短，同样角度末端摆幅小，力度给大一点。
@@ -312,8 +316,14 @@ export default function ContactPage() {
           style={art(ART.envBack)}
         />
 
-        {/* 信纸：静态摆在封口里，字都写在它上面 */}
-        <div className="absolute" style={art(ART.paper)}>
+        {/* 信纸：字都写在它上面；进场时连字一起从信封里往上弹出来 */}
+        <motion.div
+          className="absolute"
+          style={art(ART.paper)}
+          initial={{ y: PAPER_TUCK }}
+          animate={{ y: shown ? 0 : PAPER_TUCK }}
+          transition={{ type: "spring", stiffness: 90, damping: 14, mass: 1, delay: PAPER_POP_DELAY }}
+        >
           <img
             src={`${C}/paper.webp`}
             alt=""
@@ -398,7 +408,7 @@ export default function ContactPage() {
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* 信封前片 + 折线 */}
         <img
