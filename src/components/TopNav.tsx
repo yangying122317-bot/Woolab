@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
-import TimeToggle from "./TimeToggle";
-import WeatherToggle from "./WeatherToggle";
+import SceneToggle from "./SceneToggle";
 import { useDarkNav, useDetailOpen, useLogoOnlyNav, useNavHidden, usePlainLogo, usePlainNav } from "../state/chrome";
 import { INTRO_PREVIEW_PATH } from "./IntroLoader";
 
@@ -34,13 +33,8 @@ export default function TopNav() {
   /* Lab 页走进奶油黄走廊后黑字；详情盖上来（深灰石墙）还是白字 */
   const darkNav = useDarkNav() && !detail;
   const navColor = darkNav ? "#1F1B17" : "#FFFFFF";
-  /* 首页顶栏多两个开关：时段、天气（晴 / 雨） */
-  const extra = home ? (
-    <>
-      <TimeToggle />
-      <WeatherToggle />
-    </>
-  ) : undefined;
+  /* 首页顶栏多一个场景开关：点开选时段、天气（晴 / 雨） */
+  const extra = home ? <SceneToggle /> : undefined;
 
   return (
     <>

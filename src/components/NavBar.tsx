@@ -69,7 +69,7 @@ const DOODLE_BOX: Record<Doodle, CSSProperties> = {
  * - 点击：涂鸦再留半拍（触屏没有 hover，靠这个看到反馈）；`held` 为真时一直留着（MENU 打开期间）。
  * 涂鸦是在 onClickCapture 里触发的，里面的按钮该干嘛照干嘛。
  */
-function NavHit({
+export function NavHit({
   held = false,
   children,
   className = "",
@@ -161,7 +161,7 @@ export default function NavBar({
   /** 目录是否打开：打开时 MENU 外面画一圈 */
   menuOpen: boolean;
   onMenu: () => void;
-  /** 塞在喇叭前面的额外按钮（首页的时段开关） */
+  /** 塞在喇叭前面的额外按钮（首页的场景开关：时段 + 天气） */
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
   hideLogo?: boolean;
