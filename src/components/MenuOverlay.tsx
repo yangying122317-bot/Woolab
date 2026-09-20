@@ -16,7 +16,7 @@ import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
 import { warmLife } from "./life/preload";
 import { warmAbout, warmContact } from "../data/pageAssets";
-import { playMenuDrop } from "../audio/sfx";
+import { playMenuDrop, warmAmbient } from "../audio/sfx";
 
 /* ---------------- 设计稿坐标（720 × 450 的 0.5x 稿，下面全按 s 倍放） ---------------- */
 
@@ -212,6 +212,8 @@ export default function MenuOverlay({
    */
   useEffect(() => {
     warmLife(0);
+    // Life 的屋内背景音也先拉着（下载不需要手势），从目录进去第一下点击就有声
+    warmAmbient("life");
     const urls = [
       "/assets/lab/entrance-wall.webp",
       "/assets/lab/gallery-painting-big.webp",

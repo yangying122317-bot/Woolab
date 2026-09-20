@@ -53,6 +53,8 @@ function unlock() {
   if (ctx.state === "suspended") void ctx.resume();
   unlocked = true;
   syncAmbient();
+  // 字节早就拉好了，这里趁着上下文已经 running 一口气全解码
+  ALL_SAMPLES.forEach((id) => void loadSample(id));
 }
 
 if (typeof window !== "undefined") {
@@ -112,6 +114,8 @@ function ambientEl(id: AmbientId) {
     el.loop = true;
     el.preload = "auto";
     el.volume = 0;
+    // Safari 常常无视 preload=auto，显式 load() 才真的开始拉
+    el.load();
     ambientEls.set(id, el);
   }
   return el;
@@ -473,35 +477,59 @@ const SAMPLES = {
 } as const;
 type SampleId = keyof typeof SAMPLES;
 
+/**
+ * 录音分两步走：
+ *   1. 字节：一进站就 fetch 回来存着（不需要 AudioContext，也不需要用户手势）；
+ *   2. 解码：等第一次点击解锁、AudioContext 真正 running 之后再 decodeAudioData。
+ * 之前是拉回来就在一个还没手势的 suspended 上下文里解码——Safari 上这种解码有时挂着不回，
+ * 结果第一下点击时 buffer 还没到、那一下不响。全部字节加起来才 100KB 左右，解码是毫秒级。
+ */
+const sampleBytes = new Map<SampleId, Promise<ArrayBuffer | null>>();
 const sampleBufs = new Map<SampleId, AudioBuffer>();
-const sampleLoading = new Map<SampleId, Promise<void>>();
+const sampleDecoding = new Map<SampleId, Promise<void>>();
 
-function loadSample(id: SampleId): Promise<void> {
-  const hit = sampleLoading.get(id);
-  if (hit) return hit;
-  ensureContext();
-  const c = ctx;
-  if (!c) return Promise.resolve();
-  const p = fetch(SAMPLES[id].src)
-    .then((r) => r.arrayBuffer())
-    .then((b) => c.decodeAudioData(b))
-    .then((buf) => {
-      sampleBufs.set(id, buf);
-    })
-    .catch(() => {
-      sampleLoading.delete(id);
-    });
-  sampleLoading.set(id, p);
+function fetchSample(id: SampleId): Promise<ArrayBuffer | null> {
+  let p = sampleBytes.get(id);
+  if (!p) {
+    p = fetch(SAMPLES[id].src)
+      .then((r) => r.arrayBuffer())
+      .catch(() => {
+        sampleBytes.delete(id);
+        return null;
+      });
+    sampleBytes.set(id, p);
+  }
   return p;
 }
 
-/** 提前把一批录音拉好（页面挂上来时调；不调也行，第一次播会自己去拉） */
-export function preloadSamples(ids: readonly SampleId[]) {
-  ids.forEach((id) => void loadSample(id));
+function loadSample(id: SampleId): Promise<void> {
+  const hit = sampleDecoding.get(id);
+  if (hit) return hit;
+  if (sampleBufs.has(id)) return Promise.resolve();
+  ensureContext();
+  const c = ctx;
+  if (!c) return Promise.resolve();
+  const p = fetchSample(id)
+    .then((b) => (b ? c.decodeAudioData(b.slice(0)) : null))
+    .then((buf) => {
+      if (buf) sampleBufs.set(id, buf);
+    })
+    .catch(() => {})
+    .finally(() => {
+      sampleDecoding.delete(id);
+    });
+  sampleDecoding.set(id, p);
+  return p;
 }
-/* 全部加起来才 100KB 左右：一进站就在后台拉好，第一下点击就有声 */
+
+/** 提前把一批录音拉好（页面挂上来时调；不调也行，第一次播会自己去拉）：解锁前只拉字节，解锁后连解码 */
+export function preloadSamples(ids: readonly SampleId[]) {
+  ids.forEach((id) => void (unlocked ? loadSample(id) : fetchSample(id)));
+}
+const ALL_SAMPLES = Object.keys(SAMPLES) as SampleId[];
+/* 一进站就在后台把字节拉好，第一下点击就有声 */
 if (typeof window !== "undefined") {
-  window.setTimeout(() => preloadSamples(Object.keys(SAMPLES) as SampleId[]), 1500);
+  window.setTimeout(() => preloadSamples(ALL_SAMPLES), 800);
 }
 
 /** 播一段录音；还没拉到就先去拉、这一下不响 */

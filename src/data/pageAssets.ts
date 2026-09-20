@@ -48,10 +48,15 @@ export function warmAbout(): Promise<void> {
   return about;
 }
 
-/** 从别的页静默预热两页：等一会儿再开始，别和当前页自己的图抢。只暖字节不解码（原因见 preload.warmBytes） */
+/** Lab 开场那张全屏大油画 + 第一面墙：开场节拍等的就是它，先进缓存开场就不会只剩字 */
+export const LAB_INTRO = ["/assets/lab/gallery-painting-big.webp", "/assets/lab/entrance-wall.webp"];
+
+/** 从别的页静默预热：等一会儿再开始，别和当前页自己的图抢。只暖字节不解码（原因见 preload.warmBytes） */
 export function warmPages(delayMs = 4000): void {
   window.setTimeout(() => {
-    void warmBytes([...CONTACT_FIRST, ...CONTACT_REST]).then(() => warmBytes([...ABOUT_FIRST, ...ABOUT_REST]));
+    void warmBytes(LAB_INTRO)
+      .then(() => warmBytes([...CONTACT_FIRST, ...CONTACT_REST]))
+      .then(() => warmBytes([...ABOUT_FIRST, ...ABOUT_REST]));
   }, delayMs);
 }
 

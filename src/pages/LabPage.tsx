@@ -17,7 +17,8 @@ import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
 import { useReportDarkNav } from "../state/chrome";
-import { loadImages } from "../components/life/preload";
+import { loadImage, loadImages } from "../components/life/preload";
+import { useLenis } from "lenis/react";
 import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
 /**
@@ -1506,12 +1507,18 @@ const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
  * 从目录吊牌进来的（startAtShrink）：整页上飞已经是过场，只留最后一段——
  * 第一帧就是亮着的全屏油画跟页面一起上来，落稳后直接缩小归位、黑幕揭开。
  */
+/** 开场那张全屏大油画 */
+const INTRO_PAINTING = "/assets/lab/gallery-painting-big.webp";
+/** 等这张图最多等这么久，网再慢也先开演 */
+const INTRO_WAIT_CAP = 2500;
+
 function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; startAtShrink?: boolean }) {
   const { t } = useLanguage();
+  const lenis = useLenis();
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const [phase, setPhase] = useState<"text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
-    startAtShrink ? "hold" : "text",
+  const [phase, setPhase] = useState<"wait" | "text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
+    startAtShrink ? "hold" : "wait",
   );
   const [big] = useState<IntroRect>(() => introBigRect());
   const [target, setTarget] = useState<IntroRect | null>(null);
@@ -1523,6 +1530,8 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
   const finish = () => {
     if (done.current) return;
     done.current = true;
+    /* 画框归位完成，这时才把滚动放开 */
+    lenis?.start();
     onDone();
   };
 
@@ -1531,15 +1540,24 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       finish();
       return;
     }
-    /* 播放期间锁定滚动 */
+    /*
+     * 播放期间锁定滚动。全站滚动是 Lenis 接管的：它自己截滚轮再用 window.scrollTo 推，
+     * overflow: hidden 只拦原生滚动拦不住它，所以必须把 Lenis 也停掉，
+     * 否则黑幕还在时滚轮已经在悄悄推后面的画廊了。
+     */
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
+    lenis?.stop();
 
     const at = (ms: number, fn: () => void) => {
       timers.current.push(window.setTimeout(fn, ms));
     };
     const shrink = () => {
-      /* 量取场景内油画当前的投影屏幕矩形作为归位目标 */
+      /* 归位前确保在页顶（万一锁之前吃到过滚轮），再量场景内油画当前的投影屏幕矩形作为归位目标 */
+      if (window.scrollY !== 0) {
+        lenis?.scrollTo(0, { immediate: true, force: true });
+        window.scrollTo(0, 0);
+      }
       const el = document.getElementById("lab-entrance-painting");
       if (el) setTarget(el.getBoundingClientRect());
       setPhase("shrink");
@@ -1569,14 +1587,29 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       }
       at(pageY && pageY.get() !== 0 ? 1600 : 1000, go);
     } else {
-      /* 顺序：文字停留 → 文字先渐隐 → 画面再亮起、模糊散开 → 缩小归位 */
-      at(3200, () => setPhase("fade"));
-      at(3800, () => setPhase("bright"));
-      at(5300, shrink);
+      /*
+       * 顺序：文字停留 → 文字先渐隐 → 画面再亮起、模糊散开 → 缩小归位。
+       * 节拍等大油画解码好再起（最多等 INTRO_WAIT_CAP）：不然直接进 /lab 或网慢时图还没到，
+       * 黑幕上只剩文字、画后来才"啪"地出现。等待期间黑幕先盖着。
+       */
+      let started = false;
+      const start = () => {
+        if (started || done.current) return;
+        started = true;
+        setPhase("text");
+        at(3200, () => setPhase("fade"));
+        at(3800, () => setPhase("bright"));
+        at(5300, shrink);
+      };
+      setPhase("wait");
+      void loadImage(INTRO_PAINTING).then(start);
+      at(INTRO_WAIT_CAP, start);
     }
 
     return () => {
       document.documentElement.style.overflow = prev;
+      /* 被提前卸载（路由切走）也得把滚动还回去 */
+      lenis?.start();
       timers.current.forEach(window.clearTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1618,12 +1651,13 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         transition={{ duration: 0.9, delay: phase === "shrink" ? 0.15 : 0, ease: "easeInOut" }}
       />
 
-      {/* 大油画：从第一帧就全屏铺满（压暗+虚化），文字退场后亮起，再缩小归位 */}
+      {/* 大油画：从第一帧就全屏铺满（压暗+虚化），文字退场后亮起，再缩小归位；等图的阶段先不露 */}
       <motion.img
-        src="/assets/lab/gallery-painting-big.webp"
+        src={INTRO_PAINTING}
         alt=""
         draggable={false}
         className="absolute max-w-none select-none"
+        style={{ visibility: phase === "wait" ? "hidden" : "visible" }}
         initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }}
         animate={
           phase === "shrink" && target
