@@ -130,7 +130,8 @@ const py = (y: number) => `${(y / FRAME_H) * 100}%`;
 const SPRITES = {
   // 新云图（1024x461，比旧图更扁）：y 按"云底贴原落地线 819"折算
   cloudBig: { src: "/assets/hero-cloud-big.png", x: 0, y: 151.5, w: 1440 },
-  base: { src: "/assets/hero-base.webp" },
+  /* 底图两档：1x 屏拿 1920 宽的就够（解码后 9MB），2x 屏才拿 2880（21MB）——新版 Safari 对每页解码位图有预算，能省就省 */
+  base: { src: "/assets/hero-base.webp", srcSet: "/assets/hero-base-1920.webp 1920w, /assets/hero-base.webp 2880w" },
   openSign: { src: "/assets/hero-open-sign.png", x: 611.8, y: 554.9, w: 98.8 },
   /**
    * 小羊：透明动画 WebP（由手绘视频抠底合成，自带待机动作循环）。
@@ -230,9 +231,14 @@ const DOOR_OPEN_ASSETS = [
 ];
 
 /** 首页第一屏要先下好的图（开场加载页拿这份清单等它们全部解码完，滑开时首页已经是完整的） */
+/** 底图按 srcset 的规则挑一档（sizes=100vw：需要的像素宽 = 视口宽 × DPR），预加载和 <img> 拿同一张，别两档都下 */
+const basePick = () =>
+  typeof window !== "undefined" && window.innerWidth * (window.devicePixelRatio || 1) <= 1920
+    ? "/assets/hero-base-1920.webp"
+    : SPRITES.base.src;
 export const HERO_PRELOAD: string[] = [
   SPRITES.cloudBig.src,
-  SPRITES.base.src,
+  basePick(),
   SPRITES.openSign.src,
   SPRITES.sheep.src,
   SPRITES.sheepShadow.src,
@@ -931,6 +937,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           >
             <img
               src={SPRITES.base.src}
+              srcSet={SPRITES.base.srcSet}
+              sizes="100vw"
               alt=""
               className="pointer-events-none absolute inset-0 h-full w-full select-none"
               draggable={false}

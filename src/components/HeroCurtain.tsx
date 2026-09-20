@@ -107,7 +107,7 @@ function screenPathAt(
   });
 }
 /** 屏幕里那两行字的字号、颜色 */
-const TV_TEXT = { size: 12, color: "#5E5B58" };
+const TV_TEXT = { size: 12, color: "#111" };
 /** 雪花画布的分辨率（拉伸到屏幕大小，颗粒感刚好） */
 const SNOW = { w: 120, h: 66, alpha: 0.34 };
 /** 电视两边那根手写签名线：先收起来（看着有点怪），加载进度只留屏幕里的雪花 + 那句话；想要回来改成 true */
@@ -467,22 +467,24 @@ export default function HeroCurtain({
               height: TV.h * u,
             }}
           />
-          {/* 屏幕描边：压在最上面，雪花的边就藏在描边底下 */}
-          <img
-            src={SCREEN_FRAME.src}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute"
-            style={{
-              left: (SCREEN.x - (SCREEN_FRAME.w - SCREEN.w) / 2) * u,
-              top: (SCREEN.y - (SCREEN_FRAME.h - SCREEN.h) / 2) * u,
-              width: SCREEN_FRAME.w * u,
-              height: SCREEN_FRAME.h * u,
-              zIndex: 2,
-            }}
-          />
         </div>
       </div>
+
+      {/* 屏幕描边：压在雪花屏上面，雪花的边就藏在描边底下。
+          不能放在白布里——白布带 mask，会自成层叠上下文，里面的 z-index 出不来，Safari 会把雪花盖到描边上 */}
+      <img
+        src={SCREEN_FRAME.src}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute"
+        style={{
+          left: hole.x - ((SCREEN_FRAME.w - SCREEN.w) / 2) * u,
+          top: hole.y - ((SCREEN_FRAME.h - SCREEN.h) / 2) * u,
+          width: SCREEN_FRAME.w * u,
+          height: SCREEN_FRAME.h * u,
+          zIndex: 2,
+        }}
+      />
 
       {/* 屏幕形状的裁形模板：0～1 相对坐标，套在下面那层上 */}
       <svg width="0" height="0" className="absolute" aria-hidden>

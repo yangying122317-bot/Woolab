@@ -1,7 +1,7 @@
 /**
  * 访客所在地现在有没有在下雨（首页雨景用）。
  * Vercel 会按访客 IP 在请求头里带上经纬度，拿它去查 Open-Meteo（免费、免 key）的当前天气。
- * 返回 { rain: true | false | null }，null = 拿不到位置或查询失败，前端自己兜底。
+ * 返回 { rain: true | false | null, code, city }，rain 为 null = 拿不到位置或查询失败，前端自己兜底。
  * 不能走边缘缓存（URL 对所有人都一样，会把 A 城的雨缓存给 B 城），
  * 改在函数实例里按经纬度取一位小数记 10 分钟，同一片的访客共用一次查询。
  */
@@ -18,6 +18,11 @@ const cache = new Map<string, { at: number; rain: boolean; code: number }>();
 export default async function handler(request: Request): Promise<Response> {
   const lat = request.headers.get("x-vercel-ip-latitude");
   const lon = request.headers.get("x-vercel-ip-longitude");
+  /* 城市只用来在前端控制台说明"按哪儿判的"（开着代理时会是代理节点所在地） */
+  const city = [request.headers.get("x-vercel-ip-city"), request.headers.get("x-vercel-ip-country")]
+    .filter(Boolean)
+    .map((v) => decodeURIComponent(v as string))
+    .join(", ");
   const json = (body: unknown, cache: string) =>
     new Response(JSON.stringify(body), {
       headers: { "content-type": "application/json", "cache-control": cache },
@@ -28,7 +33,7 @@ export default async function handler(request: Request): Promise<Response> {
   const key = `${Number(lat).toFixed(1)},${Number(lon).toFixed(1)}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) {
-    return json({ rain: hit.rain, code: hit.code }, "private, max-age=600");
+    return json({ rain: hit.rain, code: hit.code, city }, "private, max-age=600");
   }
 
   try {
@@ -42,7 +47,7 @@ export default async function handler(request: Request): Promise<Response> {
     const mm = data.current?.precipitation ?? 0;
     const rain = isRainCode(code) || mm > 0;
     cache.set(key, { at: Date.now(), rain, code });
-    return json({ rain, code }, "private, max-age=600");
+    return json({ rain, code, city }, "private, max-age=600");
   } catch {
     return json({ rain: null }, "no-store");
   }

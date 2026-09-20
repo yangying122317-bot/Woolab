@@ -60,26 +60,56 @@ export function preloadLifeRest(): Promise<void> {
 }
 
 /**
- * 从别的页提前热身：先等一小会儿（让当前页自己的图先落地），再拉第一屏；第一屏完了顺手拉后面的。
- * 幂等，随便调。
+ * 只把字节拉进 HTTP 缓存、不解码、不攥着：给"别的页"预热用。
+ * 上面 load() 会把解码结果留在内存里（一张 Image 就是一块位图），Life 第一屏 112 张解码开是 140MB，
+ * 加上首页自己的 80MB、Contact / About 的 20MB，全在首页就攥着；Chrome 无所谓，Safari 对每个标签页
+ * 有内存预算，超了会把已解码的位图丢掉、连当前正显示的大图也可能一起丢——首页那栋房子在新版 Safari 上
+ * 不显示就是这么来的。所以跨页预热只暖缓存，真进了那一页再解码（那页的加载幕会等它）。
  */
+const bytesDone = new Set<string>();
+export async function warmBytes(urls: readonly string[], limit = 4): Promise<void> {
+  let i = 0;
+  const worker = async () => {
+    while (i < urls.length) {
+      const url = urls[i++];
+      if (bytesDone.has(url)) continue;
+      bytesDone.add(url);
+      try {
+        await fetch(url, { priority: "low" } as RequestInit);
+      } catch {
+        bytesDone.delete(url);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, urls.length) }, worker));
+}
+
+/**
+ * 从别的页（目录）提前热身：先等一小会儿（让当前页自己的图先落地），再把全部 Life 素材拉进缓存。
+ * 只暖字节不解码，进门时 LifePage 自己等第一屏解码（从缓存里解码 112 张几百毫秒，在过场时间内）。幂等，随便调。
+ */
+let warmed = false;
 export function warmLife(delayMs = 2500): void {
-  if (rest) return;
+  if (warmed || rest) return;
+  warmed = true;
   window.setTimeout(() => {
-    void preloadLifeRest();
+    void warmBytes(lifeFirstAssets).then(() => warmBytes(lifeRestAssets, 3));
   }, delayMs);
 }
 
-/** 只热第一屏（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满。then：第一屏拉完后接着做的事 */
+/** 只暖第一屏的字节（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满。then：第一屏拉完后接着做的事 */
+let warmedFirst: Promise<void> | null = null;
 export function warmLifeFirst(delayMs = 2500, then?: () => void): void {
-  if (first) {
-    if (then) void first.then(then);
+  if (warmedFirst || first) {
+    if (then) void (first ?? warmedFirst)!.then(then);
     return;
   }
-  window.setTimeout(() => {
-    const p = preloadLifeFirst();
-    if (then) void p.then(then);
-  }, delayMs);
+  warmedFirst = new Promise<void>((resolve) => {
+    window.setTimeout(() => {
+      void warmBytes(lifeFirstAssets).then(resolve);
+    }, delayMs);
+  });
+  if (then) void warmedFirst.then(then);
 }
 
 /** 等第一屏就位，但最多等 capMs：网慢也不能让人对着白光干等 */

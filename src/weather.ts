@@ -54,12 +54,17 @@ async function resolve() {
   try {
     const r = await fetch("/api/weather", { headers: { accept: "application/json" } });
     if (!r.ok) throw new Error(String(r.status));
-    const data = (await r.json()) as { rain?: boolean | null };
-    if (typeof data.rain === "boolean") return set(data.rain ? "rain" : "clear");
+    const data = (await r.json()) as { rain?: boolean | null; code?: number; city?: string };
+    if (typeof data.rain === "boolean") {
+      // 留一行给排查用：IP 定位到哪、天气码多少（开着代理时定位的是代理出口，不是真人所在地）
+      console.info(`[weather] ${data.city || "未知位置"} · WMO ${data.code} → ${data.rain ? "雨" : "晴"}`);
+      return set(data.rain ? "rain" : "clear");
+    }
   } catch {
     /* 走兜底 */
   }
   const w: Weather = Math.random() < RANDOM_RAIN_CHANCE ? "rain" : "clear";
+  console.info(`[weather] 拿不到真实天气，随机 → ${w === "rain" ? "雨" : "晴"}`);
   writeSession(w);
   set(w);
 }

@@ -15,6 +15,7 @@ import { isStationDone } from "../../state/roomState";
 import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { DictKey } from "../../i18n/dict";
+import FrameAnim, { warmFrames } from "./FrameAnim";
 import {
   playLightOff,
   playLightOn,
@@ -668,40 +669,21 @@ const dressFrameSrc = (i: number) =>
 /** 松手位置落在小羊身上算触发（素材像素包围盒） */
 const SHEEP_ZONE = { x: 2130, y: 1030, w: 520, h: 680 };
 
+const DRESS_SRCS = Array.from({ length: DRESS_FRAMES }, (_, i) => dressFrameSrc(i));
+
 function DressAnim({ onEnd }: { onEnd: () => void }) {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    if (frame >= DRESS_FRAMES - 1) {
-      const t = window.setTimeout(onEnd, 400);
-      return () => window.clearTimeout(t);
-    }
-    const t = window.setTimeout(() => setFrame(frame + 1), 1000 / DRESS_FPS);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame]);
-
   return (
-    <div
-      className="pointer-events-none absolute select-none"
+    <FrameAnim
+      srcs={DRESS_SRCS}
+      fps={DRESS_FPS}
+      onEnd={onEnd}
       style={{
         left: vh(DRESS_RECT.x),
         top: vh(DRESS_RECT.y),
         width: vh(DRESS_RECT.w),
         height: vh(DRESS_RECT.h),
       }}
-    >
-      {Array.from({ length: DRESS_FRAMES }, (_, i) => (
-        <img
-          key={i}
-          src={dressFrameSrc(i)}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full max-w-none"
-          style={{ opacity: i === frame ? 1 : 0 }}
-        />
-      ))}
-    </div>
+    />
   );
 }
 
@@ -720,43 +702,24 @@ const paintFrameSrc = (i: number) =>
 /** 作画动画的阶段：wait = 已完成拼图、镜头拉回中（静态层先留着） */
 export type PaintPhase = "idle" | "wait" | "play";
 
+const PAINT_SRCS = Array.from({ length: PAINT_FRAMES }, (_, i) => paintFrameSrc(i));
+
 function PaintAnim({ playing, onEnd }: { playing: boolean; onEnd: () => void }) {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    if (!playing) return;
-    if (frame >= PAINT_FRAMES - 1) {
-      const t = window.setTimeout(onEnd, 400);
-      return () => window.clearTimeout(t);
-    }
-    const t = window.setTimeout(() => setFrame(frame + 1), 1000 / PAINT_FPS);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame, playing]);
-
   return (
-    <div
-      className="pointer-events-none absolute select-none"
+    <FrameAnim
+      srcs={PAINT_SRCS}
+      fps={PAINT_FPS}
+      playing={playing}
+      onEnd={onEnd}
       style={{
         left: vh(PAINT_RECT.x),
         top: vh(PAINT_RECT.y),
         width: vh(PAINT_RECT.w),
         height: vh(PAINT_RECT.h),
-        // wait 阶段隐藏挂载：42 帧先进 DOM 解码，play 时切换不闪帧
+        // wait 阶段先挂着不显示：帧在幕后解码好，play 时直接开画不卡
         visibility: playing ? "visible" : "hidden",
       }}
-    >
-      {Array.from({ length: PAINT_FRAMES }, (_, i) => (
-        <img
-          key={i}
-          src={paintFrameSrc(i)}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full max-w-none"
-          style={{ opacity: i === frame ? 1 : 0 }}
-        />
-      ))}
-    </div>
+    />
   );
 }
 
@@ -1574,11 +1537,7 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
   // 白T变成可拖时预热动画帧，触发时不卡顿
   useEffect(() => {
     if (!canDress) return;
-    for (let i = 0; i < DRESS_FRAMES; i++) {
-      const im = new Image();
-      im.src = dressFrameSrc(i);
-      im.decode?.().catch(() => {});
-    }
+    warmFrames(DRESS_SRCS);
   }, [canDress]);
 
   /* 作画动画：play 时帧接管小羊+画架；photo 完成后定格最后一帧 */
@@ -1588,11 +1547,7 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
   // 推近软木板开拼时预热作画帧，拉回后播放不卡顿
   useEffect(() => {
     if (!photoActive || isStationDone(room, "photo")) return;
-    for (let i = 0; i < PAINT_FRAMES; i++) {
-      const im = new Image();
-      im.src = paintFrameSrc(i);
-      im.decode?.().catch(() => {});
-    }
+    warmFrames(PAINT_SRCS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoActive]);
 

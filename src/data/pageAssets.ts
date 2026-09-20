@@ -1,9 +1,9 @@
-import { loadImages } from "../components/life/preload";
+import { loadImages, warmBytes } from "../components/life/preload";
 import { aboutShots } from "./aboutShots";
 
 /**
  * Contact / About 两页的图（各几百 KB）：进页面才下会一张张冒出来（信封一片片拼、相机等半天）。
- *   - 首页开场结束、Life 第一屏预热完之后，静默把这两批拉进缓存（warmPages）；
+ *   - 首页开场结束、Life 第一屏预热完之后，静默把这两批拉进 HTTP 缓存（warmPages，只暖字节）；
  *   - 目录里鼠标碰到哪块牌子，就补拉那一页（warmContact / warmAbout）；
  *   - 页面自己进来时最多等 first 这几张解码完再整体淡入（whenXxxReady），没预热到也是"稍等一下整齐出现"。
  * 解码结果由 preload 里那个模块级缓存攥着，重复调用都是空操作。
@@ -48,10 +48,10 @@ export function warmAbout(): Promise<void> {
   return about;
 }
 
-/** 从别的页静默预热两页：等一会儿再开始，别和当前页自己的图抢 */
+/** 从别的页静默预热两页：等一会儿再开始，别和当前页自己的图抢。只暖字节不解码（原因见 preload.warmBytes） */
 export function warmPages(delayMs = 4000): void {
   window.setTimeout(() => {
-    void warmContact().then(() => warmAbout());
+    void warmBytes([...CONTACT_FIRST, ...CONTACT_REST]).then(() => warmBytes([...ABOUT_FIRST, ...ABOUT_REST]));
   }, delayMs);
 }
 
