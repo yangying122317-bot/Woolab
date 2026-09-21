@@ -84,7 +84,7 @@ const SHEEP = {
   shadow: "/assets/hero-sheep-shadow.png",
   w: SHEEP_W,
   h: SHEEP_H,
-  left: STAGE_W - 8 - (SHEEP_W * 348) / 353, // 身体右缘（贴图 348/353 处）离屏边 8：稿里它有一小半探出信封外
+  left: STAGE_W - 22 - (SHEEP_W * 348) / 353, // 身体右缘（贴图 348/353 处）离屏边 22：稿里它有一小半探出信封外
   top: SHEEP_FEET - SHEEP_H * (534 / 550), // 脚底在贴图 534/550 处
 };
 const SHEEP_SHADOW = {
