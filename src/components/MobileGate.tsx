@@ -96,7 +96,7 @@ const SHEEP_SHADOW = {
 const GROUP_H = Math.ceil(SHEEP_FEET + 8);
 
 /**
- * 气泡：设计稿里的 Vector 1450（棕色手绘描边、白底带纸噪点，尾巴从右下垂下来），100×46 渲成透明 webp，
+ * 气泡：设计稿里的 Vector 1450（浅灰手绘描边、白底带纸噪点，尾巴从右下垂下来），100×46 渲成透明 webp，
  * 按 K 放大后挂在小羊头顶右上方，尾巴尖落在帽子右半边上方。字单独排在框体里。
  */
 const BUBBLE_W = 100 * K;
@@ -107,7 +107,7 @@ const BUBBLE = {
   w: BUBBLE_W,
   h: BUBBLE_H,
   bodyH: 30 * K, // 框体（不含尾巴）高度
-  left: SHEEP.left + 1 - 24, // 身体左缘再往左 24
+  left: SHEEP.left + 1 - 16, // 身体左缘再往左 16
   top: HAT_Y - 66,
   tailX: 0.846, // 尾巴尖在图内的横向位置
 };
