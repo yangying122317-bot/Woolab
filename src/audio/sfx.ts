@@ -532,12 +532,15 @@ if (typeof window !== "undefined") {
   window.setTimeout(() => preloadSamples(ALL_SAMPLES), 800);
 }
 
-/** 播一段录音；还没拉到就先去拉、这一下不响 */
+/** 播一段录音；还没解码好就先去解，只要 300ms 内到了仍然补播（第一下点击紧跟着解锁，字节早在手里，解码只差几毫秒） */
 function sample(id: SampleId, startAt = 0, gainMul = 1) {
   if (!ready() || !ctx || !master) return;
   const buf = sampleBufs.get(id);
   if (!buf) {
-    void loadSample(id);
+    const t0 = performance.now();
+    void loadSample(id).then(() => {
+      if (performance.now() - t0 < 300 && sampleBufs.has(id)) sample(id, startAt, gainMul);
+    });
     return;
   }
   const src = ctx.createBufferSource();
