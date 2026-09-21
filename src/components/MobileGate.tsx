@@ -103,7 +103,7 @@ const BUBBLE_W = 100 * K;
 const BUBBLE_H = 46 * K;
 const HAT_Y = SHEEP.top + SHEEP_H * (28 / 550);
 const BUBBLE = {
-  src: `${M}/bubble.webp`,
+  src: `${M}/bubble-grey.webp`, // 换过颜色，改名绕开一天的图片缓存
   w: BUBBLE_W,
   h: BUBBLE_H,
   bodyH: 30 * K, // 框体（不含尾巴）高度
@@ -400,7 +400,7 @@ export default function MobileGate() {
             <span key={l.id}>
               {i > 0 && " / "}
               <a href={l.href} target="_blank" rel="noreferrer" className="text-black no-underline">
-                {l.label.en}
+                {l.label[lang]}
               </a>
             </span>
           ))}
