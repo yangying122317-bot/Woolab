@@ -10,6 +10,7 @@ import Layout from "./components/Layout";
 import TopNav from "./components/TopNav";
 import { PageShiftFrame, PageShiftProvider } from "./components/PageShift";
 import Home from "./pages/Home";
+import MobileGate, { isPhone } from "./components/MobileGate";
 
 /*
  * 首页之外的页面都按页拆包：首屏那份 JS 只带首页 + 开场，电视机能早点出来。
@@ -45,6 +46,8 @@ function WarmPages() {
 }
 
 export default function App() {
+  /* 手机上不放真页面：整站是给大屏 + 滚轮做的，只给一张"换到电脑上看"的信封（不会去下首页那几十 MB 素材） */
+  if (isPhone()) return <MobileGate />;
   return (
     <LanguageProvider>
       <BrowserRouter>

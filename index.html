@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>WOOLAB</title>
     <meta name="description" content="WOOLAB —— 一间由小羊看店的小工作室。欢迎来到小羊居住的地方。A little studio where a sheep keeps shop." />
     <link rel="canonical" href="https://woolab.art/" />
@@ -25,13 +25,13 @@
       电视机两张图先出；字体和首页底图开场加载页反正要等它们，越早开始越好。
       字体 URL 要和 index.css 里 @font-face 写的一模一样（含 ?v=），不然浏览器会当成两份文件下两遍。
     -->
-    <link rel="preload" as="image" href="/assets/hero-loading-tv.png" />
-    <link rel="preload" as="image" href="/assets/hero-loading-tv-frame.png" />
+    <link rel="preload" media="(min-width: 768px)" as="image" href="/assets/hero-loading-tv.png" />
+    <link rel="preload" media="(min-width: 768px)" as="image" href="/assets/hero-loading-tv-frame.png" />
     <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/dm-sans.woff2" crossorigin />
-    <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/sans-zh.woff2?v=20260919c" crossorigin />
-    <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/hand-zh.woff2?v=20260919c" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/sans-zh.woff2?v=20260921a" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/hand-zh.woff2?v=20260921a" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/scroll-hand.woff2" crossorigin />
-    <link rel="preload" as="image" imagesrcset="/assets/hero-base-1920.webp 1920w, /assets/hero-base.webp 2880w" imagesizes="100vw" />
+    <link rel="preload" media="(min-width: 768px)" as="image" imagesrcset="/assets/hero-base-1920.webp 1920w, /assets/hero-base.webp 2880w" imagesizes="100vw" />
   </head>
   <body>
     <div id="root"></div>

@@ -1737,6 +1737,14 @@ export default function LabPage() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
 
+  /* 画廊是整页滚动，原生滚动条会露在右边；和 Life 一样把它藏掉（Lenis 照常工作） */
+  useEffect(() => {
+    document.documentElement.classList.add("scrollbar-hidden");
+    return () => {
+      document.documentElement.classList.remove("scrollbar-hidden");
+    };
+  }, []);
+
   /* 进场迈步：相机从稍后一点走到起点（0.9s），叠在滚动深度上 */
   const introZ = useMotionValue(-60);
   useEffect(() => {
