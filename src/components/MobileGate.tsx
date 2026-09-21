@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { dict, type Lang } from "../i18n/dict";
 import { socialLinks } from "../data/contact";
-import { noiseBg } from "./about/geom";
 import { playHello } from "../audio/sfx";
 import { loadImage } from "./life/preload";
 
@@ -97,22 +96,22 @@ const SHEEP_SHADOW = {
 const GROUP_H = Math.ceil(SHEEP_FEET + 8);
 
 /**
- * 气泡：设计稿里的 Vector 1450（灰细描边、白底带纸噪点、左下角垂一条小尾巴），135×68 渲成透明 webp。
- * 小羊在右边，所以把图水平镜像，尾巴落到右下角、尖端（原图 x≈30 处）对到帽顶；字单独排在框里，不跟着镜像。
+ * 气泡：设计稿里的 Vector 1450（灰细描边、白底带纸噪点）。稿里尾巴朝下垂，这里气泡放在小羊左边、
+ * 信封前片上，尾巴要指向右边的脸，所以只渲了框体（135×42）；尾巴用 SVG 现画在右下角，描边颜色取自框体。
  */
 const BUBBLE_S = 1.1;
 const BUBBLE_W = 135 * BUBBLE_S;
-const BUBBLE_H = 68 * BUBBLE_S;
-const BUBBLE_TAIL_X = (135 - 30) * BUBBLE_S; // 镜像后尾巴尖端在图内的 x
-const HAT_X = SHEEP.left + SHEEP_W * 0.46;
+const BUBBLE_BODY_H = 42 * BUBBLE_S;
+const BUBBLE_TAIL_DROP = 10; // 尾巴尖比框体底边低多少
 const HAT_Y = SHEEP.top + SHEEP_H * (28 / 550);
 const BUBBLE = {
   src: `${M}/bubble.webp`,
   w: BUBBLE_W,
-  h: BUBBLE_H,
-  left: HAT_X - BUBBLE_TAIL_X,
-  top: HAT_Y - 2 - BUBBLE_H,
-  bodyH: 41 * BUBBLE_S, // 框体（不含尾巴）的高度
+  h: BUBBLE_BODY_H + BUBBLE_TAIL_DROP,
+  bodyH: BUBBLE_BODY_H,
+  left: SHEEP.left - 6 - BUBBLE_W, // 框体右缘离小羊 6
+  top: HAT_Y + 10,
+  stroke: "#C8C8C3",
 };
 
 function Layer({ art, className = "", style }: { art: Art; className?: string; style?: React.CSSProperties }) {
@@ -137,7 +136,7 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
         top: BUBBLE.top,
         width: BUBBLE.w,
         height: BUBBLE.h,
-        transformOrigin: `${(BUBBLE_TAIL_X / BUBBLE.w) * 100}% 100%`,
+        transformOrigin: "100% 100%",
       }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -152,12 +151,32 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
           src={BUBBLE.src}
           alt=""
           draggable={false}
-          className="absolute inset-0 h-full w-full max-w-none select-none"
-          style={{ transform: "scaleX(-1)" }}
+          className="absolute left-0 top-0 max-w-none select-none"
+          style={{ width: BUBBLE.w, height: BUBBLE.bodyH }}
         />
+        {/* 尾巴：从框体右下的弧线上伸出去指向小羊的脸；先用白色盖住那段框线，再描两条边 */}
+        <svg
+          viewBox={`0 0 ${BUBBLE.w} ${BUBBLE.h}`}
+          width={BUBBLE.w}
+          height={BUBBLE.h}
+          className="absolute left-0 top-0 overflow-visible"
+        >
+          <path
+            d={`M ${BUBBLE.w - 34} ${BUBBLE.bodyH - 4.5} C ${BUBBLE.w - 24} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 12} ${BUBBLE.bodyH + 6}, ${BUBBLE.w + 3} ${BUBBLE.bodyH + BUBBLE_TAIL_DROP - 3} C ${BUBBLE.w - 4} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 14} ${BUBBLE.bodyH - 2}, ${BUBBLE.w - 22} ${BUBBLE.bodyH - 10} L ${BUBBLE.w - 34} ${BUBBLE.bodyH - 9} Z`}
+            fill="#fff"
+          />
+          <path
+            d={`M ${BUBBLE.w - 34} ${BUBBLE.bodyH - 4.5} C ${BUBBLE.w - 24} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 12} ${BUBBLE.bodyH + 6}, ${BUBBLE.w + 3} ${BUBBLE.bodyH + BUBBLE_TAIL_DROP - 3} C ${BUBBLE.w - 4} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 14} ${BUBBLE.bodyH - 2}, ${BUBBLE.w - 22} ${BUBBLE.bodyH - 10}`}
+            fill="none"
+            stroke={BUBBLE.stroke}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
         <span
           className="font-hand absolute flex items-center justify-center whitespace-nowrap text-black"
-          style={{ left: 10, top: 1, width: BUBBLE.w - 20, height: BUBBLE.bodyH, fontSize: 17, lineHeight: 1 }}
+          style={{ left: 10, top: 0, width: BUBBLE.w - 20, height: BUBBLE.bodyH, fontSize: 17, lineHeight: 1 }}
         >
           {text}
         </span>
@@ -192,26 +211,37 @@ export default function MobileGate() {
   const [copied, setCopied] = useState(false);
   const [pulse, setPulse] = useState(0);
   const copy = async () => {
+    /* 先走剪贴板 API（要 https），不行再退到 execCommand（局域网 http 预览、老 WebKit） */
+    let ok = false;
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(SITE_URL);
-      } else {
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      try {
         const ta = document.createElement("textarea");
         ta.value = SITE_URL;
         ta.setAttribute("readonly", "");
         ta.style.position = "fixed";
+        ta.style.top = "0";
         ta.style.opacity = "0";
         document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
+        ta.focus();
+        ta.setSelectionRange(0, SITE_URL.length);
+        ok = document.execCommand("copy");
         ta.remove();
+      } catch {
+        ok = false;
       }
-      setCopied(true);
-      setPulse((n) => n + 1);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* 剪贴板不可用：文字仍在，用户可以长按地址栏 */
     }
+    /* 剪贴板彻底不可用时也给个回应，网址就在圈里，用户可以长按 */
+    setCopied(true);
+    setPulse((n) => n + 1);
+    window.setTimeout(() => setCopied(false), 1600);
   };
 
   /* 圈要罩住字：英文比中文长，按字宽把圈横向拉开（中文正好是设计稿原大） */
@@ -253,7 +283,7 @@ export default function MobileGate() {
   return (
     <div
       className="fixed inset-x-0 top-0 flex flex-col overflow-hidden text-black"
-      style={{ height: vp.h, background: "#F9F6EF", ...noiseBg("cream", 1) }}
+      style={{ height: vp.h, background: "#fff" }}
     >
       {/* 顶：logo */}
       <motion.div
@@ -307,6 +337,7 @@ export default function MobileGate() {
                   width: 180,
                   height: 44,
                   WebkitTapHighlightColor: "transparent",
+                  touchAction: "manipulation",
                 }}
                 aria-label={t["mobile.copy"]}
               >
@@ -336,9 +367,9 @@ export default function MobileGate() {
               <Layer art={ART.envFront} />
             </motion.div>
 
-            {/* 小羊：首页那只，站在信封右边，跟信封一起淡入；点它打招呼 */}
+            {/* 小羊：首页那只，站在信封右边，跟信封一起淡入；点它打招呼。这层铺满舞台，得放行点击给下面的复制按钮 */}
             <motion.div
-              className="absolute inset-0"
+              className="pointer-events-none absolute inset-0"
               initial={{ opacity: 0, y: 12 }}
               animate={shown ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
               transition={{ duration: 0.55, ease: "easeOut" }}
@@ -361,8 +392,8 @@ export default function MobileGate() {
                   type="button"
                   aria-label="Meelo"
                   onClick={greet}
-                  className="absolute cursor-pointer border-0 bg-transparent p-0"
-                  style={{ inset: "-8px -10px", WebkitTapHighlightColor: "transparent" }}
+                  className="pointer-events-auto absolute cursor-pointer border-0 bg-transparent p-0"
+                  style={{ inset: "-8px -10px", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
                 />
               </div>
               {bubble > 0 && <Bubble text={t["mobile.hi"]} pop={bubble} />}
