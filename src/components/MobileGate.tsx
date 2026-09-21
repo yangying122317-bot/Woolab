@@ -72,12 +72,12 @@ const NOTE_TOP = sy(286);
 
 /**
  * 小羊直接用首页那只：先放静帧，动图解码好了再换（和首页一样，网慢也不等）。
- * 站在信封右下角前面（它本来就是正面偏左看的，放右边正好朝着信封），脚底落在信封下沿再往下 30。
+ * 站在信封右下角前面（它本来就是正面偏左看的，放右边正好朝着信封），脚底和信封下沿齐平。
  * 首页里小羊贴图 176.2 宽、影子 170.2 宽且相对小羊偏 (3, 1)；这里按 100 宽等比换算。
  */
 const SHEEP_W = 100;
 const SHEEP_H = (SHEEP_W * 550) / 353;
-const SHEEP_FEET = sy(527 + 105 / 2) + 36;
+const SHEEP_FEET = sy(527 + 105 / 2) + 2; // 脚底和信封下沿齐平
 const SHEEP = {
   still: "/assets/hero-sheep-still.webp",
   anim: "/assets/hero-sheep-idle.webp",
@@ -158,7 +158,7 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
         <img src={BUBBLE.src} alt="" draggable={false} className="absolute inset-0 h-full w-full max-w-none select-none" />
         <span
           className="font-hand absolute flex items-center justify-center whitespace-nowrap text-black"
-          style={{ left: 0, top: 0, width: w, height: BUBBLE.bodyH, fontSize: 16, lineHeight: 1 }}
+          style={{ left: 0, top: 0, width: w, height: BUBBLE.bodyH, fontSize: 14, lineHeight: 1 }}
         >
           <span ref={ref}>{text}</span>
         </span>
