@@ -11,7 +11,7 @@ import { loadImage } from "./life/preload";
  *
  * 整站是给大屏 + 鼠标滚轮做的，手机上不放真页面，只放这一张"信封"：
  * 牛皮纸信封里插着一张白卡片，卡片上是房子的照片和两行字，一个"复制网址"的手绘圈按钮；
- * 首页那只会动的小羊背着包站在左边，头顶一个打招呼的气泡。语言跟系统（navigator.language），不显示 CN/EN 切换。
+ * 首页那只会动的小羊背着包站在右边、面朝信封，头顶一个打招呼的气泡。语言跟系统（navigator.language），不显示 CN/EN 切换。
  *
  * 排版分三段锚定，不整体缩放：logo 贴顶、署名和链接贴底（都留安全区），信封那一组按宽度铺满、
  * 垂直居中在中间——屏幕矮的机型只是上下两段挨得近一点，信封永远是原大。
@@ -31,51 +31,89 @@ export function isPhone(): boolean {
 const SITE_URL = "https://woolab.art";
 const M = "/assets/mobile";
 
-/** 设计稿宽 375；信封那一组在稿里占 y 262–612，这里把它裁成一块 375×350 的"舞台"，坐标 = 稿 y − GROUP_TOP */
+/**
+ * 设计稿宽 375。信封那一组（信封、卡片、照片、胶带、圈按钮）在稿里 254 宽，手机上两行字挤在纸边上，
+ * 这里把这组图整体放大 K 倍（字号不放，只放纸），围绕水平中线、以卡片顶边为基准往下长。
+ * 舞台 375 宽，坐标 = (稿 y − ENV_TOP) × K + PAD_TOP。
+ */
 const STAGE_W = 375;
-const GROUP_TOP = 262;
-const GROUP_H = 350;
+const K = 1.2;
+const ENV_TOP = 272; // 稿里卡片顶边
+const PAD_TOP = 6;
+const CX = STAGE_W / 2;
+const sx = (x: number) => CX + (x - CX) * K;
+const sy = (y: number) => (y - ENV_TOP) * K + PAD_TOP;
 /** 舞台最多放大到这么多倍（大屏手机上别把信封撑得太满） */
-const GROUP_MAX_SCALE = 1.18;
+const GROUP_MAX_SCALE = 1.1;
 
 /**
  * 各图层：Figma 按层导出 SVG（去掉导出时垫的底色矩形）再用无头浏览器 3x 渲成透明 webp；
- * w/h 是 SVG 的标称尺寸（稿单位），位置按设计稿里该图层的中心（已换算到舞台坐标）。
+ * w/h 是 SVG 的标称尺寸（稿单位）× K，位置按设计稿里该图层的中心换算。
  */
+const art = (src: string, w: number, h: number, cx: number, cy: number) => ({
+  src: `${M}/${src}`,
+  w: w * K,
+  h: h * K,
+  cx: sx(cx),
+  cy: sy(cy),
+});
 const ART = {
-  envBack: { src: `${M}/env-back.webp`, w: 245, h: 205, cx: 186.5, cy: 437 - GROUP_TOP },
-  card: { src: `${M}/card.webp`, w: 224, h: 247, cx: 187, cy: 395.5 - GROUP_TOP },
-  photo: { src: `${M}/photo.webp`, w: 175, h: 170, cx: 187.1, cy: 454.55 - GROUP_TOP },
-  envFront: { src: `${M}/env-front.webp`, w: 254, h: 105, cx: 187.16, cy: 527 - GROUP_TOP },
-  tape: { src: `${M}/tape.webp`, w: 45, h: 48, cx: 104.3, cy: 386.8 - GROUP_TOP },
-  circle: { src: `${M}/circle.webp`, w: 117, h: 28, cx: 186.87, cy: 343.3 - GROUP_TOP },
-} as const;
+  envBack: art("env-back.webp", 245, 205, 186.5, 437),
+  card: art("card.webp", 224, 247, 187, 395.5),
+  photo: art("photo.webp", 175, 170, 187.1, 454.55),
+  envFront: art("env-front.webp", 254, 105, 187.16, 527),
+  tape: art("tape.webp", 45, 48, 104.3, 386.8),
+  circle: art("circle.webp", 117, 28, 186.87, 343.3),
+};
 type Art = (typeof ART)[keyof typeof ART];
 const LOGO = { src: `${M}/logo.webp`, w: 96, h: 30 };
+/** 卡片上文字的可用宽度：纸两侧各留 20 */
+const NOTE_INSET = ART.card.cx - ART.card.w / 2 + 20;
+const NOTE_TOP = sy(286);
 
 /**
  * 小羊直接用首页那只：先放静帧，动图解码好了再换（和首页一样，网慢也不等）。
- * 首页里小羊贴图 176.2 宽、影子 170.2 宽且相对小羊偏 (3, 1)；这里按 92 宽等比换算，
- * 脚底落在稿里设计小羊的脚底（y 608），左边和设计小羊对齐（x 40）。
+ * 站在信封右下角前面（它本来就是正面偏左看的，放右边正好朝着信封），脚底落在信封下沿再往下 30。
+ * 首页里小羊贴图 176.2 宽、影子 170.2 宽且相对小羊偏 (3, 1)；这里按 100 宽等比换算。
  */
+const SHEEP_W = 100;
+const SHEEP_H = (SHEEP_W * 550) / 353;
+const SHEEP_FEET = sy(527 + 105 / 2) + 30;
 const SHEEP = {
   still: "/assets/hero-sheep-still.webp",
   anim: "/assets/hero-sheep-idle.webp",
   shadow: "/assets/hero-sheep-shadow.png",
-  w: 92,
-  h: (92 * 550) / 353,
-  left: 39,
-  top: 608 - GROUP_TOP - ((92 * 550) / 353) * (534 / 550),
+  w: SHEEP_W,
+  h: SHEEP_H,
+  left: STAGE_W - 36 - (SHEEP_W * 348) / 353, // 身体右缘（贴图 348/353 处）离屏边 36
+  top: SHEEP_FEET - SHEEP_H * (534 / 550), // 脚底在贴图 534/550 处
 };
 const SHEEP_SHADOW = {
-  w: (92 * 170.2) / 176.2,
-  h: ((92 * 170.2) / 176.2) * (543 / 341),
-  left: SHEEP.left + (3 / 176.2) * 92,
-  top: SHEEP.top + (1 / 176.2) * 92,
+  w: (SHEEP_W * 170.2) / 176.2,
+  h: ((SHEEP_W * 170.2) / 176.2) * (543 / 341),
+  left: SHEEP.left + (3 / 176.2) * SHEEP_W,
+  top: SHEEP.top + (1 / 176.2) * SHEEP_W,
 };
+const GROUP_H = Math.ceil(SHEEP_FEET + 8);
 
-/** 气泡：手绘云朵框 + 指向小羊头顶的小尾巴（SVG 现画，线条粗细和信封的描边一致） */
-const BUBBLE = { left: 14, top: SHEEP.top - 46, w: 150, h: 60 };
+/**
+ * 气泡：设计稿里的 Vector 1450（灰细描边、白底带纸噪点、左下角垂一条小尾巴），135×68 渲成透明 webp。
+ * 小羊在右边，所以把图水平镜像，尾巴落到右下角、尖端（原图 x≈30 处）对到帽顶；字单独排在框里，不跟着镜像。
+ */
+const BUBBLE_S = 1.1;
+const BUBBLE_W = 135 * BUBBLE_S;
+const BUBBLE_H = 68 * BUBBLE_S;
+const BUBBLE_TAIL_X = (135 - 30) * BUBBLE_S; // 镜像后尾巴尖端在图内的 x
+const HAT_X = SHEEP.left + SHEEP_W * 0.46;
+const HAT_Y = SHEEP.top + SHEEP_H * (28 / 550);
+const BUBBLE = {
+  src: `${M}/bubble.webp`,
+  w: BUBBLE_W,
+  h: BUBBLE_H,
+  left: HAT_X - BUBBLE_TAIL_X,
+  top: HAT_Y - 2 - BUBBLE_H,
+  bodyH: 41 * BUBBLE_S, // 框体（不含尾巴）的高度
+};
 
 function Layer({ art, className = "", style }: { art: Art; className?: string; style?: React.CSSProperties }) {
   return (
@@ -94,7 +132,13 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
     <motion.div
       key={pop}
       className="pointer-events-none absolute"
-      style={{ left: BUBBLE.left, top: BUBBLE.top, width: BUBBLE.w, height: BUBBLE.h, transformOrigin: "62% 100%" }}
+      style={{
+        left: BUBBLE.left,
+        top: BUBBLE.top,
+        width: BUBBLE.w,
+        height: BUBBLE.h,
+        transformOrigin: `${(BUBBLE_TAIL_X / BUBBLE.w) * 100}% 100%`,
+      }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: "spring", stiffness: 380, damping: 16, mass: 0.7 }}
@@ -104,29 +148,16 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
         animate={{ y: [0, -2.5, 0] }}
         transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
       >
-        <svg viewBox="0 0 150 60" width={BUBBLE.w} height={BUBBLE.h} className="absolute inset-0 overflow-visible">
-          {/* 云朵框：一圈略不规则的椭圆；尾巴从右下方伸出去指向小羊 */}
-          <path
-            d="M 22 6 C 44 1, 78 0, 104 3 C 128 5, 145 12, 146 24 C 147 36, 133 46, 108 49 C 90 51, 66 51, 46 49 C 24 47, 6 40, 5 27 C 4 16, 10 9, 22 6 Z"
-            fill="#fff"
-            stroke="#222"
-            strokeWidth="2.2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M 78 49 C 80 53, 84 57, 91 60 C 86 57, 84 53, 84 49"
-            fill="#fff"
-            stroke="#222"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* 盖住尾巴根部那一小段框线，让尾巴和框连成一体 */}
-          <path d="M 79 49 L 84 49" stroke="#fff" strokeWidth="3" />
-        </svg>
+        <img
+          src={BUBBLE.src}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full max-w-none select-none"
+          style={{ transform: "scaleX(-1)" }}
+        />
         <span
           className="font-hand absolute flex items-center justify-center whitespace-nowrap text-black"
-          style={{ left: 8, top: 4, width: BUBBLE.w - 16, height: 44, fontSize: 17, lineHeight: 1 }}
+          style={{ left: 10, top: 1, width: BUBBLE.w - 20, height: BUBBLE.bodyH, fontSize: 17, lineHeight: 1 }}
         >
           {text}
         </span>
@@ -154,8 +185,8 @@ export default function MobileGate() {
       window.visualViewport?.removeEventListener("resize", on);
     };
   }, []);
-  /* 信封那一组按宽度铺满 */
-  const groupScale = Math.min(vp.w / STAGE_W, GROUP_MAX_SCALE);
+  /* 信封那一组按宽度铺满；特别矮的屏上再按剩余高度收一收（上下两段大约各占 90） */
+  const groupScale = Math.min(vp.w / STAGE_W, GROUP_MAX_SCALE, Math.max(0.7, (vp.h - 180) / GROUP_H));
 
   /* 复制网址 */
   const [copied, setCopied] = useState(false);
@@ -259,8 +290,8 @@ export default function MobileGate() {
 
               {/* 卡片上的两行字 */}
               <p
-                className="font-hand absolute inset-x-0 whitespace-pre-line text-center"
-                style={{ top: 286 - GROUP_TOP, fontSize: 14, lineHeight: 1.25 }}
+                className="font-hand absolute whitespace-pre-line text-center"
+                style={{ left: NOTE_INSET, right: NOTE_INSET, top: NOTE_TOP, fontSize: 14, lineHeight: 1.25 }}
               >
                 {t["mobile.note"]}
               </p>
@@ -305,12 +336,12 @@ export default function MobileGate() {
               <Layer art={ART.envFront} />
             </motion.div>
 
-            {/* 小羊：首页那只，从左边走进来；点它打招呼 */}
+            {/* 小羊：首页那只，站在信封右边，跟信封一起淡入；点它打招呼 */}
             <motion.div
               className="absolute inset-0"
-              initial={{ x: -170, opacity: 0 }}
-              animate={shown ? { x: 0, opacity: 1 } : { x: -170, opacity: 0 }}
-              transition={{ delay: 0.35, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={shown ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
             >
               <img
                 src={SHEEP.shadow}
@@ -319,12 +350,7 @@ export default function MobileGate() {
                 className="pointer-events-none absolute max-w-none select-none"
                 style={{ left: SHEEP_SHADOW.left, top: SHEEP_SHADOW.top, width: SHEEP_SHADOW.w, height: SHEEP_SHADOW.h }}
               />
-              <motion.div
-                className="absolute"
-                style={{ left: SHEEP.left, top: SHEEP.top, width: SHEEP.w, height: SHEEP.h, transformOrigin: "50% 100%" }}
-                animate={shown ? { y: [0, -3, 0, -3, 0] } : { y: 0 }}
-                transition={{ delay: 0.35, duration: 0.9, ease: "easeInOut" }}
-              >
+              <div className="absolute" style={{ left: SHEEP.left, top: SHEEP.top, width: SHEEP.w, height: SHEEP.h }}>
                 <img
                   src={sheepAnim ? SHEEP.anim : SHEEP.still}
                   alt="Meelo"
@@ -338,7 +364,7 @@ export default function MobileGate() {
                   className="absolute cursor-pointer border-0 bg-transparent p-0"
                   style={{ inset: "-8px -10px", WebkitTapHighlightColor: "transparent" }}
                 />
-              </motion.div>
+              </div>
               {bubble > 0 && <Bubble text={t["mobile.hi"]} pop={bubble} />}
             </motion.div>
           </div>
