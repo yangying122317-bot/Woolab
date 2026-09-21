@@ -72,12 +72,12 @@ const NOTE_TOP = sy(286);
 
 /**
  * 小羊直接用首页那只：先放静帧，动图解码好了再换（和首页一样，网慢也不等）。
- * 站在信封右下角前面（它本来就是正面偏左看的，放右边正好朝着信封），脚底和信封下沿齐平。
+ * 站在信封右下角前面（它本来就是正面偏左看的，放右边正好朝着信封），脚底比信封下沿低一点，站在信封前面。
  * 首页里小羊贴图 176.2 宽、影子 170.2 宽且相对小羊偏 (3, 1)；这里按 100 宽等比换算。
  */
 const SHEEP_W = 100;
 const SHEEP_H = (SHEEP_W * 550) / 353;
-const SHEEP_FEET = sy(527 + 105 / 2) + 2; // 脚底和信封下沿齐平
+const SHEEP_FEET = sy(527 + 105 / 2) + 18; // 脚底比信封下沿低 18，站在信封前面
 const SHEEP = {
   still: "/assets/hero-sheep-still.webp",
   anim: "/assets/hero-sheep-idle.webp",
