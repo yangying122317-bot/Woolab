@@ -77,14 +77,14 @@ const NOTE_TOP = sy(286);
  */
 const SHEEP_W = 100;
 const SHEEP_H = (SHEEP_W * 550) / 353;
-const SHEEP_FEET = sy(527 + 105 / 2) + 30;
+const SHEEP_FEET = sy(527 + 105 / 2) + 36;
 const SHEEP = {
   still: "/assets/hero-sheep-still.webp",
   anim: "/assets/hero-sheep-idle.webp",
   shadow: "/assets/hero-sheep-shadow.png",
   w: SHEEP_W,
   h: SHEEP_H,
-  left: STAGE_W - 36 - (SHEEP_W * 348) / 353, // 身体右缘（贴图 348/353 处）离屏边 36
+  left: STAGE_W - 8 - (SHEEP_W * 348) / 353, // 身体右缘（贴图 348/353 处）离屏边 8：稿里它有一小半探出信封外
   top: SHEEP_FEET - SHEEP_H * (534 / 550), // 脚底在贴图 534/550 处
 };
 const SHEEP_SHADOW = {
@@ -96,22 +96,20 @@ const SHEEP_SHADOW = {
 const GROUP_H = Math.ceil(SHEEP_FEET + 8);
 
 /**
- * 气泡：设计稿里的 Vector 1450（灰细描边、白底带纸噪点）。稿里尾巴朝下垂，这里气泡放在小羊左边、
- * 信封前片上，尾巴要指向右边的脸，所以只渲了框体（135×42）；尾巴用 SVG 现画在右下角，描边颜色取自框体。
+ * 气泡：设计稿里的 Vector 1450（棕色手绘描边、白底带纸噪点，尾巴从右下垂下来），100×46 渲成透明 webp，
+ * 按 K 放大后挂在小羊头顶右上方，尾巴尖落在帽子右半边上方。字单独排在框体里。
  */
-const BUBBLE_S = 1.1;
-const BUBBLE_W = 135 * BUBBLE_S;
-const BUBBLE_BODY_H = 42 * BUBBLE_S;
-const BUBBLE_TAIL_DROP = 10; // 尾巴尖比框体底边低多少
+const BUBBLE_W = 100 * K;
+const BUBBLE_H = 46 * K;
 const HAT_Y = SHEEP.top + SHEEP_H * (28 / 550);
 const BUBBLE = {
   src: `${M}/bubble.webp`,
   w: BUBBLE_W,
-  h: BUBBLE_BODY_H + BUBBLE_TAIL_DROP,
-  bodyH: BUBBLE_BODY_H,
-  left: SHEEP.left - 6 - BUBBLE_W, // 框体右缘离小羊 6
-  top: HAT_Y + 10,
-  stroke: "#C8C8C3",
+  h: BUBBLE_H,
+  bodyH: 30 * K, // 框体（不含尾巴）高度
+  left: SHEEP.left + 1 - 32, // 身体左缘再往左 32（稿里的相对位置）
+  top: HAT_Y - 66,
+  tailX: 0.846, // 尾巴尖在图内的横向位置
 };
 
 function Layer({ art, className = "", style }: { art: Art; className?: string; style?: React.CSSProperties }) {
@@ -127,16 +125,26 @@ function Layer({ art, className = "", style }: { art: Art; className?: string; s
 }
 
 function Bubble({ text, pop }: { text: string; pop: number }) {
+  /* 中文比英文宽，字装不下就把框横向拉开一点（手绘椭圆拉 15% 看不出来），尾巴跟着框的比例走 */
+  const ref = useRef<HTMLSpanElement>(null);
+  const [w, setW] = useState(BUBBLE.w);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => setW(Math.max(BUBBLE.w, el.offsetWidth + 26));
+    fit();
+    document.fonts?.ready.then(fit).catch(() => {});
+  }, [text]);
   return (
     <motion.div
       key={pop}
       className="pointer-events-none absolute"
       style={{
-        left: BUBBLE.left,
+        left: BUBBLE.left - (w - BUBBLE.w), // 往左长，右边贴着屏边的距离不变
         top: BUBBLE.top,
-        width: BUBBLE.w,
+        width: w,
         height: BUBBLE.h,
-        transformOrigin: "100% 100%",
+        transformOrigin: `${BUBBLE.tailX * 100}% 100%`,
       }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -147,38 +155,12 @@ function Bubble({ text, pop }: { text: string; pop: number }) {
         animate={{ y: [0, -2.5, 0] }}
         transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
       >
-        <img
-          src={BUBBLE.src}
-          alt=""
-          draggable={false}
-          className="absolute left-0 top-0 max-w-none select-none"
-          style={{ width: BUBBLE.w, height: BUBBLE.bodyH }}
-        />
-        {/* 尾巴：从框体右下的弧线上伸出去指向小羊的脸；先用白色盖住那段框线，再描两条边 */}
-        <svg
-          viewBox={`0 0 ${BUBBLE.w} ${BUBBLE.h}`}
-          width={BUBBLE.w}
-          height={BUBBLE.h}
-          className="absolute left-0 top-0 overflow-visible"
-        >
-          <path
-            d={`M ${BUBBLE.w - 34} ${BUBBLE.bodyH - 4.5} C ${BUBBLE.w - 24} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 12} ${BUBBLE.bodyH + 6}, ${BUBBLE.w + 3} ${BUBBLE.bodyH + BUBBLE_TAIL_DROP - 3} C ${BUBBLE.w - 4} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 14} ${BUBBLE.bodyH - 2}, ${BUBBLE.w - 22} ${BUBBLE.bodyH - 10} L ${BUBBLE.w - 34} ${BUBBLE.bodyH - 9} Z`}
-            fill="#fff"
-          />
-          <path
-            d={`M ${BUBBLE.w - 34} ${BUBBLE.bodyH - 4.5} C ${BUBBLE.w - 24} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 12} ${BUBBLE.bodyH + 6}, ${BUBBLE.w + 3} ${BUBBLE.bodyH + BUBBLE_TAIL_DROP - 3} C ${BUBBLE.w - 4} ${BUBBLE.bodyH + 3}, ${BUBBLE.w - 14} ${BUBBLE.bodyH - 2}, ${BUBBLE.w - 22} ${BUBBLE.bodyH - 10}`}
-            fill="none"
-            stroke={BUBBLE.stroke}
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <img src={BUBBLE.src} alt="" draggable={false} className="absolute inset-0 h-full w-full max-w-none select-none" />
         <span
           className="font-hand absolute flex items-center justify-center whitespace-nowrap text-black"
-          style={{ left: 10, top: 0, width: BUBBLE.w - 20, height: BUBBLE.bodyH, fontSize: 17, lineHeight: 1 }}
+          style={{ left: 0, top: 0, width: w, height: BUBBLE.bodyH, fontSize: 16, lineHeight: 1 }}
         >
-          {text}
+          <span ref={ref}>{text}</span>
         </span>
       </motion.div>
     </motion.div>

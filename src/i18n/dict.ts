@@ -241,7 +241,7 @@ export const dict = {
     "mobile.copy": "Copy the link",
     "mobile.copied": "Copied",
     "mobile.sign": "Meet Meelo elsewhere first",
-    "mobile.hi": "Hi, I'm Meelo",
+    "mobile.hi": "Hi I'm Meelo",
     "contact.phone": "Pick up the phone",
     "contact.hello": "Hi～you found Meelo！",
     "intro.skip": "Skip",
