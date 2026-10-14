@@ -3,7 +3,7 @@
  * 换成真实地址/链接时只改这里。
  */
 
-export const contactEmail = "hello@woolab.example";
+export const contactEmail = "woolabart@gmail.com";
 
 export interface SocialLink {
   id: string;
