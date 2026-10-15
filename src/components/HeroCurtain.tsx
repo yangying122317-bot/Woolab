@@ -127,10 +127,20 @@ const SIGN = {
 
 const loaded = (src: string) =>
   new Promise<void>((res) => {
-    const im = new Image();
-    im.onload = () => im.decode().then(res, res);
-    im.onerror = () => res();
-    im.src = src;
+    const attempt = (retry: boolean) => {
+      const im = new Image();
+      im.onload = () => im.decode().then(res, res);
+      im.onerror = () => {
+        if (!retry) {
+          window.setTimeout(() => attempt(true), 250);
+          return;
+        }
+        if (import.meta.env.DEV) console.warn(`Hero preload failed: ${src}`);
+        res();
+      };
+      im.src = src;
+    };
+    attempt(false);
   });
 
 /** 场景那层的镜头参数：缩放 + 位移（像素），由这里驱动 */

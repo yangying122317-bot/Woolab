@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Component, Suspense, lazy, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import IntroLoader, {
@@ -10,7 +10,6 @@ import Layout from "./components/Layout";
 import TopNav from "./components/TopNav";
 import { PageShiftFrame, PageShiftProvider } from "./components/PageShift";
 import Home from "./pages/Home";
-import MobileGate, { isPhone } from "./components/MobileGate";
 
 /*
  * 首页之外的页面都按页拆包：首屏那份 JS 只带首页 + 开场，电视机能早点出来。
@@ -35,6 +34,42 @@ const LabProjectPage = lazy(PAGE_LOADERS.labProject);
 const NewsPage = lazy(PAGE_LOADERS.news);
 const ContactPage = lazy(PAGE_LOADERS.contact);
 
+function PageLoading() {
+  return (
+    <div className="font-hand fixed inset-0 flex items-center justify-center bg-[#F9F6EF] text-black">
+      <span className="animate-pulse text-base">Loading…</span>
+    </div>
+  );
+}
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    if (import.meta.env.DEV) console.error("Route chunk failed", error, info);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="font-hand fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#F9F6EF] text-center text-black">
+        <p className="text-lg">页面没有加载完整 / This page didn’t load.</p>
+        <button
+          type="button"
+          className="cursor-pointer rounded-full border border-black px-5 py-2 text-sm"
+          onClick={() => window.location.reload()}
+        >
+          重新加载 / Reload
+        </button>
+      </div>
+    );
+  }
+}
+
 function WarmPages() {
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -46,8 +81,6 @@ function WarmPages() {
 }
 
 export default function App() {
-  /* 手机上不放真页面：整站是给大屏 + 滚轮做的，只给一张"换到电脑上看"的信封（不会去下首页那几十 MB 素材） */
-  if (isPhone()) return <MobileGate />;
   return (
     <LanguageProvider>
       <BrowserRouter>
@@ -59,8 +92,9 @@ export default function App() {
             {/* 路由包在可位移的一层里：目录跳页时新页面从底下被拉上来 */}
             <PageShiftFrame>
               <WarmPages />
-              <Suspense fallback={null}>
-                <Routes>
+              <PageErrorBoundary>
+                <Suspense fallback={<PageLoading />}>
+                  <Routes>
                   {/* 首页（场景导航）与屋内长卷使用全屏布局 */}
                   <Route path="/" element={<Home />} />
                   {/* 加载动画单独入口：底下是首页，开屏不看会话标记、可反复播 */}
@@ -92,8 +126,9 @@ export default function App() {
                     {/* Downloads 已折叠进 Lab 详情的"带一份回家"段落 */}
                     <Route path="/contact" element={<ContactPage />} />
                   </Route>
-                </Routes>
-              </Suspense>
+                  </Routes>
+                </Suspense>
+              </PageErrorBoundary>
             </PageShiftFrame>
           </PageShiftProvider>
         </SmoothScrollProvider>

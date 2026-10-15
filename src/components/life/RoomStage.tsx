@@ -16,6 +16,7 @@ import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { DictKey } from "../../i18n/dict";
 import FrameAnim, { warmFrames } from "./FrameAnim";
+import { preloadLifeInteraction } from "./preload";
 import {
   playLightOff,
   playLightOn,
@@ -265,7 +266,7 @@ function RecordPlayer({
           height: vh(RECORD_DISC.h),
         }}
       />
-      {/* 盘面帧序列：全部常驻 DOM 只切透明度，避免换帧重新解码 */}
+      {/* 盘面帧序列：默认不挂载，鼠标靠近时预热、点下后才进入 DOM，避免 36 帧阻塞入场 */}
       <div
         ref={ref}
         className="pointer-events-none absolute select-none"
@@ -276,16 +277,18 @@ function RecordPlayer({
           height: vh(RECORD_FACE.h),
         }}
       >
-        {Array.from({ length: RECORD_FRAMES }, (_, i) => (
-          <img
-            key={i}
-            src={recordFrameSrc(i)}
-            alt=""
-            draggable={false}
-            className="absolute inset-0 h-full w-full max-w-none"
-            style={{ opacity: i === frame ? 1 : 0 }}
-          />
-        ))}
+        {playing &&
+          Array.from({ length: RECORD_FRAMES }, (_, i) => (
+            <img
+              key={i}
+              src={recordFrameSrc(i)}
+              alt=""
+              draggable={false}
+              decoding="async"
+              className="absolute inset-0 h-full w-full max-w-none"
+              style={{ opacity: i === frame ? 1 : 0 }}
+            />
+          ))}
       </div>
       <img
         src="/assets/life/seg01/record-arm.webp"
@@ -313,7 +316,14 @@ function RecordPlayer({
           height: vh(RECORD_DISC.y + RECORD_DISC.h - RECORD_ARM.y + 40),
           zIndex: 5,
         }}
-        onClick={() => interactive && onToggle()}
+        onPointerEnter={() => {
+          if (interactive && !playing) void preloadLifeInteraction();
+        }}
+        onClick={() => {
+          if (!interactive) return;
+          if (!playing) void preloadLifeInteraction();
+          onToggle();
+        }}
         onKeyDown={(e) => {
           if (interactive && (e.key === "Enter" || e.key === " ")) onToggle();
         }}

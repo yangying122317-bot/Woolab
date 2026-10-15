@@ -50,11 +50,14 @@ function ensureContext() {
 function unlock() {
   ensureContext();
   if (!ctx) return;
-  if (ctx.state === "suspended") void ctx.resume();
+  const resumed = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
   unlocked = true;
-  syncAmbient();
-  // 字节早就拉好了，这里趁着上下文已经 running 一口气全解码
-  ALL_SAMPLES.forEach((id) => void loadSample(id));
+  void resumed.then(() => {
+    syncAmbient();
+    // 字节早就拉好了，这里趁着上下文已经 running 一口气全解码
+    ALL_SAMPLES.forEach((id) => void loadSample(id));
+    void decodePhoneHello();
+  });
 }
 
 if (typeof window !== "undefined") {
@@ -601,23 +604,43 @@ export const PHONE = {
 } as const;
 
 let helloBuf: AudioBuffer | null = null;
+let helloBytes: Promise<ArrayBuffer | null> | null = null;
 let helloLoading: Promise<void> | null = null;
 
-/** 提前把那句 hello 拉下来解码好（Contact 页挂上来时调一次）；没解码好就退回合成的两个音节 */
-export function preloadPhoneHello() {
-  if (helloBuf || helloLoading) return;
+function fetchPhoneHello(): Promise<ArrayBuffer | null> {
+  if (!helloBytes) {
+    helloBytes = fetch(HELLO_SRC)
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .catch(() => {
+        helloBytes = null;
+        return null;
+      });
+  }
+  return helloBytes;
+}
+
+function decodePhoneHello(): Promise<void> {
+  if (helloBuf) return Promise.resolve();
+  if (helloLoading) return helloLoading;
   ensureContext();
   const c = ctx;
-  if (!c) return;
-  helloLoading = fetch(HELLO_SRC)
-    .then((r) => r.arrayBuffer())
-    .then((b) => c.decodeAudioData(b))
+  if (!c) return Promise.resolve();
+  helloLoading = fetchPhoneHello()
+    .then((b) => (b ? c.decodeAudioData(b.slice(0)) : null))
     .then((buf) => {
-      helloBuf = buf;
+      if (buf) helloBuf = buf;
+      else helloLoading = null;
     })
     .catch(() => {
       helloLoading = null;
     });
+  return helloLoading;
+}
+
+/** Contact 挂载时只下载字节；用户首次触摸、AudioContext running 后才解码，避免 Safari 卡在 suspended context。 */
+export function preloadPhoneHello() {
+  void fetchPhoneHello();
+  if (unlocked) void decodePhoneHello();
 }
 
 /** 电话线路那种 300–3400Hz 的窄带：所有从听筒里传出来的声音都先过这一层 */

@@ -1,4 +1,4 @@
-import { lifeFirstAssets, lifeRestAssets } from "../../data/lifeAssets";
+import { lifeFirstAssets, lifeInteractionAssets, lifeRestAssets } from "../../data/lifeAssets";
 
 /**
  * Life 页素材预加载。
@@ -17,17 +17,29 @@ function load(url: string): Promise<void> {
   const hit = cache.get(url);
   if (hit) return hit;
   const p = new Promise<void>((resolve) => {
-    const im = new Image();
-    im.decoding = "async";
-    im.onload = () => {
-      // decode() 把解码也做完；不支持或失败（比如被丢弃）都当作完成，不卡进门
-      const d = im.decode?.();
-      if (d) d.then(resolve, resolve);
-      else resolve();
+    const attempt = (retry: boolean) => {
+      const im = new Image();
+      im.decoding = "async";
+      im.onload = () => {
+        // decode() 把解码也做完；不支持或失败（比如被丢弃）都当作完成，不卡进门
+        const d = im.decode?.();
+        if (d) d.then(resolve, resolve);
+        else resolve();
+      };
+      im.onerror = () => {
+        if (!retry) {
+          window.setTimeout(() => attempt(true), 250);
+          return;
+        }
+        // 不把失败永久写进缓存；网络恢复后下一次 warm / 进页仍可再试。
+        window.setTimeout(() => cache.delete(url), 0);
+        if (import.meta.env.DEV) console.warn(`Image preload failed: ${url}`);
+        resolve();
+      };
+      im.src = url;
+      keep.push(im);
     };
-    im.onerror = () => resolve();
-    im.src = url;
-    keep.push(im);
+    attempt(false);
   });
   cache.set(url, p);
   return p;
@@ -45,12 +57,19 @@ async function loadAll(urls: readonly string[], limit = 8): Promise<void> {
 }
 
 let first: Promise<void> | null = null;
+let interaction: Promise<void> | null = null;
 let rest: Promise<void> | null = null;
 
 /** 第一屏素材：返回全部解码完成的 Promise（重复调用复用同一个） */
 export function preloadLifeFirst(): Promise<void> {
   if (!first) first = loadAll(lifeFirstAssets);
   return first;
+}
+
+/** 唱片逐帧图：只在鼠标靠近或真正点击时解码，不再阻塞 Life 入场 */
+export function preloadLifeInteraction(): Promise<void> {
+  if (!interaction) interaction = loadAll(lifeInteractionAssets, 4);
+  return interaction;
 }
 
 /** 后面两段：第一屏就位后再开始，别抢带宽 */
@@ -85,15 +104,15 @@ export async function warmBytes(urls: readonly string[], limit = 4): Promise<voi
 }
 
 /**
- * 从别的页（目录）提前热身：先等一小会儿（让当前页自己的图先落地），再把全部 Life 素材拉进缓存。
- * 只暖字节不解码，进门时 LifePage 自己等第一屏解码（从缓存里解码 112 张几百毫秒，在过场时间内）。幂等，随便调。
+ * 从别的页（目录）提前热身：只暖第一屏字节。后两段等真正进入 Life 后再拉，
+ * 避免用户只是打开一次目录，就在后台下载整间屋子。
  */
 let warmed = false;
 export function warmLife(delayMs = 2500): void {
   if (warmed || rest) return;
   warmed = true;
   window.setTimeout(() => {
-    void warmBytes(lifeFirstAssets).then(() => warmBytes(lifeRestAssets, 3));
+    void warmBytes(lifeFirstAssets);
   }, delayMs);
 }
 

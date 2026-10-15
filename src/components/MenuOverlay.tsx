@@ -206,9 +206,8 @@ export default function MenuOverlay({
   });
 
   /*
-   * 目录一打开就把 Life / Lab 首屏的大图取回来解码好。
-   * 不然点牌子上飞、新页面刚露头那一刻才解码，中段会卡一下。
-   * Life 那批走公共的 preload（LifePage 进门时等的就是同一批，这里先拉了那边就不用等）。
+   * 目录一打开就暖 Life 首屏的 HTTP 字节，并把 Lab 首屏大图解码好。
+   * Life 后两段不在这里下载，避免用户只是看一眼目录就拉完整间屋子。
    */
   useEffect(() => {
     warmLife(0);

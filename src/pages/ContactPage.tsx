@@ -102,12 +102,13 @@ const ROUND_CIRCLE = { src: `${C}/circle-round.png`, ar: 124 / 272 };
  * hover 时用手绘圈把里面的字圈起来：圈从左往右画出来（0.45s），移开就淡掉。
  * 圈的大小按字的实际尺寸算，所以进来时量一下。
  */
-function Circled({ children }: { children: ReactNode }) {
+function Circled({ children, disabled = false }: { children: ReactNode; disabled?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [on, setOn] = useState(false);
   const [box, setBox] = useState<{ src: string; l: number; t: number; w: number; h: number } | null>(null);
 
   const enter = () => {
+    if (disabled) return;
     const el = ref.current;
     if (el) {
       const w = el.offsetWidth;
@@ -138,12 +139,12 @@ function Circled({ children }: { children: ReactNode }) {
           style={{ left: box.l, top: box.t, width: box.w, height: box.h }}
           initial={false}
           animate={
-            on
+            on && !disabled
               ? { clipPath: "inset(-6px -6px -6px -6px)", opacity: 1 }
               : { clipPath: "inset(-6px 100% -6px -6px)", opacity: 0 }
           }
           transition={
-            on
+            on && !disabled
               ? { clipPath: { duration: 0.45, ease: "easeOut" }, opacity: { duration: 0 } }
               : { opacity: { duration: 0.2 }, clipPath: { delay: 0.2, duration: 0 } }
           }
@@ -387,7 +388,7 @@ export default function ContactPage() {
                 className={`${bodyFont} absolute text-center text-black`}
                 style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
               >
-                <Circled>
+                <Circled disabled={copied}>
                   <button
                     type="button"
                     onClick={() => void copyEmail()}

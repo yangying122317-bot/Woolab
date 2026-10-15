@@ -19,7 +19,10 @@ def files(sub, skip=()):
     return out
 
 
-first = ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"] + files("seg01", skip=("dress-anim",)) + files("list")
+first = ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"] + files(
+    "seg01", skip=("dress-anim", "record-anim")
+) + files("list")
+interaction = files("seg01/record-anim")
 rest = files("seg02", skip=("paint-anim",)) + files("seg03")
 
 
@@ -30,7 +33,8 @@ def block(name, doc, arr):
 
 src = """/**
  * Life 页素材清单（自动生成，别手改）。分两批预加载：
- *   lifeFirstAssets  进门第一屏就要的：墙面、段01 衣帽区（含窗户/唱片帧）、清单抽屉
+ *   lifeFirstAssets  进门第一屏就要的：墙面、段01 衣帽区（含窗户帧）、清单抽屉
+ *   lifeInteractionAssets  点唱片后才需要的帧
  *   lifeRestAssets   往右走才看到的：段02 起居区、段03 厨房 + LAB 门
  * 换装（seg01/dress-anim）和作画（seg02/paint-anim）两套帧序列不在这里，RoomStage 在触发前才预热。
  *
@@ -40,6 +44,7 @@ src = """/**
 
 """
 src += block("lifeFirstAssets", f"第一屏：{len(first)} 个文件", first)
+src += "\n" + block("lifeInteractionAssets", f"首屏交互：{len(interaction)} 个文件", interaction)
 src += "\n" + block("lifeRestAssets", f"后面两段：{len(rest)} 个文件", rest)
 OUT.write_text(src)
 
@@ -48,4 +53,8 @@ def mb(arr):
     return sum(os.path.getsize(ROOT / "public" / u.lstrip("/")) for u in arr) / 1e6
 
 
-print(f"first {len(first)} files {mb(first):.1f}MB, rest {len(rest)} files {mb(rest):.1f}MB -> {OUT.relative_to(ROOT)}")
+print(
+    f"first {len(first)} files {mb(first):.1f}MB, "
+    f"interaction {len(interaction)} files {mb(interaction):.1f}MB, "
+    f"rest {len(rest)} files {mb(rest):.1f}MB -> {OUT.relative_to(ROOT)}"
+)

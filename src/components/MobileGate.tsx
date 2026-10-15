@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { dict, type Lang } from "../i18n/dict";
 import { socialLinks } from "../data/contact";
-import { playHello } from "../audio/sfx";
-import { loadImage } from "./life/preload";
 
 /**
  * 手机上打开时的引导页（设计稿 Frame 34，375 宽）。
@@ -16,19 +14,39 @@ import { loadImage } from "./life/preload";
  * 垂直居中在中间——屏幕矮的机型只是上下两段挨得近一点，信封永远是原大。
  */
 
-/** 手机判定：触屏 + 短边不到 768（iPad 横屏、桌面窄窗口都放行）。?gate=1 / ?gate=0 可强制 */
-export function isPhone(): boolean {
-  if (typeof window === "undefined") return false;
-  const q = new URLSearchParams(window.location.search).get("gate");
-  if (q === "1") return true;
-  if (q === "0") return false;
-  const coarse = window.matchMedia("(pointer: coarse)").matches;
-  const short = Math.min(window.innerWidth, window.innerHeight) < 768;
-  return coarse && short;
-}
-
 const SITE_URL = "https://woolab.art";
 const M = "/assets/mobile";
+const HELLO = "/assets/audio/hello.mp3";
+
+let helloAudio: HTMLAudioElement | null = null;
+function mobileHelloAudio() {
+  if (!helloAudio) {
+    helloAudio = new Audio(HELLO);
+    helloAudio.preload = "auto";
+    helloAudio.volume = 0.8;
+    helloAudio.load();
+  }
+  return helloAudio;
+}
+function playMobileHello() {
+  const audio = mobileHelloAudio();
+  audio.currentTime = 0;
+  void audio.play().catch(() => {});
+}
+
+function loadImage(src: string): Promise<void> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      const decoded = image.decode?.();
+      if (decoded) void decoded.then(resolve, resolve);
+      else resolve();
+    };
+    image.onerror = () => resolve();
+    image.src = src;
+  });
+}
 
 /**
  * 设计稿宽 375。信封那一组（信封、卡片、照片、胶带、圈按钮）在稿里 254 宽，手机上两行字挤在纸边上，
@@ -173,6 +191,7 @@ export default function MobileGate() {
   const t = dict[lang];
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    mobileHelloAudio();
   }, [lang]);
 
   /* 视口：地址栏收起/展开时高度会变，跟着重排 */
@@ -252,7 +271,7 @@ export default function MobileGate() {
     return () => window.clearTimeout(id);
   }, []);
   const greet = () => {
-    playHello();
+    playMobileHello();
     setBubble((n) => n + 1);
   };
 

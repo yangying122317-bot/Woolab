@@ -1,6 +1,7 @@
 /**
  * Life 页素材清单（自动生成，别手改）。分两批预加载：
- *   lifeFirstAssets  进门第一屏就要的：墙面、段01 衣帽区（含窗户/唱片帧）、清单抽屉
+ *   lifeFirstAssets  进门第一屏就要的：墙面、段01 衣帽区（含窗户帧）、清单抽屉
+ *   lifeInteractionAssets  点唱片后才需要的帧
  *   lifeRestAssets   往右走才看到的：段02 起居区、段03 厨房 + LAB 门
  * 换装（seg01/dress-anim）和作画（seg02/paint-anim）两套帧序列不在这里，RoomStage 在触发前才预热。
  *
@@ -8,7 +9,7 @@
  *   python3 scripts/gen-life-assets.py
  */
 
-/** 第一屏：112 个文件 */
+/** 第一屏：76 个文件 */
 export const lifeFirstAssets: readonly string[] = [
   "/assets/life/room-bg-tile.webp",
   "/assets/life/room-floor-tile.webp",
@@ -38,42 +39,6 @@ export const lifeFirstAssets: readonly string[] = [
   "/assets/life/seg01/note-2.webp",
   "/assets/life/seg01/plant.webp",
   "/assets/life/seg01/rack.webp",
-  "/assets/life/seg01/record-anim/f00.webp",
-  "/assets/life/seg01/record-anim/f01.webp",
-  "/assets/life/seg01/record-anim/f02.webp",
-  "/assets/life/seg01/record-anim/f03.webp",
-  "/assets/life/seg01/record-anim/f04.webp",
-  "/assets/life/seg01/record-anim/f05.webp",
-  "/assets/life/seg01/record-anim/f06.webp",
-  "/assets/life/seg01/record-anim/f07.webp",
-  "/assets/life/seg01/record-anim/f08.webp",
-  "/assets/life/seg01/record-anim/f09.webp",
-  "/assets/life/seg01/record-anim/f10.webp",
-  "/assets/life/seg01/record-anim/f11.webp",
-  "/assets/life/seg01/record-anim/f12.webp",
-  "/assets/life/seg01/record-anim/f13.webp",
-  "/assets/life/seg01/record-anim/f14.webp",
-  "/assets/life/seg01/record-anim/f15.webp",
-  "/assets/life/seg01/record-anim/f16.webp",
-  "/assets/life/seg01/record-anim/f17.webp",
-  "/assets/life/seg01/record-anim/f18.webp",
-  "/assets/life/seg01/record-anim/f19.webp",
-  "/assets/life/seg01/record-anim/f20.webp",
-  "/assets/life/seg01/record-anim/f21.webp",
-  "/assets/life/seg01/record-anim/f22.webp",
-  "/assets/life/seg01/record-anim/f23.webp",
-  "/assets/life/seg01/record-anim/f24.webp",
-  "/assets/life/seg01/record-anim/f25.webp",
-  "/assets/life/seg01/record-anim/f26.webp",
-  "/assets/life/seg01/record-anim/f27.webp",
-  "/assets/life/seg01/record-anim/f28.webp",
-  "/assets/life/seg01/record-anim/f29.webp",
-  "/assets/life/seg01/record-anim/f30.webp",
-  "/assets/life/seg01/record-anim/f31.webp",
-  "/assets/life/seg01/record-anim/f32.webp",
-  "/assets/life/seg01/record-anim/f33.webp",
-  "/assets/life/seg01/record-anim/f34.webp",
-  "/assets/life/seg01/record-anim/f35.webp",
   "/assets/life/seg01/record-arm.webp",
   "/assets/life/seg01/record-body.webp",
   "/assets/life/seg01/record-disc.webp",
@@ -122,6 +87,46 @@ export const lifeFirstAssets: readonly string[] = [
   "/assets/life/list/tape-br.png",
   "/assets/life/list/tape-sheet.png",
   "/assets/life/list/tape-tr.png",
+];
+
+/** 首屏交互：36 个文件 */
+export const lifeInteractionAssets: readonly string[] = [
+  "/assets/life/seg01/record-anim/f00.webp",
+  "/assets/life/seg01/record-anim/f01.webp",
+  "/assets/life/seg01/record-anim/f02.webp",
+  "/assets/life/seg01/record-anim/f03.webp",
+  "/assets/life/seg01/record-anim/f04.webp",
+  "/assets/life/seg01/record-anim/f05.webp",
+  "/assets/life/seg01/record-anim/f06.webp",
+  "/assets/life/seg01/record-anim/f07.webp",
+  "/assets/life/seg01/record-anim/f08.webp",
+  "/assets/life/seg01/record-anim/f09.webp",
+  "/assets/life/seg01/record-anim/f10.webp",
+  "/assets/life/seg01/record-anim/f11.webp",
+  "/assets/life/seg01/record-anim/f12.webp",
+  "/assets/life/seg01/record-anim/f13.webp",
+  "/assets/life/seg01/record-anim/f14.webp",
+  "/assets/life/seg01/record-anim/f15.webp",
+  "/assets/life/seg01/record-anim/f16.webp",
+  "/assets/life/seg01/record-anim/f17.webp",
+  "/assets/life/seg01/record-anim/f18.webp",
+  "/assets/life/seg01/record-anim/f19.webp",
+  "/assets/life/seg01/record-anim/f20.webp",
+  "/assets/life/seg01/record-anim/f21.webp",
+  "/assets/life/seg01/record-anim/f22.webp",
+  "/assets/life/seg01/record-anim/f23.webp",
+  "/assets/life/seg01/record-anim/f24.webp",
+  "/assets/life/seg01/record-anim/f25.webp",
+  "/assets/life/seg01/record-anim/f26.webp",
+  "/assets/life/seg01/record-anim/f27.webp",
+  "/assets/life/seg01/record-anim/f28.webp",
+  "/assets/life/seg01/record-anim/f29.webp",
+  "/assets/life/seg01/record-anim/f30.webp",
+  "/assets/life/seg01/record-anim/f31.webp",
+  "/assets/life/seg01/record-anim/f32.webp",
+  "/assets/life/seg01/record-anim/f33.webp",
+  "/assets/life/seg01/record-anim/f34.webp",
+  "/assets/life/seg01/record-anim/f35.webp",
 ];
 
 /** 后面两段：135 个文件 */
