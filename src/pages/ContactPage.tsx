@@ -130,7 +130,7 @@ function Circled({ children, disabled = false }: { children: ReactNode; disabled
   return (
     <span ref={ref} className="relative inline-block" onMouseEnter={enter} onMouseLeave={() => setOn(false)}>
       {children}
-      {box && (
+      {box && !disabled && (
         <motion.img
           src={box.src}
           alt=""
