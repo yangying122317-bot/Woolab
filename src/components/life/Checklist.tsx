@@ -48,9 +48,10 @@ const TAPE_TR = pic("tape-tr.png", 241, 97.16, 46.326, 42.95);
 /** 抽屉右下角那条胶带（位置按抽屉的角算，见渲染处；这里只用它的尺寸） */
 const TAPE_BR = pic("tape-br.png", 250, 392.5, 46.585, 39.189);
 /** "带我过去"：奶油底黑边的框 + 顶上一条胶带 + 右边一支小箭头，字是活的 */
-const CTA_BOX = pic("cta-box.webp", 141.76, 286.1, 119.314, 35.467);
+const CTA_ORIGIN = { x: 125.76, y: 278, w: 164, h: 45 };
+const CTA_BOX = pic("cta-box.webp", 125.76, 286.1, 151.314, 35.467);
 const CTA_TAPE = pic("cta-tape.png", 178.12, 278, 36.507, 20.344);
-const CTA_ARROW = pic("cta-arrow.png", 238, 298.5, 13.341, 8.266);
+const CTA_ARROW = pic("cta-arrow.png", 248, 298.5, 13.341, 8.266);
 
 /**
  * 纸底下"往右走"那句：一行写完，围着纸的中线居中，贴在纸下缘和抽屉右下角那条胶带之间
@@ -537,19 +538,19 @@ function DoneNote({
         type="button"
         onClick={onGoDoor}
         className="absolute cursor-pointer"
-        style={{ ...box(141.76, 278, 123, 45), transformOrigin: "50% 60%" }}
+        style={{ ...box(CTA_ORIGIN.x, CTA_ORIGIN.y, CTA_ORIGIN.w, CTA_ORIGIN.h), transformOrigin: "50% 60%" }}
         initial={play ? { opacity: 0, scale: 1.7, rotate: -12, y: 10 } : { opacity: 1, scale: 1, rotate: 0, y: 0 }}
         animate={{ opacity: 1, scale: 1, rotate: 0, y: 0, transition: { type: "spring", stiffness: 420, damping: 22, delay: play ? 3.15 : 0 } }}
         whileHover={{ scale: 1.06, rotate: 1.5 }}
         whileTap={{ scale: 0.96 }}
         transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
-        <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(CTA_BOX, 141.76, 278)} />
+        <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(CTA_BOX, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
         <span
           className="font-look absolute whitespace-nowrap font-bold uppercase"
           style={{
-            left: 191.84 - 141.76,
-            top: 305.98 - 278,
+            left: 189.84 - CTA_ORIGIN.x,
+            top: 305.98 - CTA_ORIGIN.y,
             transform: "translate(-50%, -50%) rotate(-3.44deg)",
             fontSize: hand ? 12 : 11.5,
             lineHeight: 1.2,
@@ -558,8 +559,8 @@ function DoneNote({
         >
           {cta}
         </span>
-        <img src={`${A}/${CTA_ARROW.src}`} alt="" draggable={false} style={at(CTA_ARROW, 141.76, 278)} />
-        <img src={`${A}/${CTA_TAPE.src}`} alt="" draggable={false} style={at(CTA_TAPE, 141.76, 278)} />
+        <img src={`${A}/${CTA_ARROW.src}`} alt="" draggable={false} style={at(CTA_ARROW, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
+        <img src={`${A}/${CTA_TAPE.src}`} alt="" draggable={false} style={at(CTA_TAPE, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
       </motion.button>
     </>
   );

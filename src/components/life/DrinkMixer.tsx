@@ -71,7 +71,7 @@ const ARROW_PX = 100;
 const ARROW_H = vh(ARROW_PX);
 const ARROW_STROKE = 1.6;
 /** 分步纸签的中线 x（长卷像素）：一口咩纸箱左半上方，右边给加冰那步的箭头留出冰桶上空 */
-const STEP_TAG_X = 9105;
+const STEP_TAG_X = 9180;
 
 /** 坐标换算基准区（整张白圆桌一带） */
 const BOUNDS = { x: 8560, y: 1120, w: 1420, h: 610 };
@@ -525,7 +525,8 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
               // 倒酒绕瓶颈转，hover 摇晃以瓶底为轴
               transformOrigin: pouring ? "50% 20%" : "50% 92%",
               // 选中的瓶子压在其他瓶子和杯子之上（倒酒时也在中途杯前面）
-              zIndex: pouring ? 12 : isChosen && !done && step !== "pick" ? 13 : 9,
+              // hover 时整瓶提到引导纸签上面，让饮料名称始终完整可读。
+              zIndex: hovered === d.id ? 35 : pouring ? 12 : isChosen && !done && step !== "pick" ? 13 : 9,
               opacity: dragging ? 0 : 1,
               // label 阶段瓶子正从杯口弹回原位，指针事件先关掉，
               // 免得它路过静止的鼠标时误触发 hover 气泡
@@ -607,7 +608,12 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
         arrowH={ARROW_H}
         bold
         stroke={ARROW_STROKE}
-        style={{ left: vh(BOTTLE_POS["soda-white"].x + 24), top: vh(BOTTLE_POS["soda-white"].y - ARROW_PX - 10) }}
+        style={{
+          left: vh(BOTTLE_POS["soda-white"].x + 24),
+          top: vh(BOTTLE_POS["soda-white"].y - ARROW_PX - 10),
+          // 饮料名气泡在瓶子层（z=9）；箭头放到它后面，避免划过文字。
+          zIndex: 8,
+        }}
       />
       {/* 切柠檬：站在一口咩纸箱和柠檬盘之间那块空垫布上，斜指左下的柠檬 */}
       <HandHint

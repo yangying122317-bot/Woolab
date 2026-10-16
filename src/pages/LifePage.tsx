@@ -46,6 +46,8 @@ const LIST_HINT_STAY = 5000;
  * 完成痕迹存 localStorage（见 src/state/roomState.ts），下次进来还在。
  */
 export default function LifePage() {
+  const donePreview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).has("done");
   const { t, pick } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -105,6 +107,10 @@ export default function LifePage() {
   /* ---------------- 房间状态（持久化） ---------------- */
   // 带 ?reset 打开时清空进度（引导只看进度，清了自然重演），方便从头体验一遍
   const [room, setRoom] = useState<RoomState>(() => {
+    if (donePreview) {
+      window.history.replaceState(null, "", window.location.pathname);
+      return { tee: true, photo: true, drink: "a", candle: true, dressed: true };
+    }
     if (new URLSearchParams(window.location.search).has("reset")) {
       window.history.replaceState(null, "", window.location.pathname);
       return { ...DEFAULT_ROOM };
@@ -128,7 +134,10 @@ export default function LifePage() {
    *   user   自己点开的（墙上那张 / 左边缘一角）——锁滚，点空处 / Esc 收
    *   done   四件全做完那次——不自动收，底下浮出"带我过去"
    */
-  const [list, setList] = useState<{ open: boolean; reason: ListReason }>({ open: false, reason: "user" });
+  const [list, setList] = useState<{ open: boolean; reason: ListReason }>({
+    open: donePreview,
+    reason: donePreview ? "done" : "user",
+  });
   const checklistOpen = list.open;
   const listRef = useRef(list);
   listRef.current = list;
