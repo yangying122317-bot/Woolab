@@ -1692,6 +1692,8 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
                 letterSpacing: "0.1em",
                 lineHeight: 1.3,
                 textShadow: INTRO_TEXT_SHADOW,
+                position: "relative",
+                top: "-0.7vw",
               }}
               {...lineAnim(0.35)}
             >
