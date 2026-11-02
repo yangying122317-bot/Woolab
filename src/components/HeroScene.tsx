@@ -223,14 +223,14 @@ const BIRD_STAND = { src: "/assets/hero-bird-stand.png", w: 119, h: 91 };
 /** 小鸟容器（画板像素），所有姿态在容器内底部居中对齐 */
 const BIRD_BOX = { w: 120, h: 97 };
 
-/** 开门动画那三张：不在开机必等清单里，幕布飞走后 / 悬停大门时提前拉好 */
+/** 开门动画三张图 */
 const DOOR_OPEN_ASSETS = [
   SPRITES.doorOpen.back.src,
   SPRITES.doorOpen.left.src,
   SPRITES.doorOpen.right.src,
 ];
 
-/** 首页第一屏要先下好的图（开场加载页拿这份清单等它们全部解码完，滑开时首页已经是完整的） */
+/** 首页全部图层（开场小电视拿这份清单真实等待全部下载并解码完成，推进去时首页已 100% 齐备） */
 /** 底图按 srcset 的规则挑一档（sizes=100vw：需要的像素宽 = 视口宽 × DPR），预加载和 <img> 拿同一张，别两档都下 */
 const basePick = () =>
   typeof window !== "undefined" && window.innerWidth * (window.devicePixelRatio || 1) <= 1920
@@ -239,19 +239,36 @@ const basePick = () =>
 export const HERO_PRELOAD: string[] = [
   SPRITES.cloudBig.src,
   basePick(),
+  "/assets/hero-base-edge-l.png",
+  "/assets/hero-base-edge-r.png",
   SPRITES.openSign.src,
   SPRITES.sheep.src,
+  SPRITES.sheep.anim,
   SPRITES.sheepShadow.src,
   SPRITES.mailbox.headClosed,
+  SPRITES.mailbox.headOpen,
   SPRITES.mailbox.post,
   SPRITES.woolab.off.src,
   SPRITES.woolab.on.src,
+  SPRITES.doorLit.src,
+  ...DOOR_OPEN_ASSETS,
   SPRITES.board.src,
   SPRITES.bush.src,
   SPRITES.bushLeft.src,
   SPRITES.bushRight.src,
   ...BIRD_FLAP_FRAMES,
   BIRD_STAND.src,
+  "/assets/hero-window-lit.webp",
+  "/assets/hero-leaf-1.png",
+  "/assets/hero-leaf-2.png",
+  "/assets/hero-leaf-3.png",
+  "/assets/hero-rain-s.webp",
+  "/assets/hero-rain-m.webp",
+  "/assets/hero-rain-l.webp",
+  "/assets/hero-firefly-body.webp",
+  "/assets/hero-firefly-tail.webp",
+  "/assets/hero-firefly-wing-top.webp",
+  "/assets/hero-firefly-wing-bottom.webp",
 ];
 
 /** 降落点：屋顶栏杆横杆（顶边 y≈300），花箱左侧的空档（x≈860） */
@@ -446,8 +463,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 幕布拉开后：先把小羊的待机动画换上（850KB，让它独占带宽），换完先把开门那三张图拉好（点门时门框、门板得同时到，
-     不然冷缓存下门板先滑、门框后到，底图里关着的门会露出来），再顺手把 Life 页第一屏的图拉进缓存（3.5MB，只拉第一屏） */
+  /* 首页自身素材已在小电视阶段全部解码完；幕布拉开后直接启用小羊待机动画，并静默预热后续内页缓存 */
   const [sheepAnim, setSheepAnim] = useState(false);
   useEffect(() => {
     if (curtainUp) return;
@@ -455,8 +471,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     loadImage(SPRITES.sheep.anim).then(() => {
       if (!alive) return;
       setSheepAnim(true);
-      void loadImages(DOOR_OPEN_ASSETS);
-      // Life 第一屏拉完，再静默把 Contact / About 的图拉进缓存（共 1.4MB），从首页进这两页就不用等
       warmLifeFirst(1500, () => warmPages(1000));
     });
     return () => {

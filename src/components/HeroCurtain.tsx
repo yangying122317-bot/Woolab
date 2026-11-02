@@ -16,7 +16,7 @@ import { useLanguage } from "../i18n/LanguageContext";
  * 布上是一台小电视，屏幕里雪花闪着、Getting Meelo ready... 跟着抖。
  * 白布在屏幕那块是挖空的（mask），只是加载期间被雪花屏那层盖着，看不出来。
  *
- * 流程：等首页第一屏的图 + 字体 + 最短停留（最长兜底）→ 电视"开机"：雪花一闪白、屏幕那层淡掉，
+ * 流程：等首页全部图 + 两套手写字体真实加载解码完 + 最短停留 → 电视"开机"：雪花一闪白、屏幕那层淡掉，
  * 透过屏幕的洞看见底下的场景（这时场景被缩到刚好塞满屏幕：天空 + 那栋空房子）→ 报 onLoaded；
  * 外面（HeroScene）把 slide 置真 → 停一下 → 镜头往屏幕里推：白布、电视机、字、屏幕里的场景
  * 是一整张画一起绕屏幕中心放大（先慢后快），场景长到 1:1 就停住、电视边框以同样的速度继续飞出画面
@@ -28,8 +28,6 @@ import { useLanguage } from "../i18n/LanguageContext";
 
 /** 至少停这么久 */
 const MIN_SHOW = 1.6;
-/** 图再没下完也走，别把人卡在开屏 */
-const MAX_WAIT = 7;
 /** 进度满后再等一下，再开机 */
 const SETTLE_MS = 350;
 /** 开机：闪白 + 屏幕那层淡掉 */
@@ -125,23 +123,33 @@ const SIGN = {
   trackAlpha: 0.1,
 };
 
-const loaded = (src: string) =>
-  new Promise<void>((res) => {
-    const attempt = (retry: boolean) => {
+const keptHeroImages: HTMLImageElement[] = [];
+const heroImageCache = new Map<string, Promise<void>>();
+
+const loaded = (src: string) => {
+  const hit = heroImageCache.get(src);
+  if (hit) return hit;
+  const p = new Promise<void>((res) => {
+    const attempt = (n: number) => {
       const im = new Image();
-      im.onload = () => im.decode().then(res, res);
+      im.decoding = "async";
+      im.onload = () => {
+        keptHeroImages.push(im);
+        const d = im.decode?.();
+        if (d) d.then(res, res);
+        else res();
+      };
       im.onerror = () => {
-        if (!retry) {
-          window.setTimeout(() => attempt(true), 250);
-          return;
-        }
-        if (import.meta.env.DEV) console.warn(`Hero preload failed: ${src}`);
-        res();
+        const delay = Math.min(300 * Math.pow(1.5, n), 3000);
+        window.setTimeout(() => attempt(n + 1), delay);
       };
       im.src = src;
     };
-    attempt(false);
+    attempt(0);
   });
+  heroImageCache.set(src, p);
+  return p;
+};
 
 /** 场景那层的镜头参数：缩放 + 位移（像素），由这里驱动 */
 export type CurtainCamera = {
@@ -256,25 +264,35 @@ export default function HeroCurtain({
     restDelta: 0.001,
   });
 
-  /* 加载判定 */
+  /* 加载判定：真实等待全部首页图片解码 + 两套手写字体就绪 + 最短停留，不设超时跳过 */
   useEffect(() => {
     let alive = true;
     const t0 = performance.now();
     let done = 0;
-    const total = Math.max(preload.length, 1);
+    const allAssets = Array.from(new Set([TV.src, SCREEN_FRAME.src, ...preload]));
+    const total = allAssets.length + 1;
     const assets = Promise.all(
-      preload.map((src) =>
+      allAssets.map((src) =>
         loaded(src).then(() => {
           done += 1;
         }),
       ),
     );
-    const fonts = document.fonts?.ready ?? Promise.resolve();
+    const loadFonts = (): Promise<void> => {
+      if (!document.fonts) return Promise.resolve();
+      return Promise.all([
+        document.fonts.load('16px "ScrollHand"'),
+        document.fonts.load('16px "HandZh"'),
+      ])
+        .then(() => document.fonts.ready)
+        .then(() => undefined)
+        .catch(() => new Promise<void>((r) => window.setTimeout(r, 400)).then(loadFonts));
+    };
+    const fonts = loadFonts().then(() => {
+      done += 1;
+    });
     const minShow = new Promise<void>((r) =>
       window.setTimeout(r, MIN_SHOW * 1000),
-    );
-    const maxWait = new Promise<void>((r) =>
-      window.setTimeout(r, MAX_WAIT * 1000),
     );
 
     let raf = 0;
@@ -284,13 +302,13 @@ export default function HeroCurtain({
         (performance.now() - t0) / (MIN_SHOW * 1000),
         1,
       );
-      const assetFrac = preload.length ? done / total : 1;
+      const assetFrac = done / total;
       target.set(Math.min(timeFrac, assetFrac));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
 
-    Promise.race([Promise.all([assets, fonts, minShow]), maxWait]).then(() => {
+    Promise.all([assets, fonts, minShow]).then(() => {
       if (!alive) return;
       cancelAnimationFrame(raf);
       target.set(1);
