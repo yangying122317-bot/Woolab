@@ -96,13 +96,39 @@ async function loadAll(urls: readonly string[], limit = 8): Promise<void> {
   await Promise.all(Array.from({ length: Math.min(limit, urls.length) }, worker));
 }
 
+const LIFE_CORE_ASSETS = lifeFirstAssets.filter(
+  (u) => !u.includes("/window-anim/") || u.endsWith("/f00.webp"),
+);
+const LIFE_WINDOW_REST = lifeFirstAssets.filter(
+  (u) => u.includes("/window-anim/") && !u.endsWith("/f00.webp"),
+);
+
+let core: Promise<void> | null = null;
+let coreReady = false;
 let first: Promise<void> | null = null;
 let interaction: Promise<void> | null = null;
 let rest: Promise<void> | null = null;
 
-/** 第一屏素材：返回全部解码完成的 Promise（重复调用复用同一个） */
+/** 第一屏核心静态层是否已全部解码就绪（供 LifePage 首帧同步判断，免去多余等待帧） */
+export function isLifeFirstReady(): boolean {
+  return coreReady || LIFE_CORE_ASSETS.every((u) => readySet.has(u));
+}
+
+/** 第一屏核心层（墙、地、衣帽区全部家具衣物、窗户第 1 帧、清单抽屉）：优先解码，省去 23 帧窗户动画占用的 54MB 显存 */
+export function preloadLifeCore(): Promise<void> {
+  if (!core) {
+    core = loadAll(LIFE_CORE_ASSETS, 8).then(() => {
+      coreReady = true;
+    });
+  }
+  return core;
+}
+
+/** 第一屏完整素材（核心层 + 窗户其余 23 帧）：返回全部解码完成的 Promise（重复调用复用同一个） */
 export function preloadLifeFirst(): Promise<void> {
-  if (!first) first = loadAll(lifeFirstAssets);
+  if (!first) {
+    first = preloadLifeCore().then(() => loadAll(LIFE_WINDOW_REST, 6));
+  }
   return first;
 }
 
@@ -112,7 +138,7 @@ export function preloadLifeInteraction(): Promise<void> {
   return interaction;
 }
 
-/** 后面两段：第一屏就位后再开始，别抢带宽 */
+/** 后面两段：第一屏核心层就位后再开始，别抢带宽 */
 export function preloadLifeRest(): Promise<void> {
   if (!rest) rest = preloadLifeFirst().then(() => loadAll(lifeRestAssets, 6));
   return rest;
@@ -144,34 +170,36 @@ export async function warmBytes(urls: readonly string[], limit = 4): Promise<voi
 }
 
 /**
- * 从别的页（目录）提前热身：只暖第一屏字节。后两段等真正进入 Life 后再拉，
- * 避免用户只是打开一次目录，就在后台下载整间屋子。
+ * 从别的页（目录）提前热身：直接解码第一屏核心层，并把窗户动画帧拉进缓存。
  */
 let warmed = false;
-export function warmLife(delayMs = 2500): void {
+export function warmLife(delayMs = 0): void {
   if (warmed || rest) return;
   warmed = true;
   window.setTimeout(() => {
-    void warmBytes(lifeFirstAssets);
+    void preloadLifeCore().then(() => warmBytes(LIFE_WINDOW_REST));
   }, delayMs);
 }
 
-/** 只暖第一屏的字节（首页用）：后面两段十几 MB，等真进了 Life 再拉，别在首页就把带宽占满。then：第一屏拉完后接着做的事 */
+/** 首页小电视结束后立即预加载 Life 第一屏核心层（解码进内存）并暖好窗户帧字节；then：完成后接着预热其他内页 */
 let warmedFirst: Promise<void> | null = null;
-export function warmLifeFirst(delayMs = 2500, then?: () => void): void {
+export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   if (warmedFirst || first) {
     if (then) void (first ?? warmedFirst)!.then(then);
     return;
   }
   warmedFirst = new Promise<void>((resolve) => {
     window.setTimeout(() => {
-      void warmBytes(lifeFirstAssets).then(resolve);
+      void preloadLifeCore()
+        .then(() => warmBytes(LIFE_WINDOW_REST))
+        .then(resolve);
     }, delayMs);
   });
   if (then) void warmedFirst.then(then);
 }
 
-/** 等第一屏就位，但最多等 capMs：网慢也不能让人对着白光干等 */
+/** 等第一屏核心层就位，但最多等 capMs：网慢也不能让人干等 */
 export function whenLifeFirstReady(capMs: number): Promise<void> {
-  return Promise.race([preloadLifeFirst(), new Promise<void>((r) => window.setTimeout(r, capMs))]);
+  if (isLifeFirstReady()) return Promise.resolve();
+  return Promise.race([preloadLifeCore(), new Promise<void>((r) => window.setTimeout(r, capMs))]);
 }

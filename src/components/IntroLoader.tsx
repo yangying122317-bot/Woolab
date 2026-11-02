@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { config } from "../config";
 import { MU, NavLogo, navBarStyle } from "./NavBar";
 import { noiseBg } from "./about/geom";
+import { whenLifeFirstReady } from "./life/preload";
 import { INTRO_DISMISSED_EVENT, INTRO_PREVIEW_PATH, INTRO_REPLAY_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 
 export { INTRO_DISMISSED_EVENT, INTRO_PREVIEW_PATH, INTRO_SESSION_KEY };
@@ -32,7 +33,7 @@ export default function IntroLoader() {
     () => config.introEnabled && !isMobile() && !sessionStorage.getItem(INTRO_SESSION_KEY),
   );
   if (!visible || pathname === "/" || pathname === INTRO_PREVIEW_PATH || pathname === "/lab") return null;
-  return <PlainLoader onDone={() => setVisible(false)} />;
+  return <PlainLoader pathname={pathname} onDone={() => setVisible(false)} />;
 }
 
 /**
@@ -62,7 +63,7 @@ export function IntroPreview() {
   );
 }
 
-function PlainLoader({ onDone }: { onDone: () => void }) {
+function PlainLoader({ pathname, onDone }: { pathname: string; onDone: () => void }) {
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -83,9 +84,10 @@ function PlainLoader({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     let alive = true;
     const fonts = document.fonts?.ready ?? Promise.resolve();
+    const pageAssets = pathname === "/life" ? whenLifeFirstReady(4000) : Promise.resolve();
     const minShow = new Promise<void>((r) => window.setTimeout(r, MIN_SHOW * 1000));
     const maxWait = new Promise<void>((r) => window.setTimeout(r, MAX_WAIT * 1000));
-    Promise.race([Promise.all([fonts, minShow]), maxWait]).then(() => {
+    Promise.race([Promise.all([fonts, pageAssets, minShow]), maxWait]).then(() => {
       if (!alive || leaving.current) return;
       leaving.current = true;
       animate(y, -(vh + pad), { duration: SLIDE_T, ease: [0.55, 0, 0.75, 0.55] }).then(() => {

@@ -20,8 +20,10 @@ import { seg01Layers } from "../data/seg01Layers";
 import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } from "../state/roomState";
 import type { DrinkChoice, RoomState } from "../state/roomState";
 import { playDrawer, playNavigate, playTaskDone, startAmbient, stopAmbient } from "../audio/sfx";
+import { config } from "../config";
 import { useLanguage } from "../i18n/LanguageContext";
-import { preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
+import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
+import { isLifeFirstReady, preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
 
 /** 第一屏素材最多等这么久；网再慢也先揭开（图会陆续补上） */
 const READY_CAP_MS = 4000;
@@ -81,10 +83,10 @@ export default function LifePage() {
   const x = useTransform(scrollYProgress, [0, 0.92, 1], [0, -maxShift, -maxShift]);
 
   /*
-   * 进门先把第一屏的图在幕后解码完（见 components/life/preload.ts），就位前房间不挂、白光不散；
-   * 就位后再把后面两段的图在后台拉齐。这样揭开的那一刻主线程是空的，滚轮立刻有反应。
+   * 进门先把第一屏核心层的图在幕后解码完（从首页来时已在后台提前解码好，isLifeFirstReady() 直接为 true，首帧立即挂载房间）；
+   * 就位后再把窗户其余帧与后面两段的图在后台拉齐。
    */
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => isLifeFirstReady());
   useEffect(() => {
     let alive = true;
     void whenLifeFirstReady(READY_CAP_MS).then(() => {
@@ -306,8 +308,17 @@ export default function LifePage() {
    * 之后靠站点旁的小箭头接力（滚进画面就出，不用等人停下来）。
    */
   const [entryHint, setEntryHint] = useState(false);
+  const [introDone, setIntroDone] = useState(
+    () => !config.introEnabled || window.innerWidth < 768 || !!sessionStorage.getItem(INTRO_SESSION_KEY),
+  );
+  useEffect(() => {
+    if (introDone) return;
+    const on = () => setIntroDone(true);
+    window.addEventListener(INTRO_DISMISSED_EVENT, on, { once: true });
+    return () => window.removeEventListener(INTRO_DISMISSED_EVENT, on);
+  }, [introDone]);
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
-  const guideIdle = useIdle(800, ready && noProgress && !guideDone.current && !focus && !list.open);
+  const guideIdle = useIdle(800, ready && introDone && noProgress && !guideDone.current && !focus && !list.open);
   useEffect(() => {
     if (!guideIdle || guideDone.current) return;
     markGuideDone();
@@ -316,7 +327,7 @@ export default function LifePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guideIdle]);
   useEffect(() => {
-    if (!ready || noProgress || isAllDone(room)) return;
+    if (!ready || !introDone || noProgress || isAllDone(room)) return;
     const t = window.setTimeout(() => {
       markGuideDone();
       setListKick((n) => n + 1);
@@ -325,7 +336,7 @@ export default function LifePage() {
     }, 900);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
+  }, [ready, introDone]);
 
   // 隐藏原生滚动条（底部进度条代替）；离开页面时恢复滚动锁
   useEffect(() => {
@@ -362,8 +373,9 @@ export default function LifePage() {
 
   /** 走进 LAB 门：镜头推进门洞 + 暖光漫满 → 跳转 /lab（Lab 页从同色暖光淡出） */
   const navigate = useNavigate();
-  /* 从目录吊牌跳进来：整页是被拉上来的，那本身就是过场，不再叠自己的白光进场 */
-  const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
+  const routeFrom = (useLocation().state as { from?: string } | null)?.from;
+  /* 只有从首页推门进来（from === "door"）才放衔接推门白光的淡出层；直接进 /life（已有蓝底 Loading）或从目录来都不叠白底 */
+  const fromDoor = routeFrom === "door";
   const [labEntry, setLabEntry] = useState<{ cx: number; cy: number } | null>(null);
   const labGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(labGoTimer.current), []);
@@ -472,6 +484,16 @@ export default function LifePage() {
         >
           {/* 房间长卷：滚动驱动横移；willChange 让它独立成层，横移时不重绘整条墙 */}
           <motion.div ref={stripRef} className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
+            {/* 墙面底纹常驻垫底，任何加载阶段都不露白 */}
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{
+                right: "-10vw",
+                backgroundImage: "url(/assets/life/room-bg-tile.webp)",
+                backgroundSize: "auto 100%",
+                backgroundRepeat: "repeat-x",
+              }}
+            />
             {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白。用墙面贴图最底下那段地板噪点裁的，
               从它在墙面贴图里的位置开始铺、往上盖住墙面贴图的下边缘：两张图在重叠区像素一致，
               镜头推近时墙面贴图下边那条半透明的抗锯齿缝就压在同样的地板上，看不出拼接线 */}
@@ -601,8 +623,8 @@ export default function LifePage() {
           )}
         </AnimatePresence>
 
-        {/* 进场：接住开门过场，等第一屏的图就位再淡出露出房间（示意稿用中性白光）；从目录来的不放 */}
-        {!fromMenu && (
+        {/* 进场：仅在从首页推门进屋（fromDoor）时衔接推门白光并淡出露出房间；直达或从目录来不叠白底 */}
+        {fromDoor && (
           <motion.div
             className="pointer-events-none absolute inset-0 z-50"
             style={{

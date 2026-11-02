@@ -32,7 +32,7 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { isImageReady, loadImage, loadImages, warmLifeFirst } from "./life/preload";
+import { isImageReady, loadImage, loadImages, preloadLifeFirst, warmLifeFirst } from "./life/preload";
 import { MENU_ASSETS, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
@@ -471,15 +471,16 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 首页自身素材已在小电视阶段或内页后台全部解码完；已就绪时第一帧直接挂上动态小羊，不再切换 src */
+  /* 首页自身素材已在小电视阶段或内页后台全部解码完；已就绪时第一帧直接挂上动态小羊，并立即在后台预加载 Life 页代码与第一屏图层 */
   const [sheepAnim, setSheepAnim] = useState(() => isImageReady(SPRITES.sheep.anim));
   useEffect(() => {
     if (curtainUp) return;
     let alive = true;
+    void import("../pages/LifePage");
     loadImage(SPRITES.sheep.anim).then(() => {
       if (!alive) return;
       setSheepAnim(true);
-      warmLifeFirst(1500, () => warmPages(1000));
+      warmLifeFirst(0, () => warmPages(600));
     });
     return () => {
       alive = false;
@@ -747,10 +748,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
     if (reducedMotion) {
       playNavigate();
-      navigate("/life");
+      navigate("/life", { state: { from: "door" } });
       return;
     }
 
+    // 推门的同时确保 Life 第一屏全部图层解码完毕
+    void preloadLifeFirst();
     // 万一开门图还没到（没预热成功），最多等 600ms 让门框和门板一起出现，别让门板先滑、露出底图的闭门
     await Promise.race([loadImages(DOOR_OPEN_ASSETS), sleep(600)]);
     setEntering(true);
@@ -770,7 +773,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       scale: 6.5,
       transition: { duration: 0.95, ease: [0.55, 0.05, 0.75, 0.5] },
     });
-    navigate("/life");
+    navigate("/life", { state: { from: "door" } });
   };
 
   /** 悬停进入/离开热区：更新状态 + 对应音效 */
@@ -778,9 +781,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     /* 开门过场中、开场蓝布还盖着时都不响应（布是 pointer-events-none，鼠标能穿到底下的热区） */
     if (enteringRef.current || curtainUpRef.current) return;
     setHovered(id);
-    // 碰到大门就把开门图兜底拉一次（已经在缓存里的话是空操作），屋里的背景音也顺手拉起来
+    // 碰到大门就把开门图和 Life 第一屏全量图兜底拉齐，屋里的背景音也顺手拉起来
     if (id === "life") {
       void loadImages(DOOR_OPEN_ASSETS);
+      void preloadLifeFirst();
       warmAmbient("life");
     }
     // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
