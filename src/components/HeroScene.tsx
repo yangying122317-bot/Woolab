@@ -32,7 +32,14 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { isImageReady, loadImage, loadImages, preloadLifeFirst, warmLifeFirst } from "./life/preload";
+import {
+  LIFE_CORE_ASSETS,
+  isImageReady,
+  loadImage,
+  loadImages,
+  preloadLifeFirst,
+  warmLifeFirst,
+} from "./life/preload";
 import { MENU_ASSETS, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
@@ -270,6 +277,7 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-firefly-wing-top.webp",
   "/assets/hero-firefly-wing-bottom.webp",
   ...MENU_ASSETS,
+  ...LIFE_CORE_ASSETS,
 ];
 
 let heroWarmed: Promise<void> | null = null;

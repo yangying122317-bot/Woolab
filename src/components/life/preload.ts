@@ -96,7 +96,7 @@ async function loadAll(urls: readonly string[], limit = 8): Promise<void> {
   await Promise.all(Array.from({ length: Math.min(limit, urls.length) }, worker));
 }
 
-const LIFE_CORE_ASSETS = lifeFirstAssets.filter(
+export const LIFE_CORE_ASSETS = lifeFirstAssets.filter(
   (u) => !u.includes("/window-anim/") || u.endsWith("/f00.webp"),
 );
 const LIFE_WINDOW_REST = lifeFirstAssets.filter(
@@ -198,8 +198,8 @@ export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   if (then) void warmedFirst.then(then);
 }
 
-/** 等第一屏核心层就位，但最多等 capMs：网慢也不能让人干等 */
-export function whenLifeFirstReady(capMs: number): Promise<void> {
+/** 真实等待第一屏（含衣帽区 seg01 + 起居区 seg02 + 清单抽屉）全部解码就位，不再因超时提前揭开导致右侧空白 */
+export function whenLifeFirstReady(_capMs?: number): Promise<void> {
   if (isLifeFirstReady()) return Promise.resolve();
-  return Promise.race([preloadLifeCore(), new Promise<void>((r) => window.setTimeout(r, capMs))]);
+  return preloadLifeCore();
 }

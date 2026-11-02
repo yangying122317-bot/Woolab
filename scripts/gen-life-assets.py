@@ -21,9 +21,9 @@ def files(sub, skip=()):
 
 first = ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"] + files(
     "seg01", skip=("dress-anim", "record-anim")
-) + files("list")
+) + files("seg02", skip=("paint-anim",)) + files("list")
 interaction = files("seg01/record-anim")
-rest = files("seg02", skip=("paint-anim",)) + files("seg03")
+rest = files("seg03")
 
 
 def block(name, doc, arr):

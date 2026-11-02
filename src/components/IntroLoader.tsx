@@ -84,10 +84,11 @@ function PlainLoader({ pathname, onDone }: { pathname: string; onDone: () => voi
   useEffect(() => {
     let alive = true;
     const fonts = document.fonts?.ready ?? Promise.resolve();
-    const pageAssets = pathname === "/life" ? whenLifeFirstReady(4000) : Promise.resolve();
     const minShow = new Promise<void>((r) => window.setTimeout(r, MIN_SHOW * 1000));
     const maxWait = new Promise<void>((r) => window.setTimeout(r, MAX_WAIT * 1000));
-    Promise.race([Promise.all([fonts, pageAssets, minShow]), maxWait]).then(() => {
+    const baseReady = Promise.race([Promise.all([fonts, minShow]), maxWait]);
+    const pageAssets = pathname === "/life" ? whenLifeFirstReady() : Promise.resolve();
+    Promise.all([baseReady, pageAssets]).then(() => {
       if (!alive || leaving.current) return;
       leaving.current = true;
       animate(y, -(vh + pad), { duration: SLIDE_T, ease: [0.55, 0, 0.75, 0.55] }).then(() => {

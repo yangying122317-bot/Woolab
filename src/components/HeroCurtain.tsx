@@ -246,12 +246,16 @@ export default function HeroCurtain({
     let done = 0;
     const allAssets = Array.from(new Set([TV.src, SCREEN_FRAME.src, ...preload]));
     const total = allAssets.length + 1;
+    let idx = 0;
+    const workerCount = Math.min(10, allAssets.length);
     const assets = Promise.all(
-      allAssets.map((src) =>
-        loaded(src).then(() => {
+      Array.from({ length: workerCount }, async () => {
+        while (alive && idx < allAssets.length) {
+          const src = allAssets[idx++];
+          await loaded(src);
           done += 1;
-        }),
-      ),
+        }
+      }),
     );
     const loadFonts = (): Promise<void> => {
       if (!document.fonts) return Promise.resolve();
