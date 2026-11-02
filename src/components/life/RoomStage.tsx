@@ -16,7 +16,7 @@ import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { DictKey } from "../../i18n/dict";
 import FrameAnim, { warmFrames } from "./FrameAnim";
-import { preloadLifeInteraction } from "./preload";
+import { loadImage, preloadLifeInteraction } from "./preload";
 import {
   playLightOff,
   playLightOn,
@@ -681,17 +681,19 @@ const SHEEP_ZONE = { x: 2130, y: 1030, w: 520, h: 680 };
 
 const DRESS_SRCS = Array.from({ length: DRESS_FRAMES }, (_, i) => dressFrameSrc(i));
 
-function DressAnim({ onEnd }: { onEnd: () => void }) {
+function DressAnim({ playing, onEnd }: { playing: boolean; onEnd: () => void }) {
   return (
     <FrameAnim
       srcs={DRESS_SRCS}
       fps={DRESS_FPS}
+      playing={playing}
       onEnd={onEnd}
       style={{
         left: vh(DRESS_RECT.x),
         top: vh(DRESS_RECT.y),
         width: vh(DRESS_RECT.w),
         height: vh(DRESS_RECT.h),
+        visibility: playing ? "visible" : "hidden",
       }}
     />
   );
@@ -1544,11 +1546,12 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
   const canDress =
     isStationDone(room, "tee") && !room.dressed && !dressPlaying && interactive;
 
-  // 白T变成可拖时预热动画帧，触发时不卡顿
+  // 进衣帽区且还没换装时提前预热换装动画帧 + 定格图，挂完衣服拖白T时 0 延迟
   useEffect(() => {
-    if (!canDress) return;
+    if (room.dressed) return;
     warmFrames(DRESS_SRCS);
-  }, [canDress]);
+    void loadImage("/assets/life/seg01/dress-still.webp");
+  }, [room.dressed]);
 
   /* 作画动画：play 时帧接管小羊+画架；photo 完成后定格最后一帧 */
   const paintStill = isStationDone(room, "photo") && paint === "idle";
@@ -1831,9 +1834,10 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
       )}
 
 
-      {/* 换装彩蛋：播放中放帧序列，播完定格最后一帧（穿好白T牛仔裤照镜子） */}
-      {dressPlaying && (
+      {/* 换装彩蛋：canDress 时先隐形挂载并画好第一帧，拖白T松手时直接切 visible 播放，0 空闪；播完定格最后一帧 */}
+      {(canDress || dressPlaying) && (
         <DressAnim
+          playing={dressPlaying}
           onEnd={() => {
             onDressed();
             setDressPlaying(false);

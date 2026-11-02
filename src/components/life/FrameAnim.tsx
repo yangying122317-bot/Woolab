@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
 /**
  * 逐帧动画（换装、作画那种几十张 webp 的序列）统一走这里：先把所有帧解码成 ImageBitmap 存在内存里，
@@ -10,18 +10,25 @@ import { useEffect, useRef, type CSSProperties } from "react";
 
 type Frame = ImageBitmap | HTMLImageElement;
 const cache = new Map<string, Promise<Frame>>();
+const syncCache = new Map<string, Frame>();
 
 function loadFrame(src: string): Promise<Frame> {
+  const ready = syncCache.get(src);
+  if (ready) return Promise.resolve(ready);
   let p = cache.get(src);
   if (!p) {
     p = new Promise<Frame>((resolve, reject) => {
       const im = new Image();
       im.decoding = "async";
       im.onload = () => {
+        const done = (f: Frame) => {
+          syncCache.set(src, f);
+          resolve(f);
+        };
         if (typeof createImageBitmap === "function") {
-          createImageBitmap(im).then(resolve, () => resolve(im));
+          createImageBitmap(im).then(done, () => done(im));
         } else {
-          resolve(im);
+          done(im);
         }
       };
       im.onerror = () => reject(new Error(src));
@@ -80,11 +87,13 @@ export default function FrameAnim({
     return true;
   };
 
-  /* 解码所有帧；第一帧到了先画上，免得 playing 之前是空的 */
-  useEffect(() => {
+  /* 解码所有帧；若已在同步缓存里，在浏览器绘制前（useLayoutEffect）直接画上第 1 帧，杜绝空闪 */
+  useLayoutEffect(() => {
     let alive = true;
-    framesRef.current = srcs.map(() => null);
+    framesRef.current = srcs.map((s) => syncCache.get(s) ?? null);
+    if (framesRef.current[0]) draw(0);
     srcs.forEach((s, i) => {
+      if (framesRef.current[i]) return;
       loadFrame(s)
         .then((f) => {
           if (!alive) return;
@@ -100,7 +109,7 @@ export default function FrameAnim({
   }, [srcs]);
 
   /* 播放：按 fps 走表；某一帧还没解码完就在这帧多等一拍，不跳帧 */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!playing) return;
     let alive = true;
     let i = 0;
