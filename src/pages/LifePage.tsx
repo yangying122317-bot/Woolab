@@ -15,6 +15,7 @@ import { useIdle } from "../components/life/useIdle";
 import { LAB_DOOR, ROOM_FLOOR_TILE_H_VH, ROOM_TILE_W_VH, ROOM_TOTAL_VH, lifeStations, type StationId } from "../data/lifeStations";
 import type { LifeStation } from "../data/lifeStations";
 import { useLenis } from "lenis/react";
+import { usePageShift } from "../components/PageShift";
 import { useReportPlainLogo, useReportPlainNav } from "../state/chrome";
 import { seg01Layers } from "../data/seg01Layers";
 import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } from "../state/roomState";
@@ -299,7 +300,8 @@ export default function LifePage() {
   /* ---------------- 引导 ---------------- */
   /**
    * 引导只看进度，不另记标记：
-   *  - 一件都没做过：房间揭开后，人停下来 0.8s 没动，清单抽屉从左边推出来让人看（四件小事），不自己收，
+   *  - 一件都没做过：等页面完全拉起到位 / 推门白光完全淡出 / 蓝底 Loading 拉开之后，再停 0.8s 没动，
+   *    清单抽屉从左边推出来让人看（四件小事），不自己收，
    *    人一有动作（点外面 / Esc / 滚动）才收 → 墙上那张荡两下 → 一支手绘箭头指着它"今晚的清单住在这儿"→
    *    再出一个"往右滑"的提示，人一滚就没。
    *    每次进来都这样；但揭开后人已经自己滚了 / 点了站点，说明会玩了，这次就不弹。
@@ -307,18 +309,61 @@ export default function LifePage() {
    *  - 全做完：什么都不提醒。
    * 之后靠站点旁的小箭头接力（滚进画面就出，不用等人停下来）。
    */
+  const routeFrom = (useLocation().state as { from?: string } | null)?.from;
+  const fromMenu = routeFrom === "menu";
+  /* 只有从首页推门进来（from === "door"）才放衔接推门白光的淡出层；直接进 /life（已有蓝底 Loading）或从目录来都不叠白底 */
+  const fromDoor = routeFrom === "door";
+  const pageY = usePageShift();
+
   const [entryHint, setEntryHint] = useState(false);
   const [introDone, setIntroDone] = useState(
     () => !config.introEnabled || window.innerWidth < 768 || !!sessionStorage.getItem(INTRO_SESSION_KEY),
   );
+  /* 从目录跳进来时，等整页上飞真正落稳（pageY === 0） */
+  const [menuLanded, setMenuLanded] = useState(() => !fromMenu);
+  /* 从首页推门进来时，等 0.7s 白光淡出完成后再开始计时弹清单 */
+  const [doorFadeDone, setDoorFadeDone] = useState(() => !fromDoor);
+
   useEffect(() => {
     if (introDone) return;
     const on = () => setIntroDone(true);
     window.addEventListener(INTRO_DISMISSED_EVENT, on, { once: true });
     return () => window.removeEventListener(INTRO_DISMISSED_EVENT, on);
   }, [introDone]);
+
+  useEffect(() => {
+    if (menuLanded) return;
+    let fired = false;
+    const land = () => {
+      if (fired) return;
+      fired = true;
+      setMenuLanded(true);
+    };
+    const off = pageY?.on("change", (v) => {
+      if (v === 0) {
+        off?.();
+        land();
+      }
+    });
+    const t = window.setTimeout(() => {
+      off?.();
+      land();
+    }, 1450);
+    return () => {
+      off?.();
+      window.clearTimeout(t);
+    };
+  }, [menuLanded, pageY]);
+
+  useEffect(() => {
+    if (!ready || doorFadeDone) return;
+    const t = window.setTimeout(() => setDoorFadeDone(true), 700);
+    return () => window.clearTimeout(t);
+  }, [ready, doorFadeDone]);
+
+  const pageRevealed = ready && introDone && menuLanded && doorFadeDone;
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
-  const guideIdle = useIdle(800, ready && introDone && noProgress && !guideDone.current && !focus && !list.open);
+  const guideIdle = useIdle(800, pageRevealed && noProgress && !guideDone.current && !focus && !list.open);
   useEffect(() => {
     if (!guideIdle || guideDone.current) return;
     markGuideDone();
@@ -327,7 +372,7 @@ export default function LifePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guideIdle]);
   useEffect(() => {
-    if (!ready || !introDone || noProgress || isAllDone(room)) return;
+    if (!pageRevealed || noProgress || isAllDone(room)) return;
     const t = window.setTimeout(() => {
       markGuideDone();
       setListKick((n) => n + 1);
@@ -336,7 +381,7 @@ export default function LifePage() {
     }, 900);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, introDone]);
+  }, [pageRevealed]);
 
   // 隐藏原生滚动条（底部进度条代替）；离开页面时恢复滚动锁
   useEffect(() => {
@@ -373,9 +418,6 @@ export default function LifePage() {
 
   /** 走进 LAB 门：镜头推进门洞 + 暖光漫满 → 跳转 /lab（Lab 页从同色暖光淡出） */
   const navigate = useNavigate();
-  const routeFrom = (useLocation().state as { from?: string } | null)?.from;
-  /* 只有从首页推门进来（from === "door"）才放衔接推门白光的淡出层；直接进 /life（已有蓝底 Loading）或从目录来都不叠白底 */
-  const fromDoor = routeFrom === "door";
   const [labEntry, setLabEntry] = useState<{ cx: number; cy: number } | null>(null);
   const labGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(labGoTimer.current), []);
