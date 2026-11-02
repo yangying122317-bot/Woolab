@@ -32,6 +32,7 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
+import { MENU_ASSETS } from "./MenuOverlay";
 import { loadImage, loadImages, warmLifeFirst } from "./life/preload";
 import { warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
@@ -269,6 +270,7 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-firefly-tail.webp",
   "/assets/hero-firefly-wing-top.webp",
   "/assets/hero-firefly-wing-bottom.webp",
+  ...MENU_ASSETS,
 ];
 
 /** 降落点：屋顶栏杆横杆（顶边 y≈300），花箱左侧的空档（x≈860） */

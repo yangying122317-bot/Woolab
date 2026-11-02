@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
-import MenuOverlay from "./MenuOverlay";
+import MenuOverlay, { warmMenu } from "./MenuOverlay";
 import SceneToggle from "./SceneToggle";
 import { useDarkNav, useDetailOpen, useLogoOnlyNav, useNavHidden, usePlainLogo, usePlainNav } from "../state/chrome";
 import { INTRO_PREVIEW_PATH } from "./IntroLoader";
@@ -18,6 +18,9 @@ import { INTRO_PREVIEW_PATH } from "./IntroLoader";
 export default function TopNav() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    void warmMenu();
+  }, []);
   /* 加载动画预览页底下也是首页，顶栏按首页那套走 */
   const home = pathname === "/" || pathname === INTRO_PREVIEW_PATH;
   const detail = useDetailOpen();
