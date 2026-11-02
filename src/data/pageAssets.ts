@@ -11,6 +11,29 @@ import { aboutShots } from "./aboutShots";
 
 const C = "/assets/contact";
 const A = "/assets/about";
+const M = "/assets/menu";
+
+/** 目录吊牌全部素材（19 张：四块牌的绳子、牌身、贴纸、胶带 + 两种夹子 + 水印）与顶栏涂鸦 */
+export const MENU_ASSETS: readonly string[] = [
+  ...(["about", "lab", "life", "contact"] as const).flatMap((id) => [
+    `${M}/string-${id}.png`,
+    `${M}/tag-${id}.webp`,
+    `${M}/sticker-${id}.png`,
+    `${M}/tape-${id}.png`,
+  ]),
+  `${M}/clip.png`,
+  `${M}/clip-big.png`,
+  `${M}/mark.png`,
+  `${M}/circle.svg`,
+  `${M}/underline.svg`,
+];
+
+let menuWarmed: Promise<void> | null = null;
+/** 提前把目录页所有吊牌、贴纸、夹子解码进内存，点开 MENU 时直接整齐落下 */
+export function warmMenu(): Promise<void> {
+  if (!menuWarmed) menuWarmed = loadImages(MENU_ASSETS, 6);
+  return menuWarmed;
+}
 
 /** Contact：信封 + 信纸 + 小羊先到齐再露；电话、水印、圈圈这些小件随后 */
 export const CONTACT_FIRST = [`${C}/env-back.webp`, `${C}/paper.webp`, `${C}/env-front.webp`, `${C}/fold.webp`, `${C}/sheep.webp`];

@@ -86,7 +86,7 @@ export default function App() {
       <BrowserRouter>
         <SmoothScrollProvider>
           <IntroLoader />
-          <PageShiftProvider>
+          <PageShiftProvider backdrop={<Home />}>
             {/* 全站一份顶栏（logo / MENU / CN·EN / 喇叭）+ 吊牌目录 */}
             <TopNav />
             {/* 路由包在可位移的一层里：目录跳页时新页面从底下被拉上来 */}

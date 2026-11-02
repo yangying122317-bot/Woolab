@@ -32,9 +32,8 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { MENU_ASSETS } from "./MenuOverlay";
 import { loadImage, loadImages, warmLifeFirst } from "./life/preload";
-import { warmPages } from "../data/pageAssets";
+import { MENU_ASSETS, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 

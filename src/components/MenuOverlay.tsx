@@ -14,7 +14,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
-import { loadImages, warmLife } from "./life/preload";
+import { warmLife } from "./life/preload";
 import { warmAbout, warmContact } from "../data/pageAssets";
 import { playMenuDrop, warmAmbient } from "../audio/sfx";
 
@@ -155,28 +155,6 @@ const OUT_TOTAL = LIFT_T + MAX_DELAY * 0.6;
 /** 收回：最后一块牌快出屏时蓝底就开始往上抽 */
 const PULL_DELAY = Math.max(0, OUT_TOTAL - 0.15);
 
-/** 目录吊牌全部素材（19 张：四块牌的绳子、牌身、贴纸、胶带 + 两种夹子 + 水印）与顶栏涂鸦 */
-export const MENU_ASSETS: readonly string[] = [
-  ...TAGS.flatMap((tg) => [
-    `${A}/string-${tg.id}.png`,
-    `${A}/tag-${tg.id}.webp`,
-    `${A}/sticker-${tg.id}.png`,
-    `${A}/tape-${tg.id}.png`,
-  ]),
-  `${A}/clip.png`,
-  `${A}/clip-big.png`,
-  `${A}/mark.png`,
-  `${A}/circle.svg`,
-  `${A}/underline.svg`,
-];
-
-let menuWarmed: Promise<void> | null = null;
-/** 提前把目录页所有吊牌、贴纸、夹子解码进内存，点开 MENU 时直接整齐落下 */
-export function warmMenu(): Promise<void> {
-  if (!menuWarmed) menuWarmed = loadImages(MENU_ASSETS, 6);
-  return menuWarmed;
-}
-
 /**
  * 目录：蓝底像块布从上面盖下来（底边带弧，落地收平），四块牛皮纸吊牌跟着被绳子放下来，晃两下停住。
  * 绳子顶端钉在屏幕上边不动，牌子掉多深绳子就放多长，摆动也是绕绳子顶端摆。
@@ -189,12 +167,15 @@ export default function MenuOverlay({
   navColor,
   extra,
   onClosed,
+  onPrepareHome,
 }: {
   /** 黑底上那份顶栏的颜色（就是白） */
   navColor: string;
   extra?: ReactNode;
   /** 完全收起 / 跳转完成后通知外面卸载 */
   onClosed: () => void;
+  /** 从目录点 logo 回首页时，提前写好会话标记 */
+  onPrepareHome?: () => void;
 }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -293,23 +274,12 @@ export default function MenuOverlay({
 
   const goHome = () => {
     if (phase !== "in" || picked) return;
-    if (pathname === "/") {
-      close();
-      return;
+    if (pathname !== "/") {
+      onPrepareHome?.();
+      navigate("/");
+      window.scrollTo(0, 0);
     }
-    setHovered(null);
-    const vh = window.innerHeight;
-    navigate("/");
-    window.scrollTo(0, 0);
-    pageY?.set(0.5);
-    window.setTimeout(() => {
-      if (!alive.current) return;
-      setPhase("go");
-      pageY?.set(vh);
-      const opts = { duration: GO_T, ease: GO_EASE };
-      animate(rootY, -vh, opts).then(() => alive.current && onClosed());
-      if (pageY) animate(pageY, 0, opts);
-    }, 160);
+    close();
   };
 
   const pick = (tag: TagDef) => {

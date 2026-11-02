@@ -74,6 +74,17 @@ body,
   display: none; /* Chrome / Safari / Edge */
 }
 
+/** 点击左上角 logo 整页向上抽走回首页时：把 sticky 舞台固定在当前滚动位置，使其随整页一起上移 */
+.is-peeling .sticky {
+  position: relative !important;
+  top: var(--peel-sy, 0px) !important;
+}
+.is-peeling [data-intro="1"] {
+  position: absolute !important;
+  top: var(--peel-sy, 0px) !important;
+  height: 100vh !important;
+}
+
 body {
   font-family: "ScrollHand", "HandZh", system-ui, -apple-system, "PingFang SC", sans-serif;
 }
