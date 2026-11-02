@@ -127,10 +127,26 @@ export function NavHit({
 }
 
 /** 左上角的 WOOLAB logo（点回首页）。单独导出：需要把它从混合模式里拎出来单画一份时用（见 TopNav） */
-export function NavLogo({ disabled = false }: { disabled?: boolean }) {
+export function NavLogo({
+  disabled = false,
+  onClick,
+}: {
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
   const { t } = useLanguage();
   return (
-    <Link to="/" className={`block ${disabled ? "pointer-events-none" : "pointer-events-auto"}`} aria-label={t("siteName")}>
+    <Link
+      to="/"
+      onClick={(e) => {
+        if (!onClick) return;
+        e.preventDefault();
+        playNavClick();
+        onClick();
+      }}
+      className={`block ${disabled ? "pointer-events-none" : "pointer-events-auto"}`}
+      aria-label={t("siteName")}
+    >
       <span className="block" style={{ ...maskStyle("/assets/menu/logo.svg"), width: mu(73), height: mu(23) }} />
     </Link>
   );
@@ -150,6 +166,7 @@ export default function NavBar({
   color,
   menuOpen,
   onMenu,
+  onLogo,
   extra,
   hideLogo = false,
   logoOnly = false,
@@ -161,6 +178,8 @@ export default function NavBar({
   /** 目录是否打开：打开时 MENU 外面画一圈 */
   menuOpen: boolean;
   onMenu: () => void;
+  /** 点击左上角 logo 的自定义过渡处理 */
+  onLogo?: () => void;
   /** 塞在喇叭前面的额外按钮（首页的场景开关：时段 + 天气） */
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
@@ -185,7 +204,7 @@ export default function NavBar({
       transition={{ duration: hidden ? 0 : 0.6, ease: "easeOut" }}
     >
       {/* 左：logo，点回首页 */}
-      {hideLogo ? <span aria-hidden /> : <NavLogo disabled={hidden} />}
+      {hideLogo ? <span aria-hidden /> : <NavLogo disabled={hidden} onClick={onLogo} />}
 
       {/* 右：MENU / CN · EN / 喇叭 */}
       <motion.div

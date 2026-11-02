@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   animate,
   motion,
@@ -197,6 +197,7 @@ export default function MenuOverlay({
   onClosed: () => void;
 }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { t } = useLanguage();
   const pageY = usePageShift();
   const [phase, setPhase] = useState<Phase>("in");
@@ -290,6 +291,27 @@ export default function MenuOverlay({
     window.setTimeout(() => alive.current && onClosed(), (PULL_DELAY + PULL_T) * 1000 + 40);
   };
 
+  const goHome = () => {
+    if (phase !== "in" || picked) return;
+    if (pathname === "/") {
+      close();
+      return;
+    }
+    setHovered(null);
+    const vh = window.innerHeight;
+    navigate("/");
+    window.scrollTo(0, 0);
+    pageY?.set(0.5);
+    window.setTimeout(() => {
+      if (!alive.current) return;
+      setPhase("go");
+      pageY?.set(vh);
+      const opts = { duration: GO_T, ease: GO_EASE };
+      animate(rootY, -vh, opts).then(() => alive.current && onClosed());
+      if (pageY) animate(pageY, 0, opts);
+    }, 160);
+  };
+
   const pick = (tag: TagDef) => {
     if (phase !== "in" || picked) return;
     setPicked(tag.id);
@@ -359,7 +381,7 @@ export default function MenuOverlay({
         animate={{ opacity: phase === "out" ? 0 : 1 }}
         transition={phase === "out" ? { duration: 0.25, delay: PULL_DELAY } : { duration: 0.2, delay: 0.12 }}
       >
-        <NavBar color={navColor} menuOpen={phase === "in"} onMenu={close} extra={extra} />
+        <NavBar color={navColor} menuOpen={phase === "in"} onMenu={close} onLogo={goHome} extra={extra} />
       </motion.div>
 
       {/* 吊牌们：一张按稿等比放的画板，挂在顶边 */}
