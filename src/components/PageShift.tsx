@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   animate,
   motion,
@@ -18,7 +18,7 @@ import {
   type MotionValue,
 } from "framer-motion";
 import { useLenis } from "lenis/react";
-import { INTRO_SESSION_KEY } from "../state/intro";
+import { INTRO_PREVIEW_PATH, INTRO_SESSION_KEY } from "../state/intro";
 
 /**
  * 整页位移与向上掀页回首页：
@@ -41,12 +41,15 @@ const Ctx = createContext<PageShiftContextValue | null>(null);
 
 export function PageShiftProvider({
   backdrop,
+  introPreview,
   children,
 }: {
   backdrop?: ReactNode;
+  introPreview?: ReactNode;
   children: ReactNode;
 }) {
   const y = useMotionValue(0);
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const lenis = useLenis();
   const [peeling, setPeeling] = useState(false);
@@ -79,11 +82,37 @@ export function PageShiftProvider({
     });
   }, [lenis, navigate, y]);
 
+  const isHome = pathname === "/" || pathname === INTRO_PREVIEW_PATH;
+  const showHome = isHome || peeling;
+  const location = useLocation();
+  const fromLabDoor = isHome && (location.state as { from?: string } | null)?.from === "lab-door";
+
+  /* 切回首页时强制把原生滚动与 Lenis 位置立即归零，避免停留在上一页（如 Lab 7000px 处）的滚动位置 */
+  useEffect(() => {
+    if (!isHome) return;
+    window.scrollTo(0, 0);
+    lenis?.scrollTo(0, { immediate: true, force: true });
+    lenis?.resize();
+  }, [isHome, lenis]);
+
   return (
     <Ctx.Provider value={{ y, peeling, sy, peelToHome }}>
-      {peeling && (
-        <div className="fixed inset-0 z-0 overflow-hidden">
+      {/* 首页持久层：从掀页开始（peeling=true）到切回 "/"（isHome=true）始终是同一个 <Home /> 实例，不卸载不重挂 */}
+      {showHome && (
+        <div className={peeling ? "fixed inset-0 z-0 overflow-hidden" : "relative z-0 h-screen overflow-hidden"}>
           {backdrop}
+          {pathname === INTRO_PREVIEW_PATH && introPreview}
+          {fromLabDoor && (
+            <motion.div
+              className="pointer-events-none fixed inset-0 z-50"
+              style={{
+                background: "radial-gradient(circle at 50% 50%, #FFE9B8 0%, #FBE3AC 55%, #F2EDE3 100%)",
+              }}
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 0 }}
+              transition={{ duration: 0.65, ease: "easeOut" }}
+            />
+          )}
         </div>
       )}
       {children}
@@ -94,6 +123,8 @@ export function PageShiftProvider({
 /** 包住 <Routes>：真正会动的那层 */
 export function PageShiftFrame({ children }: { children: ReactNode }) {
   const ctx = useContext(Ctx);
+  const { pathname } = useLocation();
+  const isHome = pathname === "/" || pathname === INTRO_PREVIEW_PATH;
   const y = ctx?.y;
   const peeling = ctx?.peeling ?? false;
   const sy = ctx?.sy ?? 0;
@@ -144,7 +175,7 @@ export function PageShiftFrame({ children }: { children: ReactNode }) {
   return (
     <motion.div
       ref={ref}
-      className={`min-h-full ${peeling ? "is-peeling relative z-10" : ""}`}
+      className={`${isHome && !peeling ? "hidden" : "min-h-full"} ${peeling ? "is-peeling relative z-10" : ""}`}
       style={{
         y: activeY,
         clipPath: clip,

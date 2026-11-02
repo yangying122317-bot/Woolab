@@ -86,7 +86,7 @@ export default function App() {
       <BrowserRouter>
         <SmoothScrollProvider>
           <IntroLoader />
-          <PageShiftProvider backdrop={<Home />}>
+          <PageShiftProvider backdrop={<Home />} introPreview={<IntroPreview />}>
             {/* 全站一份顶栏（logo / MENU / CN·EN / 喇叭）+ 吊牌目录 */}
             <TopNav />
             {/* 路由包在可位移的一层里：目录跳页时新页面从底下被拉上来 */}
@@ -95,18 +95,9 @@ export default function App() {
               <PageErrorBoundary>
                 <Suspense fallback={<PageLoading />}>
                   <Routes>
-                  {/* 首页（场景导航）与屋内长卷使用全屏布局 */}
-                  <Route path="/" element={<Home />} />
-                  {/* 加载动画单独入口：底下是首页，开屏不看会话标记、可反复播 */}
-                  <Route
-                    path={INTRO_PREVIEW_PATH}
-                    element={
-                      <>
-                        <Home />
-                        <IntroPreview />
-                      </>
-                    }
-                  />
+                  {/* 首页由 PageShiftProvider 持久层直接渲染，确保掀页过渡前后是同一个实例 */}
+                  <Route path="/" element={null} />
+                  <Route path={INTRO_PREVIEW_PATH} element={null} />
                   <Route path="/life" element={<LifePage />} />
 
                   {/* 内页共用 Layout（顶部导航 + 语言切换） */}

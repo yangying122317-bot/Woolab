@@ -12,6 +12,12 @@ import { lifeFirstAssets, lifeInteractionAssets, lifeRestAssets } from "../../da
  * 解码后的 Image 对象存在模块级 Map 里不放手，浏览器就不会把解码结果丢掉。
  */
 const cache = new Map<string, Promise<void>>();
+const readySet = new Set<string>();
+const keep: HTMLImageElement[] = [];
+
+export function isImageReady(url: string): boolean {
+  return readySet.has(url);
+}
 
 function load(url: string): Promise<void> {
   const hit = cache.get(url);
@@ -21,10 +27,14 @@ function load(url: string): Promise<void> {
       const im = new Image();
       im.decoding = "async";
       im.onload = () => {
+        const done = () => {
+          readySet.add(url);
+          resolve();
+        };
         // decode() 把解码也做完；不支持或失败（比如被丢弃）都当作完成，不卡进门
         const d = im.decode?.();
-        if (d) d.then(resolve, resolve);
-        else resolve();
+        if (d) d.then(done, done);
+        else done();
       };
       im.onerror = () => {
         if (!retry) {
@@ -44,7 +54,37 @@ function load(url: string): Promise<void> {
   cache.set(url, p);
   return p;
 }
-const keep: HTMLImageElement[] = [];
+
+/** 严格加载并解码（失败持续退避重试，给首页小电视真实加载用，与全局缓存共用 keep 池） */
+export function loadImageStrict(url: string): Promise<void> {
+  if (readySet.has(url)) return Promise.resolve();
+  const hit = cache.get(url);
+  if (hit) return hit;
+  const p = new Promise<void>((resolve) => {
+    const attempt = (n: number) => {
+      const im = new Image();
+      im.decoding = "async";
+      im.onload = () => {
+        keep.push(im);
+        const done = () => {
+          readySet.add(url);
+          resolve();
+        };
+        const d = im.decode?.();
+        if (d) d.then(done, done);
+        else done();
+      };
+      im.onerror = () => {
+        const delay = Math.min(300 * Math.pow(1.5, n), 3000);
+        window.setTimeout(() => attempt(n + 1), delay);
+      };
+      im.src = url;
+    };
+    attempt(0);
+  });
+  cache.set(url, p);
+  return p;
+}
 
 /** 一批一起下，limit 个并发；全部完成后 resolve（单张失败不算失败）。别处（Lab 详情）也用这两个 */
 export { load as loadImage, loadAll as loadImages };

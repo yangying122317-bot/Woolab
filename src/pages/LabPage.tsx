@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   animate,
   motion,
+  useAnimationControls,
   useMotionTemplate,
   useMotionValue,
   useMotionValueEvent,
@@ -972,14 +973,17 @@ function CorridorEndWall({
   camDepth,
   camX,
   frame,
+  onEnterDoor,
 }: {
   camDepth: MotionValue<number>;
   camX: MotionValue<number>;
   frame: ShellFrame;
+  onEnterDoor: (rect: DOMRect) => void;
 }) {
   const { t } = useLanguage();
-  const navigate = useNavigate();
   const [doorHover, setDoorHover] = useState(false);
+  const [doorPinned, setDoorPinned] = useState(false);
+  const doorOpen = doorHover || doorPinned;
   const g = frame.g;
   const scale = useTransform(camDepth, (cz) => scaleOf(EXIT_Z, cz));
   /* 尽头墙画的是走廊断面（四角在角线上）。相机横向偏离时角线会变斜率，
@@ -1060,7 +1064,7 @@ function CorridorEndWall({
         className="absolute"
         style={{ left: (END_LAMP.x - 218 * lampK) * g, top: END_LAMP.y * g, width: 616 * lampK * g, height: 347 * lampK * g }}
       >
-        <WallLamp hover={doorHover} width={616 * lampK * g} height={347 * lampK * g} />
+        <WallLamp hover={doorOpen} width={616 * lampK * g} height={347 * lampK * g} />
       </div>
       {/* 空金框：框里一句"下一件留位中" */}
       <div
@@ -1081,15 +1085,15 @@ function CorridorEndWall({
           {t("lab.gallery.reserved")}
         </div>
       </div>
-      {/* 门：关着的一张压在开着的一张上面，鼠标碰到就换过去；整组镜像成往右开。点门回首页 */}
+      {/* 门：关着的一张压在开着的一张上面，鼠标碰到就换过去；整组镜像成往右开。点门推进暖光回首页 */}
       <button
         type="button"
         aria-label={t("lab.gallery.door")}
         onMouseEnter={() => setDoorHover(true)}
         onMouseLeave={() => setDoorHover(false)}
-        onClick={() => {
-          playNavigate();
-          navigate("/");
+        onClick={(e) => {
+          setDoorPinned(true);
+          onEnterDoor(e.currentTarget.getBoundingClientRect());
         }}
         className="pointer-events-auto absolute block cursor-pointer"
         style={{
@@ -1109,7 +1113,7 @@ function CorridorEndWall({
             width: END_DOOR.w * 1.8 * g,
             height: END_DOOR.h * 0.9 * g,
             background: "radial-gradient(ellipse at 50% 55%, rgba(255,205,70,0.4) 0%, rgba(255,205,70,0) 68%)",
-            opacity: doorHover ? 1 : 0,
+            opacity: doorOpen ? 1 : 0,
             transition: "opacity 0.45s ease",
           }}
         />
@@ -1123,7 +1127,7 @@ function CorridorEndWall({
             top: 0,
             width: END_DOOR_OPEN.w * END_DOOR.w * g,
             height: END_DOOR_OPEN.h * END_DOOR.h * g,
-            opacity: doorHover ? 1 : 0,
+            opacity: doorOpen ? 1 : 0,
             transition: "opacity 0.3s ease",
           }}
         />
@@ -1132,7 +1136,7 @@ function CorridorEndWall({
           alt=""
           draggable={false}
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
-          style={{ opacity: doorHover ? 0 : 1, transition: "opacity 0.25s ease" }}
+          style={{ opacity: doorOpen ? 0 : 1, transition: "opacity 0.25s ease" }}
         />
       </button>
       {/* 思考羊雕像 */}
@@ -1164,6 +1168,7 @@ function FakeCorridor({
   paintingHidden,
   openId,
   onOpen,
+  onEnterDoor,
 }: {
   q: MotionValue<number>;
   introZ: MotionValue<number>;
@@ -1171,6 +1176,7 @@ function FakeCorridor({
   paintingHidden: boolean;
   openId: string | null;
   onOpen: (project: LabProject, rect: DOMRect) => void;
+  onEnterDoor: (rect: DOMRect) => void;
 }) {
   const [vp, setVp] = useState(() => ({
     w: window.innerWidth,
@@ -1206,7 +1212,7 @@ function FakeCorridor({
     {
       z: EXIT_Z,
       key: "exit",
-      el: <CorridorEndWall camDepth={camDepth} camX={camX} frame={frame} />,
+      el: <CorridorEndWall camDepth={camDepth} camX={camX} frame={frame} onEnterDoor={onEnterDoor} />,
     },
     ...CO_OVAL_Z.map((z) => ({
       z,
@@ -1838,6 +1844,46 @@ export default function LabPage() {
   const [inCorridor, setInCorridor] = useState(false);
   useReportDarkNav(!introPlaying && inCorridor);
 
+  /* 走进走廊尽头的门回首页：复刻 Life 页进 Lab 门的同款镜头推进 + 暖光漫满过渡 */
+  const navigate = useNavigate();
+  const lenis = useLenis();
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [zoomOrigin, setZoomOrigin] = useState("50% 50%");
+  const zoomControls = useAnimationControls();
+  const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
+  const homeGoTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
+
+  const enterHomeDoor = (r: DOMRect) => {
+    if (open || homeEntry) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    /* 走廊尽头这扇门带 scaleX(-1) 镜像（往右开），开门后黄色门洞在门框热区靠右（约 0.9 宽处） */
+    const cx = r.left + r.width * 0.9;
+    const cy = r.top + r.height * 0.5;
+    const wr = wrap.getBoundingClientRect();
+    setZoomOrigin(`${cx - wr.left}px ${cy - wr.top}px`);
+    document.documentElement.style.overflow = "hidden";
+    lenis?.stop();
+    sessionStorage.setItem(INTRO_SESSION_KEY, "1");
+    sessionStorage.setItem("heroIntroPlayed", "1");
+    setHomeEntry({ cx, cy });
+    void zoomControls.start({
+      scale: 3,
+      x: window.innerWidth / 2 - cx,
+      y: window.innerHeight / 2 - cy,
+      transition: { duration: 1.15, ease: [0.55, 0, 0.68, 0.4] },
+    });
+    homeGoTimer.current = window.setTimeout(() => {
+      document.documentElement.style.overflow = "";
+      lenis?.scrollTo(0, { immediate: true, force: true });
+      window.scrollTo(0, 0);
+      lenis?.start();
+      playNavigate();
+      navigate("/", { state: { from: "lab-door" } });
+    }, 1300);
+  };
+
   return (
     <div
       ref={scrollRef}
@@ -1849,21 +1895,42 @@ export default function LabPage() {
         className="sticky top-0 h-screen overflow-hidden"
         style={{ background: "#FEF0C1" }}
         onPointerMove={(e) => {
-          parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
+          if (!homeEntry) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
         }}
         onPointerLeave={() => parallaxX.set(0)}
       >
-        {/* 假透视走廊（含入口墙）；外层套呼吸/视差偏移 */}
-        <motion.div className="absolute inset-0" style={{ x: headX, y: headY }}>
-          <FakeCorridor
-            q={scrollYProgress}
-            introZ={introZ}
-            active={active}
-            paintingHidden={introPlaying}
-            openId={open ? open.project.id : null}
-            onOpen={openProject}
-          />
+        <motion.div
+          ref={wrapRef}
+          className="absolute inset-0"
+          animate={zoomControls}
+          style={{ transformOrigin: zoomOrigin }}
+        >
+          {/* 假透视走廊（含入口墙）；外层套呼吸/视差偏移 */}
+          <motion.div className="absolute inset-0" style={{ x: headX, y: headY }}>
+            <FakeCorridor
+              q={scrollYProgress}
+              introZ={introZ}
+              active={active}
+              paintingHidden={introPlaying}
+              openId={open ? open.project.id : null}
+              onOpen={openProject}
+              onEnterDoor={enterHomeDoor}
+            />
+          </motion.div>
         </motion.div>
+
+        {/* 走门回首页：门后的暖光从门洞漫满全屏，盖住切页瞬间 */}
+        {homeEntry && (
+          <motion.div
+            className="pointer-events-none fixed inset-0 z-50"
+            style={{
+              background: `radial-gradient(circle at ${homeEntry.cx}px ${homeEntry.cy}px, #FFE9B8 0%, #FBE3AC 55%, #F2EDE3 100%)`,
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.55, duration: 0.65, ease: "easeIn" }}
+          />
+        )}
 
         <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
           {Array.from({ length: N + 1 }).map((_, i) => (

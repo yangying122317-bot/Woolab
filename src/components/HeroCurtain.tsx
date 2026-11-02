@@ -10,6 +10,7 @@ import {
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { useReportNavHidden } from "../state/chrome";
 import { useLanguage } from "../i18n/LanguageContext";
+import { loadImageStrict } from "./life/preload";
 
 /**
  * 首页开场的那块白布：压在首页场景上面，把整个房子盖住。
@@ -123,33 +124,7 @@ const SIGN = {
   trackAlpha: 0.1,
 };
 
-const keptHeroImages: HTMLImageElement[] = [];
-const heroImageCache = new Map<string, Promise<void>>();
-
-const loaded = (src: string) => {
-  const hit = heroImageCache.get(src);
-  if (hit) return hit;
-  const p = new Promise<void>((res) => {
-    const attempt = (n: number) => {
-      const im = new Image();
-      im.decoding = "async";
-      im.onload = () => {
-        keptHeroImages.push(im);
-        const d = im.decode?.();
-        if (d) d.then(res, res);
-        else res();
-      };
-      im.onerror = () => {
-        const delay = Math.min(300 * Math.pow(1.5, n), 3000);
-        window.setTimeout(() => attempt(n + 1), delay);
-      };
-      im.src = src;
-    };
-    attempt(0);
-  });
-  heroImageCache.set(src, p);
-  return p;
-};
+const loaded = (src: string) => loadImageStrict(src);
 
 /** 场景那层的镜头参数：缩放 + 位移（像素），由这里驱动 */
 export type CurtainCamera = {

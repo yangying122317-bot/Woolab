@@ -32,7 +32,7 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
-import { loadImage, loadImages, warmLifeFirst } from "./life/preload";
+import { isImageReady, loadImage, loadImages, warmLifeFirst } from "./life/preload";
 import { MENU_ASSETS, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
@@ -272,6 +272,13 @@ export const HERO_PRELOAD: string[] = [
   ...MENU_ASSETS,
 ];
 
+let heroWarmed: Promise<void> | null = null;
+/** 直达内页时在后台把首页全套图层解码进内存，点 WOOLAB 回首页时 0 延迟直接呈现 */
+export function warmHero(): Promise<void> {
+  if (!heroWarmed) heroWarmed = loadImages(HERO_PRELOAD, 6);
+  return heroWarmed;
+}
+
 /** 降落点：屋顶栏杆横杆（顶边 y≈300），花箱左侧的空档（x≈860） */
 const PERCH = {
   left: `${((860 - BIRD_BOX.w / 2) / FRAME_W) * 100}%`,
@@ -464,8 +471,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
-  /* 首页自身素材已在小电视阶段全部解码完；幕布拉开后直接启用小羊待机动画，并静默预热后续内页缓存 */
-  const [sheepAnim, setSheepAnim] = useState(false);
+  /* 首页自身素材已在小电视阶段或内页后台全部解码完；已就绪时第一帧直接挂上动态小羊，不再切换 src */
+  const [sheepAnim, setSheepAnim] = useState(() => isImageReady(SPRITES.sheep.anim));
   useEffect(() => {
     if (curtainUp) return;
     let alive = true;

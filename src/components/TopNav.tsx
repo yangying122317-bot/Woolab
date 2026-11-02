@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
+import { warmHero } from "./HeroScene";
 import { warmMenu } from "../data/pageAssets";
 import { usePeelToHome } from "./PageShift";
 import SceneToggle from "./SceneToggle";
@@ -24,6 +25,11 @@ export default function TopNav() {
   const { peeling, peelToHome } = usePeelToHome();
   useEffect(() => {
     void warmMenu();
+    if (pathname !== "/" && pathname !== INTRO_PREVIEW_PATH) {
+      const id = window.setTimeout(() => void warmHero(), 1500);
+      return () => window.clearTimeout(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /* 加载动画预览页底下也是首页，顶栏按首页那套走 */
   const home = pathname === "/" || pathname === INTRO_PREVIEW_PATH || peeling;

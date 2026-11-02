@@ -278,21 +278,26 @@ export default function LifePage() {
     if (list.open) xAtOpen.current = x.get();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list.open]);
-  /** 揭开后人已经自己滚过房间了：会玩了，这次不用引导 */
+  /** 揭开后人已经自己滚过房间了或清单引导已出：会玩了，这次不用引导 */
   const guideDone = useRef(false);
+  const [guideReady, setGuideReady] = useState(false);
+  const markGuideDone = () => {
+    guideDone.current = true;
+    setGuideReady(true);
+  };
   useMotionValueEvent(x, "change", (v) => {
     const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight;
     setMiniList(-v > listRightPx);
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;
     if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
-    if (Math.abs(v) > 8) guideDone.current = true;
+    if (Math.abs(v) > 8) markGuideDone();
   });
 
   /* ---------------- 引导 ---------------- */
   /**
    * 引导只看进度，不另记标记：
-   *  - 一件都没做过：房间揭开后，人停下来 1.5s 没动，清单抽屉从左边推出来让人看（四件小事），不自己收，
+   *  - 一件都没做过：房间揭开后，人停下来 0.8s 没动，清单抽屉从左边推出来让人看（四件小事），不自己收，
    *    人一有动作（点外面 / Esc / 滚动）才收 → 墙上那张荡两下 → 一支手绘箭头指着它"今晚的清单住在这儿"→
    *    再出一个"往右滑"的提示，人一滚就没。
    *    每次进来都这样；但揭开后人已经自己滚了 / 点了站点，说明会玩了，这次就不弹。
@@ -302,10 +307,10 @@ export default function LifePage() {
    */
   const [entryHint, setEntryHint] = useState(false);
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
-  const guideIdle = useIdle(1500, ready && noProgress && !guideDone.current && !focus && !list.open);
+  const guideIdle = useIdle(800, ready && noProgress && !guideDone.current && !focus && !list.open);
   useEffect(() => {
     if (!guideIdle || guideDone.current) return;
-    guideDone.current = true;
+    markGuideDone();
     guideHint.current = true;
     showList("guide");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -313,6 +318,7 @@ export default function LifePage() {
   useEffect(() => {
     if (!ready || noProgress || isAllDone(room)) return;
     const t = window.setTimeout(() => {
+      markGuideDone();
       setListKick((n) => n + 1);
       setEntryHint(true);
       hintTimer.current = window.setTimeout(() => setEntryHint(false), LIST_HINT_STAY);
@@ -336,7 +342,7 @@ export default function LifePage() {
     /* 做完的那件不再推近（以前会弹一张占位卡片）；站点自己会给个小反应 */
     if (isStationDone(room, station.id)) return;
     /* 人已经自己上手点站点了，这次不用再推引导 */
-    guideDone.current = true;
+    markGuideDone();
     const wrap = wrapRef.current;
     if (!wrap) return;
     const wr = wrap.getBoundingClientRect();
@@ -487,7 +493,10 @@ export default function LifePage() {
                 interactive={!focus}
                 music={music}
                 onToggleMusic={() => setMusic((m) => !m)}
-                guide={{ entry: entryHint && !checklistOpen, hints: !checklistOpen && !entryHint && !labEntry }}
+                guide={{
+                  entry: entryHint && !checklistOpen,
+                  hints: (guideReady || isAllDone(room)) && !checklistOpen && !drawerShown && !entryHint && !labEntry,
+                }}
                 onOpen={openStation}
                 onChecklist={openChecklist}
                 listKick={listKick}
