@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import {
   AnimatePresence,
   animate,
@@ -12,6 +13,9 @@ import {
 import { contactEmail, socialLinks } from "../data/contact";
 import { useLanguage } from "../i18n/LanguageContext";
 import { PHONE, playPhonePickup, preloadPhoneHello } from "../audio/sfx";
+import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../components/IntroLoader";
+import { usePageShift } from "../components/PageShift";
+import { config } from "../config";
 import { noiseBg, type Box } from "../components/about/geom";
 import { whenContactReady } from "../data/pageAssets";
 
@@ -73,11 +77,11 @@ const BUBBLE_STAY = 3.2;
 
 /** 电话线底端（钉在听筒上的那点）；线顶端跟着视口顶边走，长度按需竖向拉 */
 const CORD_END = ART.cord.y + ART.cord.h;
-/** 进场：听筒从屏幕顶上放下来，线跟着放长，弹簧到位；进页面稍等一拍再开始 */
-const HANG_DROP_DELAY = 0.35;
-/** 进场：信纸（连字）先塞在信封里这么深，画面露出后弹簧往上抽出来 */
+/** 进场：画面完全露出来之后稍停一拍，听筒再从屏幕顶上放下来 */
+const HANG_DROP_DELAY = 0.15;
+/** 进场：信纸（连字）先塞在信封里这么深，画面露出时弹簧往上抽出来 */
 const PAPER_TUCK = 110;
-const PAPER_POP_DELAY = 0.45;
+const PAPER_POP_DELAY = 0.1;
 /** 信纸的裁切下沿：信封前片底边往上收一点描边 */
 const PAPER_CLIP_H = ART.envFront.y + ART.envFront.h - 6;
 /**
@@ -219,6 +223,17 @@ export default function ContactPage() {
 
   /* 信封那几张图先解码齐（没预热到最多等 2.5s）再整体淡入，别一片一片冒出来 */
   const [shown, setShown] = useState(false);
+  const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
+  const pageY = usePageShift();
+  /* 外层蓝底 IntroLoader 是否已撤走 */
+  const [introDone, setIntroDone] = useState(
+    () => !config.introEnabled || window.innerWidth < 768 || !!sessionStorage.getItem(INTRO_SESSION_KEY),
+  );
+  /* 从目录跳进来时，等整页上飞真正落稳 */
+  const [menuLanded, setMenuLanded] = useState(() => !fromMenu);
+  /* 普通进入时，等外层 0.45s 淡入 + 信纸抽出完成，画面完全露出 */
+  const [fadeDone, setFadeDone] = useState(() => fromMenu);
+
   useEffect(() => {
     let alive = true;
     void whenContactReady().then(() => alive && setShown(true));
@@ -226,6 +241,45 @@ export default function ContactPage() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (introDone) return;
+    const on = () => setIntroDone(true);
+    window.addEventListener(INTRO_DISMISSED_EVENT, on, { once: true });
+    return () => window.removeEventListener(INTRO_DISMISSED_EVENT, on);
+  }, [introDone]);
+
+  useEffect(() => {
+    if (menuLanded) return;
+    let fired = false;
+    const land = () => {
+      if (fired) return;
+      fired = true;
+      setMenuLanded(true);
+    };
+    const off = pageY?.on("change", (v) => {
+      if (v === 0) {
+        off?.();
+        land();
+      }
+    });
+    const t = window.setTimeout(() => {
+      off?.();
+      land();
+    }, 1400);
+    return () => {
+      off?.();
+      window.clearTimeout(t);
+    };
+  }, [menuLanded, pageY]);
+
+  useEffect(() => {
+    if (!shown || fadeDone) return;
+    const t = window.setTimeout(() => setFadeDone(true), 550);
+    return () => window.clearTimeout(t);
+  }, [shown, fadeDone]);
+
+  const fullyRevealed = shown && introDone && menuLanded && fadeDone;
 
   /* 挂好且没在通话时，每 6 秒自己轻晃一下；hover / 拿起那些手动晃动会另外触发，通话时停掉 */
   useEffect(() => {
@@ -235,14 +289,14 @@ export default function ContactPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hung, call]);
 
-  /* 进场：画面露出后弹簧把电话放下来；顺手把电话里那句 hello 的录音先解码好 */
+  /* 进场：等画面完全露出来（淡入完成、蓝底拉走、目录落稳）之后，再用弹簧把电话放下来 */
   useEffect(() => {
     preloadPhoneHello();
-    if (!shown) return;
+    if (!fullyRevealed) return;
     const c = animate(y, 0, { type: "spring", stiffness: 100, damping: 13, mass: 1.1, delay: HANG_DROP_DELAY });
     return () => c.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown]);
+  }, [fullyRevealed]);
 
   const copyEmail = async () => {
     try {
@@ -311,12 +365,12 @@ export default function ContactPage() {
       className="relative h-screen overflow-hidden select-none"
       style={{ backgroundColor: BG, ...noiseBg("cream", s) }}
     >
-      {/* 整个画面等信封的图到齐再一起露出来 */}
+      {/* 整个画面等信封的图到齐再一起露出来；从目录上飞进来时直接可见 */}
       <motion.div
         className="absolute inset-0"
-        initial={{ opacity: 0 }}
+        initial={{ opacity: fromMenu ? 1 : 0 }}
         animate={{ opacity: shown ? 1 : 0 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
+        transition={{ duration: fromMenu ? 0 : 0.45, ease: "easeOut" }}
       >
       <div
         className="absolute"

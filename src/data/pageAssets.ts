@@ -35,9 +35,18 @@ export function warmMenu(): Promise<void> {
   return menuWarmed;
 }
 
-/** Contact：信封 + 信纸 + 小羊先到齐再露；电话、水印、圈圈这些小件随后 */
-export const CONTACT_FIRST = [`${C}/env-back.webp`, `${C}/paper.webp`, `${C}/env-front.webp`, `${C}/fold.webp`, `${C}/sheep.webp`];
-export const CONTACT_REST = [`${C}/cord.webp`, `${C}/handset.webp`, `${A}/noise-cream.png`];
+/** Contact：信封 + 信纸 + 小羊 + 电话线与听筒全部先到齐，避免画面露出或电话掉落时缺件 */
+export const CONTACT_FIRST = [
+  `${C}/env-back.webp`,
+  `${C}/paper.webp`,
+  `${C}/env-front.webp`,
+  `${C}/fold.webp`,
+  `${C}/sheep.webp`,
+  `${C}/cord.webp`,
+  `${C}/handset.webp`,
+  `${A}/noise-cream.png`,
+];
+export const CONTACT_REST: string[] = [];
 
 /** About：相机、快门、第一张相纸的框和照片、水印先到齐；其余四张照片随后 */
 export const ABOUT_FIRST = [
