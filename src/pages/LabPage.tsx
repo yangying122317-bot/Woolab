@@ -17,7 +17,8 @@ import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
 import { useReportDarkNav } from "../state/chrome";
-import { loadImage, loadImages } from "../components/life/preload";
+import { INTRO_SESSION_KEY } from "../state/intro";
+import { loadImages } from "../components/life/preload";
 import { useLenis } from "lenis/react";
 import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
@@ -1509,17 +1510,31 @@ const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
  */
 /** 开场那张全屏大油画 */
 const INTRO_PAINTING = "/assets/lab/gallery-painting-big.webp";
-/** 等这张图最多等这么久，网再慢也先开演 */
-const INTRO_WAIT_CAP = 2500;
+/**
+ * 3.4KB 内联超小预览图（72×78 WebP）：
+ * 因为开场前 3.8 秒油画本来就带 blur(16px) + brightness(0.45)，内联预览在第 0 毫秒就能直接铺出模糊的珍珠小羊与欢迎词，
+ * 彻底告别黑屏等待；趁用户看欢迎文字期间后台把高清大油画与入口墙面全部解码好，到亮起缩小那一步时无缝接管。
+ */
+const INTRO_PAINTING_PLACEHOLDER =
+  "data:image/webp;base64,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";
+/** 亮起并缩进画框前需要准备好的入口首屏素材 */
+const LAB_ENTRANCE_FIRST = [
+  INTRO_PAINTING,
+  "/assets/lab/entrance-wall.webp",
+  "/assets/lab/prop-statue.webp",
+  "/assets/lab/gallery-lamp-entrance.webp",
+  "/assets/lab/gallery-lamp-on.webp",
+];
 
 function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; startAtShrink?: boolean }) {
   const { t } = useLanguage();
   const lenis = useLenis();
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const [phase, setPhase] = useState<"wait" | "text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
-    startAtShrink ? "hold" : "wait",
+  const [phase, setPhase] = useState<"text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
+    startAtShrink ? "hold" : "text",
   );
+  const [hiResReady, setHiResReady] = useState(false);
   const [big] = useState<IntroRect>(() => introBigRect());
   const [target, setTarget] = useState<IntroRect | null>(null);
   const timers = useRef<number[]>([]);
@@ -1530,6 +1545,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
   const finish = () => {
     if (done.current) return;
     done.current = true;
+    sessionStorage.setItem(INTRO_SESSION_KEY, "1");
     /* 画框归位完成，这时才把滚动放开 */
     lenis?.start();
     onDone();
@@ -1540,6 +1556,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       finish();
       return;
     }
+    sessionStorage.setItem(INTRO_SESSION_KEY, "1");
     /*
      * 播放期间锁定滚动。全站滚动是 Lenis 接管的：它自己截滚轮再用 window.scrollTo 推，
      * overflow: hidden 只拦原生滚动拦不住它，所以必须把 Lenis 也停掉，
@@ -1564,6 +1581,11 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       /* 收尾在缩小真正开始后再计时：飞行 1.1s + 黑幕揭开的尾巴 */
       at(1400, finish);
     };
+
+    const entranceReady = loadImages(LAB_ENTRANCE_FIRST, 5).then(() => {
+      setHiResReady(true);
+    });
+
     if (startAtShrink) {
       /*
        * 等目录整页上飞真正落稳再缩：上飞期间整页带 transform，这时候量到的油画位置
@@ -1574,7 +1596,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       const go = () => {
         if (fired) return;
         fired = true;
-        at(60, shrink);
+        void entranceReady.then(() => at(60, shrink));
       };
       if (pageY && pageY.get() !== 0) {
         const off = pageY.on("change", (v) => {
@@ -1588,22 +1610,16 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       at(pageY && pageY.get() !== 0 ? 1600 : 1000, go);
     } else {
       /*
-       * 顺序：文字停留 → 文字先渐隐 → 画面再亮起、模糊散开 → 缩小归位。
-       * 节拍等大油画解码好再起（最多等 INTRO_WAIT_CAP）：不然直接进 /lab 或网慢时图还没到，
-       * 黑幕上只剩文字、画后来才"啪"地出现。等待期间黑幕先盖着。
+       * 第 0 毫秒直接用内联预览油画（带压暗+虚化）+ 欢迎文字开演；
+       * 等 3.2s 文字停留期 AND 高清大油画与入口首屏素材解码完成，才淡出文字、亮起高清画并缩进金框。
        */
-      let started = false;
-      const start = () => {
-        if (started || done.current) return;
-        started = true;
-        setPhase("text");
-        at(3200, () => setPhase("fade"));
-        at(3800, () => setPhase("bright"));
-        at(5300, shrink);
-      };
-      setPhase("wait");
-      void loadImage(INTRO_PAINTING).then(start);
-      at(INTRO_WAIT_CAP, start);
+      const minTextStay = new Promise<void>((r) => at(3200, r));
+      void Promise.all([minTextStay, entranceReady]).then(() => {
+        if (done.current) return;
+        setPhase("fade");
+        at(600, () => setPhase("bright"));
+        at(2100, shrink);
+      });
     }
 
     return () => {
@@ -1651,13 +1667,12 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         transition={{ duration: 0.9, delay: phase === "shrink" ? 0.15 : 0, ease: "easeInOut" }}
       />
 
-      {/* 大油画：从第一帧就全屏铺满（压暗+虚化），文字退场后亮起，再缩小归位；等图的阶段先不露 */}
+      {/* 大油画：第 0 毫秒先用内联预览图铺满（压暗+虚化），高清图解码完后无缝接管，文字退场后亮起并缩小归位 */}
       <motion.img
-        src={INTRO_PAINTING}
+        src={hiResReady ? INTRO_PAINTING : INTRO_PAINTING_PLACEHOLDER}
         alt=""
         draggable={false}
         className="absolute max-w-none select-none"
-        style={{ visibility: phase === "wait" ? "hidden" : "visible" }}
         initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }}
         animate={
           phase === "shrink" && target

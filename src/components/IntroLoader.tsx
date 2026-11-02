@@ -31,7 +31,7 @@ export default function IntroLoader() {
   const [visible, setVisible] = useState(
     () => config.introEnabled && !isMobile() && !sessionStorage.getItem(INTRO_SESSION_KEY),
   );
-  if (!visible || pathname === "/" || pathname === INTRO_PREVIEW_PATH) return null;
+  if (!visible || pathname === "/" || pathname === INTRO_PREVIEW_PATH || pathname === "/lab") return null;
   return <PlainLoader onDone={() => setVisible(false)} />;
 }
 
