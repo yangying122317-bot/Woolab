@@ -1425,7 +1425,7 @@ function LookSection({
   const scale = useTransform(scrollY, (s) => 1 + 0.05 * (1 - smooth((s - enter) / (photoAt - enter))));
 
   return (
-    <section ref={ref} className="relative overflow-hidden">
+    <section ref={ref} className="relative">
       <div className="relative" style={{ height: layout.blockH }}>
         {/* 页头标题：切项目切过来的淡入；底下的 WOOLAB 水印不在这儿，挂在滚动内容最外层，切项目不重挂 */}
         {first && (
@@ -1579,11 +1579,8 @@ export function DetailPage({
   /* 照片走到主角（已缩到中等）底边下面一点的那一刻；照片从屏底进来到那儿是缩放缓动的区间 */
   const photoStopY = vh / 2 + (hero.h * HERO_MID_K) / 2 + PHOTO_GAP * u;
   const photoAt = last.start + last.blockH - photoStopY;
-  /* 滚动时间轴：手机竖屏下四宫格画框墙一滚到位即到底（wallLand = 0），不再留多余下滚行程 */
-  const wallLand = mobile ? 0 : WALL_LAND;
+  /* 滚动时间轴 */
   const wallTop = last.start + last.blockH + last.stripH;
-  const landStart = Math.max(photoAt + 1, wallTop - vh * 0.6);
-  const landEnd = mobile ? Math.max(landStart + 1, wallTop - 2) : wallTop + vh * WALL_LAND * 0.7;
   const tl: Timeline = {
     vw,
     vh,
@@ -1594,8 +1591,8 @@ export function DetailPage({
     asideY: vh * 0.25,
     photoAt,
     wallTop,
-    landStart,
-    landEnd,
+    landStart: Math.max(photoAt + 1, wallTop - vh * 0.6),
+    landEnd: wallTop + vh * WALL_LAND * 0.7,
     heroW: hero.w,
     wallW: wall.wallW,
     slotX: wall.slotX(index),
@@ -1681,7 +1678,7 @@ export function DetailPage({
         className="relative h-full w-full overflow-x-hidden overflow-y-auto"
         style={{ overscrollBehavior: "contain", scrollbarWidth: "none", touchAction: "pan-y" }}
       >
-        <div ref={content} className="relative w-full">
+        <div ref={content} className="relative">
           {/*
            * 第一屏底下的 WOOLAB 石刻水印：跟着内容滚，但放在按项目 key 的段落外面——
            * 切项目时段落整个重挂，水印要是在里面就会重新出现一次；它对每个项目都一样，挂一次就够。
@@ -1715,7 +1712,7 @@ export function DetailPage({
 
           {/* 画框墙：占一屏 + 主角落下来那段；飞回屏中的时候只淡画框，墙和水印和页顶那屏一样、不动，
               切项目跳回页顶那一下背景没有任何变化 */}
-          <section className="relative" style={{ height: vh * (1 + wallLand) }}>
+          <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
             <FrameWall
               u={uc}
               markU={u}
