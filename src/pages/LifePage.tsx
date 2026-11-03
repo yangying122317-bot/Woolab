@@ -363,7 +363,7 @@ export default function LifePage() {
 
   const pageRevealed = ready && introDone && menuLanded && doorFadeDone;
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
-  const guideIdle = useIdle(800, pageRevealed && noProgress && !guideDone.current && !focus && !list.open);
+  const guideIdle = useIdle(1500, pageRevealed && noProgress && !guideDone.current && !focus && !list.open);
   useEffect(() => {
     if (!guideIdle || guideDone.current) return;
     markGuideDone();

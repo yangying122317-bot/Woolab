@@ -276,6 +276,7 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-firefly-tail.webp",
   "/assets/hero-firefly-wing-top.webp",
   "/assets/hero-firefly-wing-bottom.webp",
+  "/assets/lab/gallery-painting-big.webp",
   ...MENU_ASSETS,
   ...LIFE_CORE_ASSETS,
 ];
@@ -485,6 +486,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     if (curtainUp) return;
     let alive = true;
     void import("../pages/LifePage");
+    void import("../pages/LabPage");
     loadImage(SPRITES.sheep.anim).then(() => {
       if (!alive) return;
       setSheepAnim(true);

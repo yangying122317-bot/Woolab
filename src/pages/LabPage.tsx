@@ -19,7 +19,7 @@ import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
 import { useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
-import { loadImages } from "../components/life/preload";
+import { isImageReady, loadImages } from "../components/life/preload";
 import { useLenis } from "lenis/react";
 import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
@@ -1517,12 +1517,12 @@ const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
 /** 开场那张全屏大油画 */
 const INTRO_PAINTING = "/assets/lab/gallery-painting-big.webp";
 /**
- * 3.4KB 内联超小预览图（72×78 WebP）：
- * 因为开场前 3.8 秒油画本来就带 blur(16px) + brightness(0.45)，内联预览在第 0 毫秒就能直接铺出模糊的珍珠小羊与欢迎词，
- * 彻底告别黑屏等待；趁用户看欢迎文字期间后台把高清大油画与入口墙面全部解码好，到亮起缩小那一步时无缝接管。
+ * 2.7KB 内联预模糊+预压暗预览图（96×105 JPEG，已将 blur(16px) 与 brightness(0.45) 直接烘焙进像素）：
+ * 作为底层 CSS background-image 在第 0 毫秒同步上屏，无需浏览器分配全屏高斯模糊滤镜表面，
+ * 高清大油画解码完成后在顶层直接显现，彻底消除切图或滤镜初始化带来的首帧黑屏。
  */
 const INTRO_PAINTING_PLACEHOLDER =
-  "data:image/webp;base64,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";
+  "data:image/jpeg;base64,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";
 /** 亮起并缩进画框前需要准备好的入口首屏素材 */
 const LAB_ENTRANCE_FIRST = [
   INTRO_PAINTING,
@@ -1540,7 +1540,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
   const [phase, setPhase] = useState<"text" | "fade" | "bright" | "hold" | "shrink" | "skip">(
     startAtShrink ? "hold" : "text",
   );
-  const [hiResReady, setHiResReady] = useState(false);
+  const [hiResReady, setHiResReady] = useState(() => isImageReady(INTRO_PAINTING));
   const [big] = useState<IntroRect>(() => introBigRect());
   const [target, setTarget] = useState<IntroRect | null>(null);
   const timers = useRef<number[]>([]);
@@ -1668,17 +1668,36 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
     >
       {/* 黑幕：缩小归位时揭开 */}
       <motion.div
-        className="absolute inset-0 bg-black"
+        className="absolute inset-0 bg-[#1B1916]"
         animate={{ opacity: phase === "shrink" ? 0 : 1 }}
         transition={{ duration: 0.9, delay: phase === "shrink" ? 0.15 : 0, ease: "easeInOut" }}
       />
 
-      {/* 大油画：第 0 毫秒先用内联预览图铺满（压暗+虚化），高清图解码完后无缝接管，文字退场后亮起并缩小归位 */}
+      {/* 底层预模糊+预压暗内联背景（无 CSS blur 滤镜开销，第 0 毫秒同步渲染，彻底杜绝首帧或切图黑屏） */}
+      {!startAtShrink && (
+        <motion.div
+          className="pointer-events-none absolute select-none"
+          style={{
+            left: big.left,
+            top: big.top,
+            width: big.width,
+            height: big.height,
+            backgroundImage: `url("${INTRO_PAINTING_PLACEHOLDER}")`,
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+          }}
+          animate={{ opacity: phase === "shrink" ? 0 : 1 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+        />
+      )}
+
+      {/* 高清大油画：src 固定不变，解码就绪后直接显现叠在底层之上，文字退场后亮起并缩小归位 */}
       <motion.img
-        src={hiResReady ? INTRO_PAINTING : INTRO_PAINTING_PLACEHOLDER}
+        src={INTRO_PAINTING}
         alt=""
         draggable={false}
         className="absolute max-w-none select-none"
+        style={{ opacity: hiResReady || startAtShrink ? 1 : 0 }}
         initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }}
         animate={
           phase === "shrink" && target
@@ -1716,7 +1735,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
                 position: "relative",
                 top: "-0.7vw",
               }}
-              {...lineAnim(0.35)}
+              {...lineAnim(0.08)}
             >
               {t("lab.intro.welcome")}
             </motion.p>
@@ -1729,7 +1748,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
                 textShadow: INTRO_TEXT_SHADOW,
                 whiteSpace: "pre-line",
               }}
-              {...lineAnim(0.6)}
+              {...lineAnim(0.2)}
             >
               {t("lab.intro.title")}
             </motion.p>
@@ -1744,7 +1763,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
               textShadow: INTRO_TEXT_SHADOW,
               whiteSpace: "pre-line",
             }}
-            {...lineAnim(1.2)}
+            {...lineAnim(0.5)}
           >
             {t("lab.intro.desc")}
           </motion.p>
