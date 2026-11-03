@@ -200,7 +200,8 @@ function Img({ src, style, fit = "cover" }: { src: string; style?: CSSProperties
  * 50% 那步已经烙进图里（bg-stone-wall 是净墙，bg-stone-mark 带 WOOLAB GOODS 水印）。
  */
 function stoneSize(u: number) {
-  const w = Math.max(1472 * u, window.innerWidth);
+  const vw = getViewWidth();
+  const w = Math.max(1472 * u, vw);
   const h = Math.max(w * (990 / 1472), window.innerHeight + 195 * u);
   return { w, h };
 }
@@ -210,6 +211,7 @@ const STONE_FILTER = "saturate(0.6)";
 
 function StoneWall({ u }: { u: number }) {
   const { w, h } = stoneSize(u);
+  const mobile = getViewWidth() < 560;
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[#5a5454]">
       <img
@@ -223,7 +225,7 @@ function StoneWall({ u }: { u: number }) {
           height: h,
           objectFit: "cover",
           objectPosition: "center top",
-          filter: STONE_FILTER,
+          filter: mobile ? undefined : STONE_FILTER,
         }}
       />
     </div>
@@ -243,6 +245,7 @@ const FRAME_CY = (95 + 262) / 2;
  */
 function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
   const { w, h } = stoneSize(u);
+  const mobile = getViewWidth() < 560;
   const half = MARK_HALF * h;
   /*
    * 只露水印四周那一截，上下都是渐隐：这张带水印的石纹和底下钉死的石墙纹路对不齐，
@@ -269,7 +272,7 @@ function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
           height: h,
           objectFit: "cover",
           objectPosition: "center top",
-          filter: STONE_FILTER,
+          filter: mobile ? undefined : STONE_FILTER,
         }}
       />
     </div>
@@ -291,7 +294,22 @@ const BEAMS =
   /* 5：最边上一条宽而暗的 */
   " transparent 98vw, rgba(255,244,222,0.12) 104vw, rgba(255,244,222,0.12) 110vw, transparent 116vw)";
 
+const BEAMS_MOBILE =
+  "linear-gradient(125deg," +
+  " transparent 0%, rgba(255,244,222,0.22) 14%, rgba(255,244,222,0.22) 20%, transparent 32%," +
+  " transparent 42%, rgba(255,244,222,0.07) 52%, transparent 65%)";
+
 function LightBeams({ animate = true }: { animate?: boolean }) {
+  const mobile = getViewWidth() < 560;
+  if (mobile) {
+    /* 手机端直接用预柔化的渐变，省去全屏 mix-blend-mode + blur(28px) 实时高斯模糊合成开销 */
+    return (
+      <div
+        className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+        style={{ background: BEAMS_MOBILE }}
+      />
+    );
+  }
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" style={{ mixBlendMode: "screen" }}>
       <motion.div
@@ -1657,10 +1675,10 @@ export function DetailPage({
 
       <div
         ref={scroller}
-        className="relative h-full w-full overflow-y-auto"
-        style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
+        className="relative h-full w-full overflow-x-hidden overflow-y-auto"
+        style={{ overscrollBehavior: "contain", scrollbarWidth: "none", touchAction: "pan-y" }}
       >
-        <div ref={content} className="relative">
+        <div ref={content} className="relative w-full overflow-x-hidden">
           {/*
            * 第一屏底下的 WOOLAB 石刻水印：跟着内容滚，但放在按项目 key 的段落外面——
            * 切项目时段落整个重挂，水印要是在里面就会重新出现一次；它对每个项目都一样，挂一次就够。

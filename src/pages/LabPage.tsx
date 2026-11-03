@@ -157,12 +157,8 @@ function EntranceWall({
   const [lampOn, setLampOn] = useState(false);
   /* 相机拐进走廊（cz > 280，即 d <= 200）时入口墙早已完全滑出屏幕左侧，及时截断缩放并卸载图层，防止放大到 20 倍撑爆手机 Safari 显存 */
   const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, ENT_Z, entCx, frame, "cut", 200);
-  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
-  /* 主墙脚线落在该深度的地脚线上；切图里转角条比主墙脚再往下伸一截 */
-  const top = useMotionTemplate`${useTransform(
-    scale,
-    (s) => frame.vpY + (CO_WALL_H + entH * (1 - ENT_FOOT)) * u * s,
-  )}px`;
+  const y = useTransform(scale, (s) => (CO_WALL_H + entH * (1 - ENT_FOOT)) * u * s);
+  const tf = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   /* 墙过身后虽然透明，但已被放大到盖住整屏——必须连指针一起关掉，
      否则会挡住后面展板的 hover/点击 */
   const pe = useTransform(opacity, (o) => (o > 0 ? ("auto" as const) : ("none" as const)));
@@ -187,7 +183,7 @@ function EntranceWall({
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: px(entW),
         height: px(entH),
         opacity,
@@ -268,14 +264,14 @@ function EntranceStatue({
   const u = frame.g;
   const dx = frame.vw < 560 ? 122 : STATUE_DX;
   const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * dx, frame, "cut", 200);
-  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
-  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  const y = useTransform(scale, (s) => CO_WALL_H * u * s);
+  const tf = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   return (
     <motion.div
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: STATUE_W * u,
         height: STATUE_H * u,
         opacity,
@@ -561,14 +557,13 @@ function CorridorStation({
     const [cz, cx] = v;
     return (worldXd - cx) * frame.g * (FOCAL / Math.max(z - cz, minD));
   });
-  /* 板脚落在该深度的地脚线上 */
-  const feetY = useTransform(camDepth, (cz) => frame.vpY + CO_WALL_H * frame.g * (FOCAL / Math.max(z - cz, minD)));
+  /* 板脚落在该深度的地脚线上（用 translate3d 承载纵移，避免每帧修改 top 触发布局回流） */
+  const feetOffset = useTransform(camDepth, (cz) => CO_WALL_H * frame.g * (FOCAL / Math.max(z - cz, minD)));
   /* 不做淡出：相机走到板子跟前之前它的内缘就已经滑出画面。
      深度触到钳位后直接隐藏并 display: none，释放超大 GPU 合成纹理 */
   const visible = useTransform(camDepth, (cz) => (z - cz > minD ? 1 : 0));
   const display = useTransform(visible, (v) => (v > 0 ? "block" : "none"));
-  const transform = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
-  const top = useMotionTemplate`${feetY}px`;
+  const transform = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${feetOffset}px, 0) scale(${scale})`;
   /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微 3D 倾斜 */
   const tiltSpring = { stiffness: 160, damping: 19 };
   const artRX = useSpring(0, tiltSpring);
@@ -597,7 +592,7 @@ function CorridorStation({
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: pw,
         height: ph,
         opacity: visible,
@@ -797,14 +792,14 @@ function CorridorProp({
     spec.side * (CO_WALL_X - PANEL_INSET - W / 2),
     frame,
   );
-  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
-  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  const y = useTransform(scale, (s) => CO_WALL_H * u * s);
+  const tf = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   return (
     <motion.div
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: W * u,
         height: H * u,
         opacity,
@@ -846,14 +841,14 @@ function CorridorColumn({
   /* 独立立柱：站在墙前一个柱宽处的地板上，地脚线整条从柱身后面穿过、
      不碰柱础，柱础清楚地立在地上。柱高 340 > 走廊墙高 290，柱头探到天花线上方 */
   const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, z, side * (CO_WALL_X - W), frame);
-  const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
-  const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
+  const y = useTransform(scale, (s) => CO_WALL_H * u * s);
+  const tf = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   return (
     <motion.div
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: W * u,
         height: H * u,
         opacity,
@@ -888,10 +883,9 @@ function CorridorOval({
   const W = 181.5; // 大档原始尺寸（设计稿 px）
   const H = 56.75;
   const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, z, 0, frame);
-  const tf = useMotionTemplate`translate(-50%, -50%) translateX(${x}px) scale(${scale})`;
   /* 灯体贴在该深度的天花上 */
-  const cy = useTransform(scale, (s) => frame.vpY - CO_WALL_H * u * s);
-  const top = useMotionTemplate`${cy}px`;
+  const y = useTransform(scale, (s) => -CO_WALL_H * u * s);
+  const tf = useMotionTemplate`translate(-50%, -50%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   /* 两档描边折算到显示高度 h：大档 ≈0.053h、小档 ≈0.077h；
      同深度处角线粗细 ≈ 0.9 + 1.62·s（设计px）。两档与角线偏差相等的点在 s≈0.45、
      h≈25.5——之前用大档、之后用小档，窄窗口内过渡，让天窗描边始终贴着角线粗细 */
@@ -903,7 +897,7 @@ function CorridorOval({
       className="pointer-events-none absolute"
       style={{
         left: "50%",
-        top,
+        top: frame.vpY,
         width: W * u,
         height: H * u,
         opacity,
@@ -957,6 +951,10 @@ function CorridorLines({
   const lFull = t + frame.vpX / Math.cos(Math.atan(CO_SLOPE));
   const halfGap = (t - tMin) / 2;
   const edgeAt = (x: number) => Math.max(0, halfGap * (1 - x / lFull));
+  const fullXm = Math.min(len, lFull);
+  const fullE1 = edgeAt(fullXm);
+  const fullE2 = edgeAt(len);
+  const fullPoly = `polygon(0 ${halfGap}px, ${fullXm}px ${fullE1}px, ${len}px ${fullE2}px, ${len}px ${t - fullE2}px, ${fullXm}px ${t - fullE1}px, 0 ${t - halfGap}px)`;
   const useLine = (side: 1 | -1, vert: 1 | -1) => {
     const rot = useTransform(camX, (cx) => {
       const deg = (Math.atan2(vert * CO_WALL_H, side * CO_WALL_X - cx) * 180) / Math.PI;
@@ -965,11 +963,11 @@ function CorridorLines({
     const clip = useTransform([camX, camDepth], (v: number[]) => {
       const [cx, cz] = v;
       const d = ENT_Z - cz;
-      let xEnd = len;
-      if (d > 1) {
-        const r = Math.hypot(side * CO_WALL_X - cx, CO_WALL_H) * (FOCAL / d) * frame.g;
-        xEnd = Math.min(len, t + r);
-      }
+      /* 走进走廊后（d <= 1）角线全长恒定，直接复用常量字符串避免每帧重绘 polygon 遮罩 */
+      if (d <= 1) return fullPoly;
+      const r = Math.hypot(side * CO_WALL_X - cx, CO_WALL_H) * (FOCAL / d) * frame.g;
+      const xEnd = Math.min(len, t + r);
+      if (xEnd >= len) return fullPoly;
       const xm = Math.min(xEnd, lFull);
       const e1 = edgeAt(xm);
       const e2 = edgeAt(xEnd);
@@ -1255,13 +1253,16 @@ function FakeCorridor({
   const sizeK = (PANEL_W * frame.g) / PANEL_PW;
 
   /* 相机深度 = 滚动节拍深度（过阻尼弹簧：滚轮只推目标值，相机带惯性地追——
-     推一下滑一段、稳稳停在节拍点）+ 进场时的一小段迈步（introZ 从负值回到 0） */
+     推一下滑一段、稳稳停在节拍点；手机端提高弹簧刚度让手指滑动跟手不拖泥带水）+ 进场时的一小段迈步 */
+  const camSpring = mobile
+    ? { stiffness: 130, damping: 26, mass: 0.55 }
+    : { stiffness: 60, damping: 20, mass: 0.9 };
   const qDepth = useTransform(q, CAM_Z_KEYS, mobile ? MOBILE_CAM_Z_VALS : CAM_Z_VALS);
-  const qDepthSoft = useSpring(qDepth, { stiffness: 60, damping: 20, mass: 0.9 });
+  const qDepthSoft = useSpring(qDepth, camSpring);
   const camDepth = useTransform([qDepthSoft, introZ], (v: number[]) => v[0] + v[1]);
   /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
   const qX = useTransform(q, CAM_X_KEYS, CAM_X_VALS);
-  const camX = useSpring(qX, { stiffness: 60, damping: 20, mass: 0.9 });
+  const camX = useSpring(qX, camSpring);
 
   /* 到站转头：整幅走廊（角线、尽头墙、柱、灯、展板一起）平移 */
   const turnX = useTransform(camDepth, (cz) => camTurnOf(cz, mobile) * frame.g);
@@ -1839,10 +1840,11 @@ export default function LabPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* 镜头微呼吸 + 鼠标视差：沿墙平移时完全静止，起步进走廊的路上渐入，走廊里全量 */
+  /* 镜头微呼吸 + 鼠标视差：沿墙平移时完全静止，起步进走廊的路上渐入，走廊里全量；
+     手机端关闭呼吸与手指视差，省去每帧整幅走廊重绘并防止手指滑动与视差抖动打架 */
   const bobY = useMotionValue(0);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (isMobileView() || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const controls = animate(bobY, [0, -7, 0], {
       duration: 6.5,
       ease: "easeInOut",
@@ -1966,7 +1968,7 @@ export default function LabPage() {
         className="sticky top-0 h-screen overflow-hidden"
         style={{ background: "#FEF0C1" }}
         onPointerMove={(e) => {
-          if (!homeEntry) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
+          if (!homeEntry && !isMobileView()) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
         }}
         onPointerLeave={() => parallaxX.set(0)}
       >
