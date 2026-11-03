@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
 import { warmHero } from "./HeroScene";
+import { loadImage } from "./life/preload";
 import { warmMenu } from "../data/pageAssets";
 import { isMobileView } from "../device";
 import { usePeelToHome } from "./PageShift";
@@ -26,6 +27,7 @@ export default function TopNav() {
   const { peeling, peelToHome } = usePeelToHome();
   useEffect(() => {
     void warmMenu();
+    void loadImage("/assets/lab/gallery-painting-big.webp");
     if (pathname !== "/" && pathname !== INTRO_PREVIEW_PATH) {
       const id = window.setTimeout(() => void warmHero(), 1500);
       return () => window.clearTimeout(id);

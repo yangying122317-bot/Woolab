@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { DRINKS, drinkOf } from "../../data/drinks";
 import type { DrinkChoice } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { isMobileView } from "../../device";
 import HandHint from "./HandHint";
 import {
   playIceClink,
@@ -89,6 +90,7 @@ interface Props {
 
 export default function DrinkMixer({ drink, active, onDone }: Props) {
   const { t, pick } = useLanguage();
+  const mobile = isMobileView();
   const done = drink !== null;
 
   const [step, setStep] = useState<Step>("pick");
@@ -142,10 +144,19 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
   /* ---------------- 各步动作 ---------------- */
 
   const pickBottle = (id: DrinkChoice) => {
-    if (!active || done || step !== "pick") return;
-    playMailboxOpen();
-    setChoice(id);
-    setStep("lemon");
+    if (!active || done || drag || dragIce) return;
+    if (step === "pick") {
+      playMailboxOpen();
+      setChoice(id);
+      setHovered(id);
+      setStep("lemon");
+      return;
+    }
+    if ((step === "lemon" || step === "ice" || step === "pour") && id !== choice) {
+      playMailboxOpen();
+      setChoice(id);
+      setHovered(id);
+    }
   };
 
   const chop = () => {
@@ -513,7 +524,8 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
         const isChosen = choice === d.id;
         const dragging = drag && isChosen;
         const pouring = isChosen && !done && step === "pouring";
-        const clickable = active && step === "pick";
+        const canSwitch = (step === "lemon" || step === "ice" || step === "pour") && !isChosen && !drag && !dragIce;
+        const clickable = active && !done && (step === "pick" || canSwitch);
         const draggable = active && step === "pour" && isChosen;
         return (
           <motion.div
@@ -588,7 +600,7 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
                 {active && hovered === d.id && !drag && !pouring && (
                   <motion.span
                     key="name"
-                    className="font-hand block whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 text-base text-neutral-800 shadow-md"
+                    className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 ${mobile ? "text-xl" : "text-base"} text-neutral-800 shadow-md`}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 6 }}
@@ -726,7 +738,7 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
           {!done && step === "label" && finalDrink && (
             <motion.span
               key="drink-name"
-              className="font-hand block whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md"
+              className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-4 py-1 ${mobile ? "text-2xl" : "text-lg"} text-neutral-800 shadow-md`}
               initial={{ opacity: 0, y: 10, scale: 0.8 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0 }}
@@ -743,7 +755,7 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
         className="pointer-events-none absolute"
         style={{
           left: vh(STEP_TAG_X),
-          top: vh(1100),
+          top: vh(mobile ? 1070 : 1100),
           transform: "translateX(-50%)",
           zIndex: 20,
         }}
@@ -753,7 +765,12 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
             <motion.span
               key={`hint-${step}`}
               className="font-hand block whitespace-nowrap text-neutral-900"
-              style={{ ...PAPER_TAG, fontSize: "1.6vh", lineHeight: 1.25, padding: "0.5vh 1.2vh 0.65vh" }}
+              style={{
+                ...PAPER_TAG,
+                fontSize: mobile ? "2.25vh" : "1.6vh",
+                lineHeight: 1.25,
+                padding: mobile ? "0.65vh 1.45vh 0.8vh" : "0.5vh 1.2vh 0.65vh",
+              }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}

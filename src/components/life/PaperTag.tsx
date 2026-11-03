@@ -34,9 +34,9 @@ export default function PaperTag({
       } ${className}`}
       style={{
         ...PAPER_TAG,
-        fontSize: mobile && fontSize === "2.6vh" ? "1.95vh" : fontSize,
-        padding: mobile ? "0.75vh 1.6vh 0.9vh" : PAPER_TAG.padding,
-        maxWidth: mobile ? "86%" : undefined,
+        fontSize: mobile && fontSize === "2.6vh" ? "2.45vh" : fontSize,
+        padding: mobile ? "0.9vh 1.9vh 1.05vh" : PAPER_TAG.padding,
+        maxWidth: mobile ? "88%" : undefined,
         textWrap: mobile ? "balance" : undefined,
         lineHeight: 1.25,
         ...style,

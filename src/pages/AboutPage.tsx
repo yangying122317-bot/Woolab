@@ -460,7 +460,7 @@ export default function AboutPage() {
               className="font-hand whitespace-nowrap"
               style={{ fontSize: 14 * s, color: "#56504D", WebkitTextStroke: `${1 * s}px #56504D` }}
             >
-              {t("lab.entry.scroll")}
+              {t(mobile ? "lab.entry.swipe" : "lab.entry.scroll")}
             </span>
           </motion.div>
         )}

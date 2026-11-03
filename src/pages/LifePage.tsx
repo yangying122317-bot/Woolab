@@ -432,18 +432,18 @@ export default function LifePage() {
     const r = el.getBoundingClientRect();
     const mobile = wr.width < 560;
     const vhPx = wr.height / 100;
-    /* 手机竖屏下：按屏宽自适应缩放与中心点，保证整块软木板+10块碎片 / 整张白圆桌（酒瓶+杯+案板+冰桶）同屏完整可见 */
+    /* 手机竖屏下：按屏宽自适应缩放与中心点，保证整块软木板+10块碎片 / 整张白圆桌（酒瓶+杯+案板+冰桶）同屏清晰饱满 */
     const cx =
       mobile && station.id === "drink"
-        ? r.left + r.width * 0.38
+        ? r.left + r.width * 0.365
         : r.left + r.width / 2;
     const cy = r.top + r.height / 2;
     const scale = mobile
       ? station.id === "candle"
-        ? Math.min(1.85, (wr.width * 0.84) / (24 * vhPx * roomScale))
+        ? Math.min(2.2, (wr.width * 0.88) / (21 * vhPx * roomScale))
         : station.id === "photo"
-          ? Math.min(1.18, (wr.width * 0.94) / (64 * vhPx * roomScale))
-          : Math.min(1.25, (wr.width * 0.92) / (52 * vhPx * roomScale))
+          ? Math.min(1.5, (wr.width * 0.95) / (48 * vhPx * roomScale))
+          : Math.min(1.52, (wr.width * 0.95) / (47.5 * vhPx * roomScale))
       : 2;
     setZoomOrigin(`${cx - wr.left}px ${cy - wr.top}px`);
     document.documentElement.style.overflow = "hidden";
@@ -724,7 +724,13 @@ export default function LifePage() {
               <button
                 onClick={() => void closeFocus()}
                 className="font-look pointer-events-auto text-neutral-800 transition hover:-translate-y-[0.2vh]"
-                style={{ ...PAPER_TAG, rotate: "1deg", padding: "0.35vh 1.3vh 0.45vh", fontSize: "1.6vh", letterSpacing: "0.04em" }}
+                style={{
+                  ...PAPER_TAG,
+                  rotate: "1deg",
+                  padding: mobileView ? "0.55vh 1.7vh 0.65vh" : "0.35vh 1.3vh 0.45vh",
+                  fontSize: mobileView ? "2.1vh" : "1.6vh",
+                  letterSpacing: "0.04em",
+                }}
               >
                 {t("life.focus.back")}
               </button>
