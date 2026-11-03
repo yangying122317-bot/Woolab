@@ -1,4 +1,5 @@
 import { lifeFirstAssets, lifeInteractionAssets, lifeRestAssets } from "../../data/lifeAssets";
+import { isMobileView } from "../../device";
 
 /**
  * Life 页素材预加载。
@@ -14,6 +15,15 @@ import { lifeFirstAssets, lifeInteractionAssets, lifeRestAssets } from "../../da
 const cache = new Map<string, Promise<void>>();
 const readySet = new Set<string>();
 const keep: HTMLImageElement[] = [];
+
+function retainImage(im: HTMLImageElement) {
+  keep.push(im);
+  /* 手机端 Safari 单页显存预算严苛（~350MB），跨页累计持有过多已解码大图会触发 WebContent 崩溃重载 */
+  if (isMobileView() && keep.length > 45) {
+    const old = keep.shift();
+    if (old) old.src = "";
+  }
+}
 
 export function isImageReady(url: string): boolean {
   return readySet.has(url);
@@ -47,7 +57,7 @@ function load(url: string): Promise<void> {
         resolve();
       };
       im.src = url;
-      keep.push(im);
+      retainImage(im);
     };
     attempt(false);
   });
@@ -65,7 +75,7 @@ export function loadImageStrict(url: string): Promise<void> {
       const im = new Image();
       im.decoding = "async";
       im.onload = () => {
-        keep.push(im);
+        retainImage(im);
         const done = () => {
           readySet.add(url);
           resolve();
@@ -170,18 +180,22 @@ export async function warmBytes(urls: readonly string[], limit = 4): Promise<voi
 }
 
 /**
- * 从别的页（目录）提前热身：直接解码第一屏核心层，并把窗户动画帧拉进缓存。
+ * 从别的页（目录）提前热身：桌面端直接解码第一屏核心层，手机端只暖 HTTP 缓存以免跨页撑爆显存。
  */
 let warmed = false;
 export function warmLife(delayMs = 0): void {
   if (warmed || rest) return;
   warmed = true;
   window.setTimeout(() => {
+    if (isMobileView()) {
+      void warmBytes(LIFE_CORE_ASSETS);
+      return;
+    }
     void preloadLifeCore().then(() => warmBytes(LIFE_WINDOW_REST));
   }, delayMs);
 }
 
-/** 首页小电视结束后立即预加载 Life 第一屏核心层（解码进内存）并暖好窗户帧字节；then：完成后接着预热其他内页 */
+/** 首页小电视结束后预热 Life 第一屏；手机端仅暖 HTTP 字节不提前解码进显存 */
 let warmedFirst: Promise<void> | null = null;
 export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   if (warmedFirst || first) {
@@ -190,9 +204,10 @@ export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   }
   warmedFirst = new Promise<void>((resolve) => {
     window.setTimeout(() => {
-      void preloadLifeCore()
-        .then(() => warmBytes(LIFE_WINDOW_REST))
-        .then(resolve);
+      const task = isMobileView()
+        ? warmBytes(LIFE_CORE_ASSETS)
+        : preloadLifeCore().then(() => warmBytes(LIFE_WINDOW_REST));
+      void task.then(resolve);
     }, delayMs);
   });
   if (then) void warmedFirst.then(then);

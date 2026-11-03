@@ -69,8 +69,8 @@ export function useMobileHorizontalDrag(enabled = true): void {
     let raf = 0;
 
     const isInteractiveTarget = (target: EventTarget | null): boolean => {
-      let el = target as HTMLElement | null;
-      while (el && el !== document.body) {
+      let el = target instanceof Element ? target : (target as Node | null)?.parentElement ?? null;
+      while (el && el !== document.body && el !== document.documentElement) {
         if (
           el.hasAttribute("data-lenis-prevent") ||
           el.classList.contains("cursor-grab") ||

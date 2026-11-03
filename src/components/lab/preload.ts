@@ -1,5 +1,6 @@
-import { loadImages } from "../life/preload";
+import { loadImages, warmBytes } from "../life/preload";
 import { labProjects, type LabProject } from "../../data/labs";
+import { isMobileView } from "../../device";
 
 /**
  * Lab 详情页素材预加载。
@@ -63,10 +64,14 @@ export function projectAssets(p: LabProject): string[] {
 }
 
 let warmed: Promise<void> | null = null;
-/** 进画廊后调一次：先拉翻面第一眼那批，再低并发把剩下的拉完 */
+/** 进画廊后调一次：桌面端先拉翻面第一眼那批再低并发把剩下的拉完；手机端只暖 HTTP 缓存，防止滑动走廊时后台解码 115MB 详情图导致 Safari 崩溃 */
 export function warmLabDetail(): Promise<void> {
   if (!warmed) {
     const first = [...SHARED_FIRST, ...labProjects.map(frameArt).filter((s): s is string => !!s)];
+    if (isMobileView()) {
+      warmed = warmBytes(first, 3);
+      return warmed;
+    }
     const rest = new Set<string>(SHARED_REST);
     labProjects.forEach((p) => projectAssets(p).forEach((s) => rest.add(s)));
     first.forEach((s) => rest.delete(s));

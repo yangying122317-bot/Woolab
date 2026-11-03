@@ -15,7 +15,7 @@ import { getViewWidth } from "../device";
 import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
-import { loadImages, warmLife } from "./life/preload";
+import { loadImage, warmBytes, warmLife } from "./life/preload";
 import { warmAbout, warmContact } from "../data/pageAssets";
 import { playMenuDrop, warmAmbient } from "../audio/sfx";
 
@@ -247,16 +247,16 @@ export default function MenuOverlay({
     warmLife(0);
     // Life 的屋内背景音也先拉着（下载不需要手势），从目录进去第一下点击就有声
     warmAmbient("life");
-    void loadImages(
+    void loadImage("/assets/lab/gallery-painting-big.webp");
+    void warmBytes(
       [
-        "/assets/lab/gallery-painting-big.webp",
         "/assets/lab/entrance-wall.webp",
         "/assets/lab/gallery-lamp-entrance.webp",
         "/assets/lab/gallery-lamp-on.webp",
         "/assets/lab/prop-statue.webp",
         "/assets/lab/panel-tall.webp",
       ],
-      6,
+      4,
     );
   }, []);
 

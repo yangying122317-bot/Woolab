@@ -20,7 +20,7 @@ import { usePageShift } from "../components/PageShift";
 import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
 import { useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
-import { isImageReady, loadImage, loadImages } from "../components/life/preload";
+import { isImageReady, loadImage, loadImages, warmBytes } from "../components/life/preload";
 import { useLenis } from "lenis/react";
 import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
@@ -85,11 +85,13 @@ function EntrancePainting({
   hidden,
   rect,
   pe,
+  mobile,
   onHover,
 }: {
   hidden: boolean;
   rect: { left: number; top: number; width: number; height: number };
   pe: MotionValue<"auto" | "none">;
+  mobile: boolean;
   onHover: (h: boolean) => void;
 }) {
   const spring = { stiffness: 160, damping: 19 };
@@ -108,12 +110,13 @@ function EntrancePainting({
         ...rect,
         opacity: hidden ? 0 : 1,
         pointerEvents: pe,
-        rotateX,
-        rotateY,
-        scale,
-        transformPerspective: 900,
+        rotateX: mobile ? undefined : rotateX,
+        rotateY: mobile ? undefined : rotateY,
+        scale: mobile ? undefined : scale,
+        transformPerspective: mobile ? undefined : 900,
       }}
       onPointerMove={(e) => {
+        if (mobile) return;
         const r = e.currentTarget.getBoundingClientRect();
         const dx = (e.clientX - r.left) / r.width - 0.5;
         const dy = (e.clientY - r.top) / r.height - 0.5;
@@ -123,6 +126,7 @@ function EntrancePainting({
         onHover(true);
       }}
       onPointerLeave={() => {
+        if (mobile) return;
         rotateX.set(0);
         rotateY.set(0);
         scale.set(1);
@@ -151,7 +155,8 @@ function EntranceWall({
   const entH = entW / (3194 / 1730);
   const entCx = -CO_WALL_X - entW / 2;
   const [lampOn, setLampOn] = useState(false);
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, ENT_Z, entCx, frame, "cut");
+  /* 相机拐进走廊（cz > 280，即 d <= 200）时入口墙早已完全滑出屏幕左侧，及时截断缩放并卸载图层，防止放大到 20 倍撑爆手机 Safari 显存 */
+  const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, ENT_Z, entCx, frame, "cut", 200);
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   /* 主墙脚线落在该深度的地脚线上；切图里转角条比主墙脚再往下伸一截 */
   const top = useMotionTemplate`${useTransform(
@@ -186,6 +191,7 @@ function EntranceWall({
         width: px(entW),
         height: px(entH),
         opacity,
+        display,
         transform: tf,
         transformOrigin: "50% 100%",
       }}
@@ -210,6 +216,7 @@ function EntranceWall({
           height: px(ENT_PAINT_H),
         }}
         pe={pe}
+        mobile={mobile}
         onHover={setLampOn}
       />
       {/* 滚动提示：手绘小箭头（切图朝下，转 -90° 朝右，呼应先向右平移）+ ( Scroll )，
@@ -260,7 +267,7 @@ function EntranceStatue({
 }) {
   const u = frame.g;
   const dx = frame.vw < 560 ? 122 : STATUE_DX;
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * dx, frame, "cut");
+  const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * dx, frame, "cut", 200);
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
   return (
@@ -272,6 +279,7 @@ function EntranceStatue({
         width: STATUE_W * u,
         height: STATUE_H * u,
         opacity,
+        display,
         transform: tf,
         transformOrigin: "50% 100%",
       }}
@@ -542,20 +550,23 @@ function CorridorStation({
   const z = STATION_Z[index];
   const side = STATION_SIDE[index];
   const flip = side === 1;
+  const mobile = frame.vw < 560;
+  const minD = mobile ? 55 : 21;
   const [hover, setHover] = useState(false);
-  const scale = useTransform(camDepth, (cz) => scaleOf(z, cz) * sizeK);
+  const downPos = useRef<{ x: number; y: number } | null>(null);
+  const scale = useTransform(camDepth, (cz) => (FOCAL / Math.max(z - cz, minD)) * sizeK);
   /* 板子离墙一条缝立在走廊里（中心在 PANEL_CX）；随相机靠近沿自己那侧滑出画面 */
   const worldXd = side * PANEL_CX;
   const x = useTransform([camDepth, camX], (v: number[]) => {
     const [cz, cx] = v;
-    return (worldXd - cx) * frame.g * scaleOf(z, cz);
+    return (worldXd - cx) * frame.g * (FOCAL / Math.max(z - cz, minD));
   });
   /* 板脚落在该深度的地脚线上 */
-  const feetY = useTransform(camDepth, (cz) => frame.vpY + CO_WALL_H * frame.g * scaleOf(z, cz));
-  /* 不做淡出：相机走到板子跟前之前（深度 ≈22）它的内缘就已经滑出画面。
-     深度触到钳位后直接隐藏——否则冻结在屏幕外的巨大板体，
-     会在下一站转头时被整幅平移带回画面边缘 */
-  const visible = useTransform(camDepth, (cz) => (z - cz > 21 ? 1 : 0));
+  const feetY = useTransform(camDepth, (cz) => frame.vpY + CO_WALL_H * frame.g * (FOCAL / Math.max(z - cz, minD)));
+  /* 不做淡出：相机走到板子跟前之前它的内缘就已经滑出画面。
+     深度触到钳位后直接隐藏并 display: none，释放超大 GPU 合成纹理 */
+  const visible = useTransform(camDepth, (cz) => (z - cz > minD ? 1 : 0));
+  const display = useTransform(visible, (v) => (v > 0 ? "block" : "none"));
   const transform = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${feetY}px`;
   /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微 3D 倾斜 */
@@ -590,6 +601,7 @@ function CorridorStation({
         width: pw,
         height: ph,
         opacity: visible,
+        display,
         transform,
         transformOrigin: "50% 100%",
       }}
@@ -618,8 +630,14 @@ function CorridorStation({
       {/* 可点击的作品集群：壁灯 + 带框展品（hover 亮灯 + 缓动放大 + 3D 倾斜） */}
       <button
         type="button"
+        onPointerDown={(ev) => {
+          downPos.current = { x: ev.clientX, y: ev.clientY };
+        }}
         onClick={(ev) => {
           if (!DETAIL_ENABLED) return;
+          if (downPos.current && Math.hypot(ev.clientX - downPos.current.x, ev.clientY - downPos.current.y) > 7) {
+            return;
+          }
           const img = ev.currentTarget.querySelector<HTMLElement>("[data-art]");
           if (!img) return;
           /* 量画框在舞台容器内的矩形；hover 放大 1.02 的那点要扣掉，翻回来落位才严丝合缝 */
@@ -639,6 +657,7 @@ function CorridorStation({
         }}
         onMouseLeave={() => setHover(false)}
         onPointerMove={(ev) => {
+          if (mobile) return;
           const r = ev.currentTarget.getBoundingClientRect();
           const dx = (ev.clientX - r.left) / r.width - 0.5;
           const dy = (ev.clientY - r.top) / r.height - 0.5;
@@ -647,6 +666,7 @@ function CorridorStation({
           artScale.set(1.02);
         }}
         onPointerLeave={() => {
+          if (mobile) return;
           artRX.set(0);
           artRY.set(0);
           artScale.set(1);
@@ -670,7 +690,7 @@ function CorridorStation({
             height: lampH,
           }}
         >
-          <WallLamp hover={hover || (frame.vw < 560 && enabled)} width={lampW} height={lampH} />
+          <WallLamp hover={hover || (mobile && enabled)} width={lampW} height={lampH} />
         </div>
         <motion.img
           data-art=""
@@ -683,10 +703,10 @@ function CorridorStation({
             top: artTop - lampTop,
             width: aw,
             height: ah,
-            rotateX: artRX,
-            rotateY: artRY,
-            scale: artScale,
-            transformPerspective: 900,
+            rotateX: mobile ? undefined : artRX,
+            rotateY: mobile ? undefined : artRY,
+            scale: mobile ? undefined : artScale,
+            transformPerspective: mobile ? undefined : 900,
             opacity: artHidden ? 0 : 1,
             filter: hover ? "brightness(1.08)" : "brightness(1)",
             transition: "filter 0.35s ease",
@@ -735,20 +755,23 @@ function usePieceMotion(
   worldXd: number,
   frame: ShellFrame,
   mode: "fade" | "cut" = "fade",
+  cutDist = 21,
 ) {
+  const minD = mode === "cut" ? cutDist : 44;
   const x = useTransform([camDepth, camX], (v: number[]) => {
     const [cz, cx] = v;
-    return (worldXd - cx) * frame.g * scaleOf(z, cz);
+    return (worldXd - cx) * frame.g * (FOCAL / Math.max(z - cz, minD));
   });
-  const scale = useTransform(camDepth, (cz) => scaleOf(z, cz));
+  const scale = useTransform(camDepth, (cz) => FOCAL / Math.max(z - cz, minD));
   const opacity = useTransform(camDepth, (cz) => {
     const d = z - cz;
-    if (mode === "cut") return d > 21 ? 1 : 0;
+    if (mode === "cut") return d > cutDist ? 1 : 0;
     if (d <= 44) return 0;
     if (d < 110) return (d - 44) / 66;
     return 1;
   });
-  return { x, scale, opacity };
+  const display = useTransform(opacity, (o) => (o > 0 ? "block" : "none"));
+  return { x, scale, opacity, display };
 }
 
 /** 走廊里的零散摆件：靠墙立在地上（离墙线一条缝，和展板一样） */
@@ -767,7 +790,7 @@ function CorridorProp({
   const a = PROP_ASSET[spec.kind];
   const H = a.h;
   const W = H * a.ratio;
-  const { x, scale, opacity } = usePieceMotion(
+  const { x, scale, opacity, display } = usePieceMotion(
     camDepth,
     camX,
     spec.z,
@@ -785,6 +808,7 @@ function CorridorProp({
         width: W * u,
         height: H * u,
         opacity,
+        display,
         transform: tf,
         transformOrigin: "50% 100%",
       }}
@@ -821,7 +845,7 @@ function CorridorColumn({
   const W = H * (322 / 1793);
   /* 独立立柱：站在墙前一个柱宽处的地板上，地脚线整条从柱身后面穿过、
      不碰柱础，柱础清楚地立在地上。柱高 340 > 走廊墙高 290，柱头探到天花线上方 */
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, z, side * (CO_WALL_X - W), frame);
+  const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, z, side * (CO_WALL_X - W), frame);
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
   return (
@@ -833,6 +857,7 @@ function CorridorColumn({
         width: W * u,
         height: H * u,
         opacity,
+        display,
         transform: tf,
         transformOrigin: "50% 100%",
       }}
@@ -862,7 +887,7 @@ function CorridorOval({
   const u = frame.g;
   const W = 181.5; // 大档原始尺寸（设计稿 px）
   const H = 56.75;
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, z, 0, frame);
+  const { x, scale, opacity, display } = usePieceMotion(camDepth, camX, z, 0, frame);
   const tf = useMotionTemplate`translate(-50%, -50%) translateX(${x}px) scale(${scale})`;
   /* 灯体贴在该深度的天花上 */
   const cy = useTransform(scale, (s) => frame.vpY - CO_WALL_H * u * s);
@@ -882,6 +907,7 @@ function CorridorOval({
         width: W * u,
         height: H * u,
         opacity,
+        display,
         transform: tf,
         transformOrigin: "50% 50%",
       }}
@@ -1009,6 +1035,7 @@ function CorridorEndWall({
   const { t } = useLanguage();
   const [doorHover, setDoorHover] = useState(false);
   const [doorPinned, setDoorPinned] = useState(false);
+  const downPos = useRef<{ x: number; y: number } | null>(null);
   const doorOpen = doorHover || doorPinned;
   const g = frame.g;
   const endZ = frame.vw < 560 ? CAM_END + 275 : EXIT_Z;
@@ -1118,7 +1145,13 @@ function CorridorEndWall({
         aria-label={t("lab.gallery.door")}
         onMouseEnter={() => setDoorHover(true)}
         onMouseLeave={() => setDoorHover(false)}
+        onPointerDown={(e) => {
+          downPos.current = { x: e.clientX, y: e.clientY };
+        }}
         onClick={(e) => {
+          if (downPos.current && Math.hypot(e.clientX - downPos.current.x, e.clientY - downPos.current.y) > 7) {
+            return;
+          }
           setDoorPinned(true);
           onEnterDoor(e.currentTarget.getBoundingClientRect());
         }}
@@ -1827,9 +1860,10 @@ export default function LabPage() {
   /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场只放最后"缩小归位"那一段 */
   const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
   const [introPlaying, setIntroPlaying] = useState(true);
-  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧 */
+  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧；
+     手机端只暖 HTTP 缓存，避免进画廊滑动时占用数十 MB 额外位图显存 */
   useEffect(() => {
-    loadImages([
+    const urls = [
       ...STATION_CFG.map((c) => `/assets/lab/${c.mask}.png`),
       "/assets/lab/detail/bg-stone-wall.webp",
       "/assets/lab/detail/bg-stone-mark.webp",
@@ -1838,7 +1872,12 @@ export default function LabPage() {
       "/assets/lab/prop-thinker.webp",
       "/assets/life/seg03/lab-door.webp",
       "/assets/life/seg03/lab-door-open.webp",
-    ]);
+    ];
+    if (isMobileView()) {
+      void warmBytes(urls, 4);
+      return;
+    }
+    void loadImages(urls);
   }, []);
   /* 开场播完再在后台把详情页的画、纸、照片都拉好，点画框翻面时框里不会空一下 */
   useEffect(() => {
@@ -1866,8 +1905,9 @@ export default function LabPage() {
     BEATS.forEach((b, i) => {
       if (p >= b.d - 0.05) idx = i + 1;
     });
-    setActive(idx);
-    setInCorridor(p >= CORRIDOR_Q);
+    setActive((prev) => (prev === idx ? prev : idx));
+    const nextCorridor = p >= CORRIDOR_Q;
+    setInCorridor((prev) => (prev === nextCorridor ? prev : nextCorridor));
   });
   /* 沿墙平移快到走廊轴、满屏都是奶油黄之后，顶栏换黑字 */
   const [inCorridor, setInCorridor] = useState(false);
