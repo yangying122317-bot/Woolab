@@ -17,6 +17,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
+import { usePhoneHorizontalScroll } from "../device";
 import { useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
 import { isImageReady, loadImages } from "../components/life/preload";
@@ -1872,6 +1873,8 @@ export default function LabPage() {
   const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
   const homeGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
+  /* 手机横屏下支持手指左右划动推进画廊走廊（电脑端不生效） */
+  usePhoneHorizontalScroll(!introPlaying && !open && !homeEntry);
 
   const enterHomeDoor = (r: DOMRect) => {
     if (open || homeEntry) return;

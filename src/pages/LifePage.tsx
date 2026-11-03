@@ -22,6 +22,7 @@ import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } 
 import type { DrinkChoice, RoomState } from "../state/roomState";
 import { playDrawer, playNavigate, playTaskDone, startAmbient, stopAmbient } from "../audio/sfx";
 import { config } from "../config";
+import { usePhoneHorizontalScroll } from "../device";
 import { useLanguage } from "../i18n/LanguageContext";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { isLifeFirstReady, preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
@@ -419,6 +420,8 @@ export default function LifePage() {
   /** 走进 LAB 门：镜头推进门洞 + 暖光漫满 → 跳转 /lab（Lab 页从同色暖光淡出） */
   const navigate = useNavigate();
   const [labEntry, setLabEntry] = useState<{ cx: number; cy: number } | null>(null);
+  /* 手机横屏下支持手指左右划动推进房间（电脑端不生效） */
+  usePhoneHorizontalScroll(!focus && !checklistOpen && !labEntry);
   const labGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(labGoTimer.current), []);
   const goLab = (cx: number, cy: number, scale: number) => {

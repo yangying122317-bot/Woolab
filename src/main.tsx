@@ -1,20 +1,78 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { isPhone } from "./device";
+import { isForcedGate, isPhone } from "./device";
+
+function PhoneShell({ Gate }: { Gate: ComponentType }) {
+  const [landscape, setLandscape] = useState(
+    () => window.innerWidth > window.innerHeight,
+  );
+  const [enteredLandscape, setEnteredLandscape] = useState(
+    () => window.innerWidth > window.innerHeight,
+  );
+  const [DesktopApp, setDesktopApp] = useState<ComponentType | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const isLand = window.innerWidth > window.innerHeight;
+      setLandscape(isLand);
+      if (isLand) setEnteredLandscape(true);
+    };
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (DesktopApp) return;
+    if (landscape) {
+      void import("./App").then((m) => setDesktopApp(() => m.default));
+      return;
+    }
+    const id = window.setTimeout(() => {
+      void import("./App").then((m) => setDesktopApp(() => m.default));
+    }, 1200);
+    return () => window.clearTimeout(id);
+  }, [landscape, DesktopApp]);
+
+  const showGate = !landscape || !DesktopApp;
+
+  return (
+    <>
+      {DesktopApp && enteredLandscape && <DesktopApp />}
+      {showGate && (
+        <div className="fixed inset-0 z-[200]">
+          <Gate />
+        </div>
+      )}
+    </>
+  );
+}
 
 async function bootstrap() {
   /*
-   * 在 import 桌面 App 之前分流。否则即使 App 最后只 return MobileGate，
-   * 手机仍会下载并解析 Home / HeroScene 和整套桌面路由。
+   * 桌面端（!isPhone()）完全走原有路径，直接加载 App。
+   * 手机端：竖屏显示信封引导页（MobileGate），横过来（landscape）自动进入完整主站 App。
    */
-  const Page = isPhone()
-    ? (await import("./components/MobileGate")).default
-    : (await import("./App")).default;
+  if (!isPhone()) {
+    const App = (await import("./App")).default;
+    createRoot(document.getElementById("root")!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    return;
+  }
 
+  const Gate = (await import("./components/MobileGate")).default;
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <Page />
+      {isForcedGate() ? <Gate /> : <PhoneShell Gate={Gate} />}
     </StrictMode>,
   );
 }

@@ -391,7 +391,8 @@ export default function AboutPage() {
         {flipReady && (
           <motion.div
             key="scroll-hint"
-            className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+            onClick={flip}
+            className="pointer-events-auto absolute inset-x-0 flex cursor-pointer items-center justify-center"
             style={{ bottom: SCROLL_HINT_BOTTOM * s, gap: 8 * s }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
