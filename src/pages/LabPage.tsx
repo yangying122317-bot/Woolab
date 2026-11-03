@@ -215,35 +215,38 @@ function EntranceWall({
         mobile={mobile}
         onHover={setLampOn}
       />
-      {/* 滚动提示：手绘小箭头（切图朝下，转 -90° 朝右，呼应先向右平移）+ ( Scroll )，
-          整组在画下方居中；箭头轻轻向右点 */}
-      <motion.img
-        src="/assets/lab/scroll-arrow.svg"
-        alt=""
-        draggable={false}
-        className="absolute select-none"
-        style={{
-          left: px(axisL - 34 - 7),
-          top: px(paintT + ENT_PAINT_H + 29 - 9.25),
-          width: px(14),
-          height: px(18.5),
-          rotate: -90,
-        }}
-        animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
-        transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
-      />
-      <span
-        className="font-hand absolute whitespace-nowrap"
-        style={{
-          left: px(axisL - 19),
-          top: px(paintT + ENT_PAINT_H + 20),
-          fontSize: px(14),
-          color: "#7E4218",
-          WebkitTextStroke: `${px(1)}px #7E4218`,
-        }}
-      >
-        {t(frame.vw < 560 ? "lab.entry.swipe" : "lab.entry.scroll")}
-      </span>
+      {/* 滚动提示：桌面端在画框正下方居中；手机端移至屏幕底部（见 LabPage 底部层） */}
+      {!mobile && (
+        <>
+          <motion.img
+            src="/assets/lab/scroll-arrow.svg"
+            alt=""
+            draggable={false}
+            className="absolute select-none"
+            style={{
+              left: px(axisL - 34 - 7),
+              top: px(paintT + ENT_PAINT_H + 29 - 9.25),
+              width: px(14),
+              height: px(18.5),
+              rotate: -90,
+            }}
+            animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
+            transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+          />
+          <span
+            className="font-hand absolute whitespace-nowrap"
+            style={{
+              left: px(axisL - 19),
+              top: px(paintT + ENT_PAINT_H + 20),
+              fontSize: px(14),
+              color: "#7E4218",
+              WebkitTextStroke: `${px(1)}px #7E4218`,
+            }}
+          >
+            {t("lab.entry.scroll")}
+          </span>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -1820,8 +1823,10 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
 /* ---------------- 页面 ---------------- */
 
 export default function LabPage() {
+  const { t } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
+  const mobileSwipeOpacity = useTransform(scrollYProgress, [0, 0.06], [1, 0]);
 
   /* 画廊是整页滚动，原生滚动条会露在右边；和 Life 一样把它藏掉（Lenis 照常工作） */
   useEffect(() => {
@@ -2003,6 +2008,33 @@ export default function LabPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.55, duration: 0.65, ease: "easeIn" }}
           />
+        )}
+
+        {isMobileView() && !introPlaying && (
+          <motion.div
+            className="pointer-events-none absolute inset-x-0 z-20 flex items-center justify-center"
+            style={{ bottom: 54, gap: 8, opacity: mobileSwipeOpacity }}
+          >
+            <motion.img
+              src="/assets/lab/scroll-arrow.svg"
+              alt=""
+              draggable={false}
+              className="select-none"
+              style={{ width: 15, height: 20, rotate: -90 }}
+              animate={{ x: [0, 4, 0], opacity: [1, 0.55, 1] }}
+              transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+            />
+            <span
+              className="font-hand whitespace-nowrap"
+              style={{
+                fontSize: 16,
+                color: "#7E4218",
+                WebkitTextStroke: "1px #7E4218",
+              }}
+            >
+              {t("lab.entry.swipe")}
+            </span>
+          </motion.div>
         )}
 
         <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
