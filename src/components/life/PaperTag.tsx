@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { isMobileView } from "../../device";
 
 /**
  * 奶油色小纸签：Life 页里所有"贴在屏幕上"的字都垫这一张——
@@ -25,10 +26,21 @@ export default function PaperTag({
   style?: CSSProperties;
   className?: string;
 }) {
+  const mobile = isMobileView();
   return (
     <span
-      className={`font-hand block whitespace-nowrap text-neutral-900 ${className}`}
-      style={{ ...PAPER_TAG, fontSize, lineHeight: 1.25, ...style }}
+      className={`font-hand block text-center text-neutral-900 ${
+        mobile ? "whitespace-normal" : "whitespace-nowrap"
+      } ${className}`}
+      style={{
+        ...PAPER_TAG,
+        fontSize: mobile && fontSize === "2.6vh" ? "1.95vh" : fontSize,
+        padding: mobile ? "0.75vh 1.6vh 0.9vh" : PAPER_TAG.padding,
+        maxWidth: mobile ? "86%" : undefined,
+        textWrap: mobile ? "balance" : undefined,
+        lineHeight: 1.25,
+        ...style,
+      }}
     >
       {children}
     </span>

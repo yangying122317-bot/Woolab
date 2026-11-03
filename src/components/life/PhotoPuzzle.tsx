@@ -140,7 +140,8 @@ export default function PhotoPuzzle({ done, active, onDone }: Props) {
       const target = targetOf(piece);
       const cx = px + piece.w / 2;
       const cy = py + piece.h / 2;
-      if (Math.hypot(cx - target.x, cy - target.y) < SNAP) {
+      const snapR = document.body.clientWidth < 560 ? 130 : SNAP;
+      if (Math.hypot(cx - target.x, cy - target.y) < snapR) {
         // 拼对了：从松手点吸附进目标位并旋正
         landing.current.set(idx, { x: px, y: py });
         playPaperSnap();

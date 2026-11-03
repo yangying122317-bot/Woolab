@@ -4,6 +4,7 @@ import NavBar, { NavLogo, navBarStyle } from "./NavBar";
 import MenuOverlay from "./MenuOverlay";
 import { warmHero } from "./HeroScene";
 import { warmMenu } from "../data/pageAssets";
+import { isMobileView } from "../device";
 import { usePeelToHome } from "./PageShift";
 import SceneToggle from "./SceneToggle";
 import { useDarkNav, useDetailOpen, useLogoOnlyNav, useNavHidden, usePlainLogo, usePlainNav } from "../state/chrome";
@@ -47,6 +48,7 @@ export default function TopNav() {
   const plainNav = usePlainNav();
   const plain = home || detail || lab || plainNav;
   const plainLogo = usePlainLogo() && !plain;
+  const mobileDrawerNav = plainLogo && isMobileView();
   /* 内页加载布盖着时只留 logo；首页开场白布盖着时整条都藏 */
   const logoOnly = useLogoOnlyNav();
   const navHidden = useNavHidden();
@@ -63,13 +65,36 @@ export default function TopNav() {
         className={`pointer-events-none fixed inset-x-0 top-0 ${detail ? "z-[55]" : "z-[45]"}`}
         style={{ mixBlendMode: plain ? "normal" : "difference" }}
       >
-        <NavBar color={navColor} menuOpen={false} onMenu={() => setOpen(true)} onLogo={onLogo} extra={extra} hideLogo={detail || plainLogo} logoOnly={logoOnly} hidden={navHidden} />
+        <NavBar
+          color={navColor}
+          menuOpen={false}
+          onMenu={() => setOpen(true)}
+          onLogo={onLogo}
+          extra={extra}
+          hideLogo={detail || plainLogo}
+          soundOnly={mobileDrawerNav}
+          logoOnly={logoOnly}
+          hidden={navHidden}
+        />
       </header>
-      {plainLogo && (
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex items-center" style={navBarStyle("#FFFFFF")}>
-          <NavLogo onClick={onLogo} />
-        </div>
-      )}
+      {plainLogo &&
+        (mobileDrawerNav ? (
+          <header className="pointer-events-none fixed inset-x-0 top-0 z-[45]">
+            <NavBar
+              color="#FFFFFF"
+              menuOpen={false}
+              onMenu={() => setOpen(true)}
+              onLogo={onLogo}
+              hideSound
+              logoOnly={logoOnly}
+              hidden={navHidden}
+            />
+          </header>
+        ) : (
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex items-center" style={navBarStyle("#FFFFFF")}>
+            <NavLogo onClick={onLogo} />
+          </div>
+        ))}
       {open && (
         <MenuOverlay
           navColor="#FFFFFF"

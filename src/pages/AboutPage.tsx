@@ -5,6 +5,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { playEject, playPhotoDrop, playShutter } from "../audio/sfx";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../components/IntroLoader";
 import { config } from "../config";
+import { getViewWidth } from "../device";
 import { A, CARD_H, CARD_W, FRAME_PAD, WINDOW, box, noiseBg, type Box } from "../components/about/geom";
 import MarkedText, { decoDelay } from "../components/about/MarkedText";
 import NextPage from "../components/about/NextPage";
@@ -69,7 +70,7 @@ const SCROLL_HINT_BOTTOM = 14;
 export default function AboutPage() {
   const { lang, pick, t } = useLanguage();
   const [vp, setVp] = useState(() => ({
-    w: window.innerWidth,
+    w: getViewWidth(),
     h: window.innerHeight,
   }));
   const [idx, setIdx] = useState(0);
@@ -83,7 +84,7 @@ export default function AboutPage() {
   };
 
   useEffect(() => {
-    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const on = () => setVp({ w: getViewWidth(), h: window.innerHeight });
     window.addEventListener("resize", on);
     return () => {
       window.removeEventListener("resize", on);
@@ -101,13 +102,18 @@ export default function AboutPage() {
     };
   }, []);
 
-  const s = Math.min(vp.w / FW, vp.h / FH);
+  const mobile = vp.w < 560;
+  /* 桌面端按 720×450 居中；手机竖屏下相机+相纸居中（中点 y≈221），上方放第一段批注+向下箭头，下方放向上箭头+第二段批注 */
+  const s = mobile
+    ? Math.min(vp.w / 335, (vp.h - 120) / 570)
+    : Math.min(vp.w / FW, vp.h / FH);
   const ox = (vp.w - FW * s) / 2;
-  const oy = (vp.h - FH * s) / 2;
+  const oy = mobile ? (vp.h - 442 * s) / 2 : (vp.h - FH * s) / 2;
   /** 相纸要掉到屏幕底下看不见为止（稿单位） */
   const dropTo = (vp.h - oy) / s - PHOTO.y + 80;
   /** 底部序号 / 小标题贴着屏幕底边（比稿高的窄屏上别浮在半空），离底边和稿里一样远 */
-  const footY = (vp.h - oy) / s - (FH - FOOT.y);
+  const footY = mobile ? (vp.h - oy - 34) / s : (vp.h - oy) / s - (FH - FOOT.y);
+  const footInset = mobile ? 24 / s : FOOT.inset;
 
   const shot = aboutShots[idx];
   const last = idx === aboutShots.length - 1;
@@ -312,7 +318,7 @@ export default function AboutPage() {
           </motion.button>
         </motion.div>
 
-        {/* 两边的手写标注：显影完擦出来，落纸时淡掉 */}
+        {/* 两边的手写标注：桌面端在相纸左右两侧；手机竖屏下按参考稿排在相机上方与相纸下方，配上下指向箭头 */}
         <AnimatePresence>
           {showNotes && (
             <motion.div
@@ -320,25 +326,62 @@ export default function AboutPage() {
               className="pointer-events-none absolute inset-0"
               exit={{ opacity: 0, transition: { duration: 0.25 } }}
             >
-              <Note
-                text={pick(shot.note.left)}
-                cx={NOTE_L.cx}
-                y={NOTE_L.y}
-                w={NOTE_L.w}
-                hand="font-hand"
-                arrow={{ src: `${A}/arrow-l.png`, box: ARROW_L, from: "left" }}
-                delay={0}
-              />
-              {/* 右边标注下面压着箭头：稿是 3 行，多出来的行往上长，别盖到箭头 */}
-              <Note
-                text={pick(shot.note.right)}
-                cx={NOTE_R.cx}
-                y={NOTE_R.y - Math.max(0, pick(shot.note.right).split("\n").length - 3) * NOTE_LH}
-                w={NOTE_R.w}
-                hand="font-hand"
-                arrow={{ src: `${A}/arrow-r.png`, box: ARROW_R, from: "right" }}
-                delay={0.35}
-              />
+              {mobile ? (
+                (() => {
+                  const topText = pick(shot.note.left);
+                  const botText = pick(shot.note.right);
+                  const topLines = topText.split("\n").length;
+                  const topY = 5 - topLines * (12.5 * 1.35);
+                  const topArrowDelay = decoDelay(topText, 0) + 0.15;
+                  const botArrowDelay = decoDelay(botText, 0.35) + 0.15;
+                  return (
+                    <>
+                      <Note
+                        text={topText}
+                        cx={360}
+                        y={topY}
+                        w={300}
+                        fontSize={12.5}
+                        hand="font-hand"
+                        delay={0}
+                      />
+                      <VerticalArrow x={360} y={13} dir="down" delay={topArrowDelay} />
+                      <VerticalArrow x={360} y={398} dir="up" delay={botArrowDelay} />
+                      <Note
+                        text={botText}
+                        cx={360}
+                        y={440}
+                        w={300}
+                        fontSize={12.5}
+                        hand="font-hand"
+                        delay={0.35}
+                      />
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <Note
+                    text={pick(shot.note.left)}
+                    cx={NOTE_L.cx}
+                    y={NOTE_L.y}
+                    w={NOTE_L.w}
+                    hand="font-hand"
+                    arrow={{ src: `${A}/arrow-l.png`, box: ARROW_L, from: "left" }}
+                    delay={0}
+                  />
+                  {/* 右边标注下面压着箭头：稿是 3 行，多出来的行往上长，别盖到箭头 */}
+                  <Note
+                    text={pick(shot.note.right)}
+                    cx={NOTE_R.cx}
+                    y={NOTE_R.y - Math.max(0, pick(shot.note.right).split("\n").length - 3) * NOTE_LH}
+                    w={NOTE_R.w}
+                    hand="font-hand"
+                    arrow={{ src: `${A}/arrow-r.png`, box: ARROW_R, from: "right" }}
+                    delay={0.35}
+                  />
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -349,7 +392,7 @@ export default function AboutPage() {
             key={`n-${idx}`}
             className="font-look absolute whitespace-nowrap"
             style={{
-              left: FOOT.inset - ox / s,
+              left: footInset - ox / s,
               top: footY,
               fontSize: 12,
               lineHeight: 1.2,
@@ -368,7 +411,7 @@ export default function AboutPage() {
             key={`t-${idx}-${lang}`}
             className="font-look absolute whitespace-nowrap"
             style={{
-              right: FOOT.inset - ox / s,
+              right: footInset - ox / s,
               top: footY,
               fontSize: 12,
               lineHeight: 1.2,
@@ -385,13 +428,13 @@ export default function AboutPage() {
       </div>
       </motion.div>
 
-      {/* 最后一张出完：屏幕底部正中的滚动提示，和 Lab 入口那组一样——手绘小箭头 + ( 滚动 )，
-          横排、字带描边加粗；这里箭头朝下（往下滚），贴屏幕底边、不跟稿走 */}
+      {/* 最后一张出完：屏幕底部正中的滚动提示，点一下或往下滚都可翻页 */}
       <AnimatePresence>
         {flipReady && (
           <motion.div
             key="scroll-hint"
-            className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+            onClick={flip}
+            className="pointer-events-auto absolute inset-x-0 flex cursor-pointer items-center justify-center"
             style={{ bottom: SCROLL_HINT_BOTTOM * s, gap: 8 * s }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -520,6 +563,7 @@ function Note({
   cx,
   y,
   w,
+  fontSize = 12,
   hand,
   arrow,
   delay,
@@ -528,17 +572,20 @@ function Note({
   cx: number;
   y: number;
   w: number;
+  fontSize?: number;
   hand: string;
-  arrow: { src: string; box: Box; from: "left" | "right" };
+  arrow?: { src: string; box: Box; from: "left" | "right" };
   delay: number;
 }) {
   const decoAt = decoDelay(text, delay);
-  const arrowWipe = {
-    hidden: {
-      clipPath: arrow.from === "left" ? "inset(-6px 100% -6px -6px)" : "inset(-6px -6px -6px 100%)",
-    },
-    shown: { clipPath: "inset(-6px -6px -6px -6px)" },
-  };
+  const arrowWipe = arrow
+    ? {
+        hidden: {
+          clipPath: arrow.from === "left" ? "inset(-6px 100% -6px -6px)" : "inset(-6px -6px -6px 100%)",
+        },
+        shown: { clipPath: "inset(-6px -6px -6px -6px)" },
+      }
+    : null;
 
   return (
     <>
@@ -548,20 +595,66 @@ function Note({
         y={y}
         w={w}
         className={hand}
-        fontSize={12}
+        fontSize={fontSize}
         color="#111"
         tone="dark"
         delay={delay}
       />
-      <motion.div
-        className="absolute"
-        style={box(arrow.box)}
-        initial={arrowWipe.hidden}
-        animate={arrowWipe.shown}
-        transition={{ duration: 0.45, delay: decoAt + 0.2, ease: "easeOut" }}
-      >
-        <img src={arrow.src} alt="" draggable={false} className="block h-full w-full max-w-none" />
-      </motion.div>
+      {arrow && arrowWipe && (
+        <motion.div
+          className="absolute"
+          style={box(arrow.box)}
+          initial={arrowWipe.hidden}
+          animate={arrowWipe.shown}
+          transition={{ duration: 0.45, delay: decoAt + 0.2, ease: "easeOut" }}
+        >
+          <img src={arrow.src} alt="" draggable={false} className="block h-full w-full max-w-none" />
+        </motion.div>
+      )}
     </>
+  );
+}
+
+/** 手机竖屏上下两支竖向手绘小箭头（上方朝下指相机，下方朝上指相纸） */
+function VerticalArrow({
+  x,
+  y,
+  dir,
+  delay,
+}: {
+  x: number;
+  y: number;
+  dir: "down" | "up";
+  delay: number;
+}) {
+  const w = 13.5;
+  const h = 31;
+  return (
+    <div
+      className="absolute"
+      style={{
+        left: x - w / 2,
+        top: y,
+        width: w,
+        height: h,
+        transform: dir === "up" ? "rotate(180deg)" : undefined,
+      }}
+    >
+      <motion.div
+        className="h-full w-full"
+        style={{
+          backgroundColor: "#262626",
+          WebkitMaskImage: "url(/assets/lab/detail/arrow-down.svg)",
+          maskImage: "url(/assets/lab/detail/arrow-down.svg)",
+          WebkitMaskSize: "100% 100%",
+          maskSize: "100% 100%",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+        }}
+        initial={{ clipPath: "inset(0 0 100% 0)" }}
+        animate={{ clipPath: "inset(0 0 0% 0)" }}
+        transition={{ duration: 0.45, delay, ease: "easeOut" }}
+      />
+    </div>
   );
 }

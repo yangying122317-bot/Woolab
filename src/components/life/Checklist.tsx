@@ -4,6 +4,7 @@ import { lifeStations, type StationId } from "../../data/lifeStations";
 import { isAllDone, isListDone } from "../../state/roomState";
 import type { RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { getViewWidth } from "../../device";
 import { playStamp, playStrike } from "../../audio/sfx";
 import HandHint from "./HandHint";
 
@@ -144,8 +145,12 @@ const DRAWER_VH = 0.64;
 function useScale() {
   const calc = () => {
     const vh = window.innerHeight;
-    const dw = Math.min(vh * DRAWER_VH, window.innerWidth * 0.5);
-    const k = ((dw / (vh * DRAWER_VH)) * vh * SHEET_VH) / 255;
+    const vw = getViewWidth();
+    const mobile = vw < 560;
+    const dw = mobile ? vw * 0.85 : Math.min(vh * DRAWER_VH, vw * 0.5);
+    const k = mobile
+      ? Math.min((dw * 0.85) / 210, (vh * 0.76) / 320)
+      : ((dw / (vh * DRAWER_VH)) * vh * SHEET_VH) / 255;
     return { vh, dw, k };
   };
   const [s, setS] = useState(calc);

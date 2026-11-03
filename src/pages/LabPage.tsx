@@ -17,6 +17,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
+import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
 import { useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
 import { isImageReady, loadImages } from "../components/life/preload";
@@ -145,21 +146,25 @@ function EntranceWall({
 }) {
   const { t } = useLanguage();
   const u = frame.g;
+  const mobile = frame.vw < 560;
+  const entW = mobile ? 1560 : ENT_W;
+  const entH = entW / (3194 / 1730);
+  const entCx = -CO_WALL_X - entW / 2;
   const [lampOn, setLampOn] = useState(false);
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, ENT_Z, ENT_CX, frame, "cut");
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, ENT_Z, entCx, frame, "cut");
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   /* 主墙脚线落在该深度的地脚线上；切图里转角条比主墙脚再往下伸一截 */
   const top = useMotionTemplate`${useTransform(
     scale,
-    (s) => frame.vpY + (CO_WALL_H + ENT_H * (1 - ENT_FOOT)) * u * s,
+    (s) => frame.vpY + (CO_WALL_H + entH * (1 - ENT_FOOT)) * u * s,
   )}px`;
   /* 墙过身后虽然透明，但已被放大到盖住整屏——必须连指针一起关掉，
      否则会挡住后面展板的 hover/点击 */
   const pe = useTransform(opacity, (o) => (o > 0 ? ("auto" as const) : ("none" as const)));
   /* 局部坐标（世界 px）：画挂在相机起点正前方 → 局部 x = 起点相对墙左缘；
      画心在视线上方 55 */
-  const floorL = ENT_H * ENT_FOOT; // 主墙脚线
-  const axisL = ENT_CAM_X0 - (ENT_CX - ENT_W / 2);
+  const floorL = entH * ENT_FOOT; // 主墙脚线
+  const axisL = ENT_CAM_X0 - (entCx - entW / 2);
   const paintL = axisL - ENT_PAINT_W / 2;
   const paintT = floorL - CO_WALL_H - 55 - ENT_PAINT_H / 2;
   /* 壁灯：WallLamp 画布 616 宽里灯具 179 宽，灯具要 44 世界px → 画布 152×86，
@@ -178,8 +183,8 @@ function EntranceWall({
       style={{
         left: "50%",
         top,
-        width: px(ENT_W),
-        height: px(ENT_H),
+        width: px(entW),
+        height: px(entH),
         opacity,
         transform: tf,
         transformOrigin: "50% 100%",
@@ -254,7 +259,8 @@ function EntranceStatue({
   frame: ShellFrame;
 }) {
   const u = frame.g;
-  const { x, scale, opacity } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * STATUE_DX, frame, "cut");
+  const dx = frame.vw < 560 ? 122 : STATUE_DX;
+  const { x, scale, opacity } = usePieceMotion(camDepth, camX, STATUE_Z, ENT_CAM_X0 + side * dx, frame, "cut");
   const tf = useMotionTemplate`translate(-50%, -100%) translateX(${x}px) scale(${scale})`;
   const top = useMotionTemplate`${useTransform(scale, (s) => frame.vpY + CO_WALL_H * u * s)}px`;
   return (
@@ -319,14 +325,15 @@ const PANEL_INSET = 15;
 /** 板中心离走廊轴的距离 */
 const PANEL_CX = CO_WALL_X - PANEL_W / 2 - PANEL_INSET;
 const STATION_SIDE: (1 | -1)[] = [-1, 1, -1, 1];
-/** 相机走到展板旁停下时，与展板的深度差（越小板越大）。340 → 板约占 40vw 宽、58vh 高，
-    板脚和脚边摆件都落在画面里；停得稍远，到站转头的幅度也小一点 */
+/** 相机走到展板旁停下时，与展板的深度差（越小板越大）。桌面端 340，手机竖屏下贴近到 200 让画框放大突出 */
 const DWELL_DIST = 340;
+const MOBILE_DWELL_DIST = 200;
 const STATION_GAP = 380;
 /** 第一站放在进走廊之后 */
 const STATION_Z = STATION_SIDE.map((_, i) => 980 + i * STATION_GAP);
 /** 每站的停留相机深度 */
 const VIEW_Z = STATION_Z.map((z) => z - DWELL_DIST);
+const MOBILE_VIEW_Z = STATION_Z.map((z) => z - MOBILE_DWELL_DIST);
 /** 走完最后一站再往前一段，尽头墙迎面放大到填满画面中央 */
 const CAM_END = VIEW_Z[3] + STATION_GAP;
 const EXIT_Z = CAM_END + 230;
@@ -338,11 +345,8 @@ const EXIT_Z = CAM_END + 230;
 const ENT_Z = 487; // 墙的深度：主墙脚落在画面 82% 高
 /** 墙宽：进场迈步起点（相机在 -60、墙缩到 0.73）时也要盖满整屏宽 */
 const ENT_W = 1200;
-const ENT_H = ENT_W / (3194 / 1730);
 /** 切图里主墙脚线在 93.5% 高，右侧转角条再往下伸到底 */
 const ENT_FOOT = 0.935;
-/** 墙块右缘（转角条外侧）接在走廊左墙线上 */
-const ENT_CX = -CO_WALL_X - ENT_W / 2;
 /** 相机起点横向（世界 px）：整个转角条（切图右侧 12.8%，≈154 世界 px）都在画面右缘外——
     进场迈步起点时转角条内缘也至少在 377（半屏 360 之外） */
 const ENT_CAM_X0 = -CO_WALL_X - 650;
@@ -402,40 +406,59 @@ const CAM_Z_VALS = [
   VIEW_Z[3],
   CAM_END,
 ];
+const MOBILE_CAM_Z_VALS = [
+  0,
+  0,
+  MOBILE_VIEW_Z[0],
+  MOBILE_VIEW_Z[0],
+  MOBILE_VIEW_Z[1],
+  MOBILE_VIEW_Z[1],
+  MOBILE_VIEW_Z[2],
+  MOBILE_VIEW_Z[2],
+  MOBILE_VIEW_Z[3],
+  MOBILE_VIEW_Z[3],
+  CAM_END,
+];
 
 /** 到站时"转头"看展板：整幅画面（连消失点）朝展板那侧平移——
     小角度转头在透视上就等于整幅画面平移。转头量 = 停留时板中心离走廊轴的屏距，
     转完展品正好停在页面水平正中。两站之间不"回正—直走—再转"，
     而是从上一站离开到下一站到达，用一条贯穿全程的平滑曲线从一侧过渡到另一侧，
     像人边走边自然转头，中途不停顿 */
-const TURN_D = PANEL_CX * (FOCAL / DWELL_DIST); // 设计稿 px
 const TURN_RAMP = 150;
 const smooth = (t: number) => {
   const k = t < 0 ? 0 : t > 1 ? 1 : t;
   return k * k * (3 - 2 * k);
 };
 /** 返回设计稿 px（调用方乘 frame.g） */
-function camTurnOf(cz: number) {
-  const turnAt = (i: number) => -STATION_SIDE[i] * TURN_D;
-  const last = VIEW_Z.length - 1;
+function camTurnOf(cz: number, mobile = false) {
+  const dwell = mobile ? MOBILE_DWELL_DIST : DWELL_DIST;
+  const vz = mobile ? MOBILE_VIEW_Z : VIEW_Z;
+  const turnD = PANEL_CX * (FOCAL / dwell);
+  const turnAt = (i: number) => -STATION_SIDE[i] * turnD;
+  const last = vz.length - 1;
   /* 进走廊：到第一站前 TURN_RAMP 内转向第一块板 */
-  if (cz <= VIEW_Z[0]) return turnAt(0) * smooth((cz - (VIEW_Z[0] - TURN_RAMP)) / TURN_RAMP);
+  if (cz <= vz[0]) return turnAt(0) * smooth((cz - (vz[0] - TURN_RAMP)) / TURN_RAMP);
   /* 出走廊：离开最后一站后在 TURN_RAMP 内回正，正对尽头墙 */
-  if (cz >= VIEW_Z[last]) return turnAt(last) * (1 - smooth((cz - VIEW_Z[last]) / TURN_RAMP));
+  if (cz >= vz[last]) return turnAt(last) * (1 - smooth((cz - vz[last]) / TURN_RAMP));
   for (let i = 0; i < last; i++) {
-    if (cz < VIEW_Z[i + 1]) {
-      const t = smooth((cz - VIEW_Z[i]) / (VIEW_Z[i + 1] - VIEW_Z[i]));
+    if (cz < vz[i + 1]) {
+      const t = smooth((cz - vz[i]) / (vz[i + 1] - vz[i]));
       return turnAt(i) + (turnAt(i + 1) - turnAt(i)) * t;
     }
   }
   return 0;
 }
 
-type ShellFrame = { g: number; vpX: number; vpY: number };
-/** 走廊画布坐标系：cover 铺满视口后 设计稿 px → 屏幕 px 的比例和消失点屏幕位置 */
+type ShellFrame = { g: number; vpX: number; vpY: number; vw: number; vh: number };
+/** 走廊画布坐标系：桌面端按 cover 铺满视口；手机竖屏下按屏宽缩放镜头，让两座入口雕像、展板与尽头门完整收进竖屏 */
 function shellFrame(vw: number, vh: number): ShellFrame {
+  if (vw < 560) {
+    const g = vw / 345;
+    return { g, vpX: vw / 2, vpY: vh * 0.54, vw, vh };
+  }
   const g = Math.max(vw / 720, vh / 450);
-  return { g, vpX: vw / 2, vpY: (vh - 450 * g) / 2 + CO_VP_D * g };
+  return { g, vpX: vw / 2, vpY: (vh - 450 * g) / 2 + CO_VP_D * g, vw, vh };
 }
 
 /** 相机贴脸时深度钳位：钳得越低，路过的东西能放得越大、越保证滑出画面 */
@@ -479,13 +502,15 @@ const STATION_CFG: StationCfg[] = [
     四站抬升量相同：进走廊时抬起来、走廊里保持、出走廊回正，路上不跳 */
 const PANEL_WORLD_H = PANEL_PH * (PANEL_W / PANEL_PW);
 const ART_CENTER_ABOVE_FLOOR = PANEL_WORLD_H * (1 - (ART_TOP + ART_H / 2) / PANEL_PH);
-const TILT_D = CO_VP_D - 225 + (CO_WALL_H - ART_CENTER_ABOVE_FLOOR) * (FOCAL / DWELL_DIST); // 设计稿 px
 /** 返回设计稿 px（画面上抬为正，调用方乘 frame.g） */
-function camTiltOf(cz: number) {
-  const last = VIEW_Z.length - 1;
-  if (cz <= VIEW_Z[0]) return TILT_D * smooth((cz - (VIEW_Z[0] - TURN_RAMP)) / TURN_RAMP);
-  if (cz >= VIEW_Z[last]) return TILT_D * (1 - smooth((cz - VIEW_Z[last]) / TURN_RAMP));
-  return TILT_D;
+function camTiltOf(cz: number, mobile = false) {
+  const dwell = mobile ? MOBILE_DWELL_DIST : DWELL_DIST;
+  const vz = mobile ? MOBILE_VIEW_Z : VIEW_Z;
+  const tiltD = CO_VP_D - 225 + (CO_WALL_H - ART_CENTER_ABOVE_FLOOR) * (FOCAL / dwell);
+  const last = vz.length - 1;
+  if (cz <= vz[0]) return tiltD * smooth((cz - (vz[0] - TURN_RAMP)) / TURN_RAMP);
+  if (cz >= vz[last]) return tiltD * (1 - smooth((cz - vz[last]) / TURN_RAMP));
+  return tiltD;
 }
 
 /** 单站展位：世界坐标固定，画面姿态由「它和相机的深度差」统一换算 */
@@ -597,12 +622,13 @@ function CorridorStation({
           if (!DETAIL_ENABLED) return;
           const img = ev.currentTarget.querySelector<HTMLElement>("[data-art]");
           if (!img) return;
-          /* 量画框在屏幕上的矩形；hover 放大 1.02 的那点要扣掉，翻回来落位才严丝合缝 */
+          /* 量画框在舞台容器内的矩形；hover 放大 1.02 的那点要扣掉，翻回来落位才严丝合缝 */
           const r = img.getBoundingClientRect();
+          const ox = document.body.getBoundingClientRect().left;
           const k = artScale.get();
           const w = r.width / k;
           const h = r.height / k;
-          const rect = new DOMRect(r.left + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h);
+          const rect = new DOMRect(r.left - ox + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h);
           playNavigate();
           onOpen(project, rect);
         }}
@@ -644,7 +670,7 @@ function CorridorStation({
             height: lampH,
           }}
         >
-          <WallLamp hover={hover} width={lampW} height={lampH} />
+          <WallLamp hover={hover || (frame.vw < 560 && enabled)} width={lampW} height={lampH} />
         </div>
         <motion.img
           data-art=""
@@ -985,7 +1011,8 @@ function CorridorEndWall({
   const [doorPinned, setDoorPinned] = useState(false);
   const doorOpen = doorHover || doorPinned;
   const g = frame.g;
-  const scale = useTransform(camDepth, (cz) => scaleOf(EXIT_Z, cz));
+  const endZ = frame.vw < 560 ? CAM_END + 275 : EXIT_Z;
+  const scale = useTransform(camDepth, (cz) => scaleOf(endZ, cz));
   /* 尽头墙画的是走廊断面（四角在角线上）。相机横向偏离时角线会变斜率，
      让墙随之横移 (1 − 半墙高/墙高)·cx，四角仍恰好落在角线上 */
   const x = useTransform([scale, camX], (v: number[]) => {
@@ -1179,15 +1206,16 @@ function FakeCorridor({
   onEnterDoor: (rect: DOMRect) => void;
 }) {
   const [vp, setVp] = useState(() => ({
-    w: window.innerWidth,
+    w: getViewWidth(),
     h: window.innerHeight,
   }));
   useEffect(() => {
-    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const onResize = () => setVp({ w: getViewWidth(), h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const { w: vw, h: vh } = vp;
+  const mobile = vw < 560;
   /* 所有物件按走廊画布坐标系落位：任何长宽比下都贴着同一套角线 */
   const frame = shellFrame(vw, vh);
   /* 板内坐标 PANEL_PW 宽 → 世界里的 PANEL_W（设计稿 px） */
@@ -1195,7 +1223,7 @@ function FakeCorridor({
 
   /* 相机深度 = 滚动节拍深度（过阻尼弹簧：滚轮只推目标值，相机带惯性地追——
      推一下滑一段、稳稳停在节拍点）+ 进场时的一小段迈步（introZ 从负值回到 0） */
-  const qDepth = useTransform(q, CAM_Z_KEYS, CAM_Z_VALS);
+  const qDepth = useTransform(q, CAM_Z_KEYS, mobile ? MOBILE_CAM_Z_VALS : CAM_Z_VALS);
   const qDepthSoft = useSpring(qDepth, { stiffness: 60, damping: 20, mass: 0.9 });
   const camDepth = useTransform([qDepthSoft, introZ], (v: number[]) => v[0] + v[1]);
   /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
@@ -1203,9 +1231,9 @@ function FakeCorridor({
   const camX = useSpring(qX, { stiffness: 60, damping: 20, mass: 0.9 });
 
   /* 到站转头：整幅走廊（角线、尽头墙、柱、灯、展板一起）平移 */
-  const turnX = useTransform(camDepth, (cz) => camTurnOf(cz) * frame.g);
+  const turnX = useTransform(camDepth, (cz) => camTurnOf(cz, mobile) * frame.g);
   /* 到站低头：整幅走廊上抬，画框落到竖直正中 */
-  const turnY = useTransform(camDepth, (cz) => -camTiltOf(cz) * frame.g);
+  const turnY = useTransform(camDepth, (cz) => -camTiltOf(cz, mobile) * frame.g);
 
   /* 所有世界物件按深度从远到近排序渲染：近的永远盖住远的，遮挡关系交给一个列表管 */
   const pieces: { z: number; key: string; el: ReactNode }[] = [
@@ -1312,7 +1340,7 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
   const [cur, setCur] = useState(index);
   const curProject = labProjects[cur];
   const [phase, setPhase] = useState<FlipPhase>("flip");
-  const [vp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const [vp] = useState(() => ({ w: getViewWidth(), h: window.innerHeight }));
 
   /* 卡片中心、放大后要滑到的屏幕正中 */
   const cx = rect.left + rect.width / 2;
@@ -1487,7 +1515,7 @@ type IntroRect = { left: number; top: number; width: number; height: number };
  * 缩小归位时金框才逐渐进入视野——对应参考站邮票齿孔边框长出来的效果。
  */
 function introBigRect(): IntroRect {
-  const vw = window.innerWidth;
+  const vw = getViewWidth();
   const vh = window.innerHeight;
   /* 1.04 轻微过扫，保证手绘画芯的不规则边缘不露出黑底 */
   const s = Math.max(vw / INTRO_INNER.w, vh / INTRO_INNER.h) * 1.04;
@@ -1582,7 +1610,11 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         window.scrollTo(0, 0);
       }
       const el = document.getElementById("lab-entrance-painting");
-      if (el) setTarget(el.getBoundingClientRect());
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const ox = document.body.getBoundingClientRect().left;
+        setTarget({ left: r.left - ox, top: r.top, width: r.width, height: r.height });
+      }
       setPhase("shrink");
       /* 收尾在缩小真正开始后再计时：飞行 1.1s + 黑幕揭开的尾巴 */
       at(1400, finish);
@@ -1717,8 +1749,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         }
       />
 
-      {/* 开场文字：主组作为一个居中排版块（行距与字号同源 vw，
-          任何窗口比例下间距比例都与设计稿一致），底部介绍单独锚定底边；只从缩小开始的不渲染 */}
+      {/* 开场文字：主组作为一个居中排版块，手机竖屏下放大字号保证清晰可读 */}
       {!startAtShrink && (
         <>
           <div
@@ -1728,12 +1759,12 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
             <motion.p
               className="font-look text-[#FFF1C2]"
               style={{
-                fontSize: "1.7vw",
+                fontSize: isMobileView() ? "15px" : "1.7vw",
                 letterSpacing: "0.1em",
                 lineHeight: 1.3,
                 textShadow: INTRO_TEXT_SHADOW,
                 position: "relative",
-                top: "-0.7vw",
+                top: isMobileView() ? "-6px" : "-0.7vw",
               }}
               {...lineAnim(0.08)}
             >
@@ -1742,9 +1773,9 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
             <motion.p
               className="font-look text-[#FFF1C2]"
               style={{
-                fontSize: "5vw",
-                lineHeight: 1.1,
-                marginTop: "0.7vw",
+                fontSize: isMobileView() ? "38px" : "5vw",
+                lineHeight: 1.12,
+                marginTop: isMobileView() ? "6px" : "0.7vw",
                 textShadow: INTRO_TEXT_SHADOW,
                 whiteSpace: "pre-line",
               }}
@@ -1754,12 +1785,12 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
             </motion.p>
           </div>
           <motion.p
-            className="pointer-events-none absolute inset-x-0 text-center font-hand text-[#FFF1C2]"
+            className="pointer-events-none absolute inset-x-0 px-6 text-center font-hand text-[#FFF1C2]"
             style={{
               bottom: "10.3vh",
-              fontSize: "1.35vw",
+              fontSize: isMobileView() ? "14px" : "1.35vw",
               letterSpacing: "0.04em",
-              lineHeight: 1.4,
+              lineHeight: 1.45,
               textShadow: INTRO_TEXT_SHADOW,
               whiteSpace: "pre-line",
             }}
@@ -1872,6 +1903,8 @@ export default function LabPage() {
   const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
   const homeGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
+  /* 手机视图下支持左右划动/拖拽推进画廊走廊（电脑端不生效） */
+  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry);
 
   const enterHomeDoor = (r: DOMRect) => {
     if (open || homeEntry) return;
@@ -1886,11 +1919,11 @@ export default function LabPage() {
     lenis?.stop();
     sessionStorage.setItem(INTRO_SESSION_KEY, "1");
     sessionStorage.setItem("heroIntroPlayed", "1");
-    setHomeEntry({ cx, cy });
+    setHomeEntry({ cx: cx - wr.left, cy: cy - wr.top });
     void zoomControls.start({
       scale: 3,
-      x: window.innerWidth / 2 - cx,
-      y: window.innerHeight / 2 - cy,
+      x: wr.left + wr.width / 2 - cx,
+      y: wr.top + wr.height / 2 - cy,
       transition: { duration: 1.15, ease: [0.55, 0, 0.68, 0.4] },
     });
     homeGoTimer.current = window.setTimeout(() => {

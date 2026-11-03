@@ -1,5 +1,6 @@
 import { Component, Suspense, lazy, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { isMobilePreview } from "./device";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import IntroLoader, {
   INTRO_PREVIEW_PATH,
@@ -80,48 +81,63 @@ function WarmPages() {
   return null;
 }
 
+function MobilePreviewShell({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    if (!isMobilePreview()) {
+      document.documentElement.classList.remove("is-mobile-preview");
+      return;
+    }
+    document.documentElement.classList.add("is-mobile-preview");
+    return () => document.documentElement.classList.remove("is-mobile-preview");
+  }, []);
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
         <SmoothScrollProvider>
-          <IntroLoader />
-          <PageShiftProvider backdrop={<Home />} introPreview={<IntroPreview />}>
-            {/* 全站一份顶栏（logo / MENU / CN·EN / 喇叭）+ 吊牌目录 */}
-            <TopNav />
-            {/* 路由包在可位移的一层里：目录跳页时新页面从底下被拉上来 */}
-            <PageShiftFrame>
-              <WarmPages />
-              <PageErrorBoundary>
-                <Suspense fallback={<PageLoading />}>
-                  <Routes>
-                  {/* 首页由 PageShiftProvider 持久层直接渲染，确保掀页过渡前后是同一个实例 */}
-                  <Route path="/" element={null} />
-                  <Route path={INTRO_PREVIEW_PATH} element={null} />
-                  <Route path="/life" element={<LifePage />} />
+          <MobilePreviewShell>
+            <IntroLoader />
+            <PageShiftProvider backdrop={<Home />} introPreview={<IntroPreview />}>
+              {/* 全站一份顶栏（logo / MENU / CN·EN / 喇叭）+ 吊牌目录 */}
+              <TopNav />
+              {/* 路由包在可位移的一层里：目录跳页时新页面从底下被拉上来 */}
+              <PageShiftFrame>
+                <WarmPages />
+                <PageErrorBoundary>
+                  <Suspense fallback={<PageLoading />}>
+                    <Routes>
+                    {/* 首页由 PageShiftProvider 持久层直接渲染，确保掀页过渡前后是同一个实例 */}
+                    <Route path="/" element={null} />
+                    <Route path={INTRO_PREVIEW_PATH} element={null} />
+                    <Route path="/life" element={<LifePage />} />
 
-                  {/* 内页共用 Layout（顶部导航 + 语言切换） */}
-                  <Route element={<Layout />}>
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route path="/stories" element={<StoriesPage />} />
-                    <Route
-                      path="/stories/:seriesId"
-                      element={<StoryDetailPage />}
-                    />
-                    <Route path="/lab" element={<LabPage />} />
-                    <Route
-                      path="/lab/:projectId"
-                      element={<LabProjectPage />}
-                    />
-                    <Route path="/news" element={<NewsPage />} />
-                    {/* Downloads 已折叠进 Lab 详情的"带一份回家"段落 */}
-                    <Route path="/contact" element={<ContactPage />} />
-                  </Route>
-                  </Routes>
-                </Suspense>
-              </PageErrorBoundary>
-            </PageShiftFrame>
-          </PageShiftProvider>
+                    {/* 内页共用 Layout（顶部导航 + 语言切换） */}
+                    <Route element={<Layout />}>
+                      <Route path="/about" element={<AboutPage />} />
+                      <Route path="/stories" element={<StoriesPage />} />
+                      <Route
+                        path="/stories/:seriesId"
+                        element={<StoryDetailPage />}
+                      />
+                      <Route path="/lab" element={<LabPage />} />
+                      <Route
+                        path="/lab/:projectId"
+                        element={<LabProjectPage />}
+                      />
+                      <Route path="/news" element={<NewsPage />} />
+                      {/* Downloads 已折叠进 Lab 详情的"带一份回家"段落 */}
+                      <Route path="/contact" element={<ContactPage />} />
+                    </Route>
+                    </Routes>
+                  </Suspense>
+                </PageErrorBoundary>
+              </PageShiftFrame>
+            </PageShiftProvider>
+          </MobilePreviewShell>
         </SmoothScrollProvider>
       </BrowserRouter>
     </LanguageProvider>

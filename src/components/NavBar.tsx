@@ -13,7 +13,7 @@ import { isMuted, onMutedChange, playNavClick, setMuted } from "../audio/sfx";
  *
  * 同一份在两处用：平时贴在页面上；目录打开时黑底那层里再画一份白的（MENU 上多一圈手绘圈）。
  */
-export const MU = "min(0.138889vw, 0.222222vh)";
+export const MU = "var(--mu-unit, min(0.138889vw, 0.222222vh))";
 
 /** 稿单位换算：mu(25) → calc(var(--mu) * 25) */
 export const mu = (n: number) => `calc(var(--mu) * ${n})`;
@@ -157,8 +157,8 @@ export const navBarStyle = (color: string): CSSProperties => ({
   ["--mu" as string]: MU,
   /* 稿上是 72，等比放到大屏上顶部空得太多，收到 52（文字中心 ≈ 26 个稿单位） */
   height: mu(52),
-  paddingLeft: mu(25),
-  paddingRight: mu(25),
+  paddingLeft: `calc(var(--mu) * var(--nav-pad, 25))`,
+  paddingRight: `calc(var(--mu) * var(--nav-pad, 25))`,
   color,
 });
 
@@ -169,6 +169,8 @@ export default function NavBar({
   onLogo,
   extra,
   hideLogo = false,
+  hideSound = false,
+  soundOnly = false,
   logoOnly = false,
   hidden = false,
   className = "",
@@ -184,6 +186,10 @@ export default function NavBar({
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
   hideLogo?: boolean;
+  /** 隐藏最右边的喇叭（手机端牛皮抽屉盖住左 85% 时，纯白层只画 logo + Menu + 中/EN） */
+  hideSound?: boolean;
+  /** 只保留最右边的喇叭（配合 hideSound，在混合层里单画抽屉外的黑喇叭） */
+  soundOnly?: boolean;
   /** 只留 logo，右边那组先藏着（内页加载页盖着的时候），放开后淡进来 */
   logoOnly?: boolean;
   /** 整条都藏着、不接鼠标（首页开场白布盖着的时候），放开后整条淡进来 */
@@ -204,57 +210,59 @@ export default function NavBar({
       transition={{ duration: hidden ? 0 : 0.6, ease: "easeOut" }}
     >
       {/* 左：logo，点回首页 */}
-      {hideLogo ? <span aria-hidden /> : <NavLogo disabled={hidden} onClick={onLogo} />}
+      {hideLogo || soundOnly ? <span aria-hidden /> : <NavLogo disabled={hidden} onClick={onLogo} />}
 
       {/* 右：MENU / CN · EN / 喇叭 */}
       <motion.div
         className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
-        style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: mu(26) }}
+        style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: `calc(var(--mu) * var(--nav-gap, 26))` }}
         initial={false}
         animate={{ opacity: rightOff ? 0 : 1 }}
         transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}
       >
         {/* MENU：目录打开期间圈一直留着 */}
-        <NavHit held={menuOpen}>
-          <button
-            type="button"
-            onClick={onMenu}
-            aria-label={menuOpen ? t("menu.close") : t("menu.open")}
-            aria-expanded={menuOpen}
-            className="cursor-pointer"
-          >
-            {menuOpen ? t("menu.closeLabel") : t("menu.label")}
-          </button>
-        </NavHit>
+        <div className={soundOnly ? "pointer-events-none invisible" : "contents"}>
+          <NavHit held={menuOpen}>
+            <button
+              type="button"
+              onClick={onMenu}
+              aria-label={menuOpen ? t("menu.close") : t("menu.open")}
+              aria-expanded={menuOpen}
+              className="cursor-pointer"
+            >
+              {menuOpen ? t("menu.closeLabel") : t("menu.label")}
+            </button>
+          </NavHit>
 
-        <div className="flex items-center" style={{ gap: mu(9) }}>
-          <NavHit>
-            <button
-              type="button"
-              onClick={() => setLang("zh")}
-              className="cursor-pointer transition-opacity hover:opacity-100"
-              style={{ opacity: lang === "zh" ? 1 : 0.5 }}
-              aria-pressed={lang === "zh"}
-            >
-              {/* 英文界面下这个入口写成「中」，让不认识 CN 的人也知道它是切中文 */}
-              {lang === "en" ? "中" : "CN"}
-            </button>
-          </NavHit>
-          <span aria-hidden>/</span>
-          <NavHit>
-            <button
-              type="button"
-              onClick={() => setLang("en")}
-              className="cursor-pointer transition-opacity hover:opacity-100"
-              style={{ opacity: lang === "en" ? 1 : 0.5 }}
-              aria-pressed={lang === "en"}
-            >
-              EN
-            </button>
-          </NavHit>
+          <div className="flex items-center" style={{ gap: mu(9) }}>
+            <NavHit>
+              <button
+                type="button"
+                onClick={() => setLang("zh")}
+                className="cursor-pointer transition-opacity hover:opacity-100"
+                style={{ opacity: lang === "zh" ? 1 : 0.5 }}
+                aria-pressed={lang === "zh"}
+              >
+                {/* 英文界面下这个入口写成「中」，让不认识 CN 的人也知道它是切中文 */}
+                {lang === "en" ? "中" : "CN"}
+              </button>
+            </NavHit>
+            <span aria-hidden>/</span>
+            <NavHit>
+              <button
+                type="button"
+                onClick={() => setLang("en")}
+                className="cursor-pointer transition-opacity hover:opacity-100"
+                style={{ opacity: lang === "en" ? 1 : 0.5 }}
+                aria-pressed={lang === "en"}
+              >
+                EN
+              </button>
+            </NavHit>
+          </div>
+
+          {extra}
         </div>
-
-        {extra}
 
         <button
           type="button"
@@ -265,7 +273,9 @@ export default function NavBar({
           }}
           aria-label={muted ? t("menu.sound.on") : t("menu.sound.off")}
           title={muted ? t("menu.sound.on") : t("menu.sound.off")}
-          className="relative flex cursor-pointer items-center justify-center transition-opacity"
+          className={`relative flex cursor-pointer items-center justify-center transition-opacity ${
+            hideSound ? "pointer-events-none invisible" : ""
+          }`}
           style={{ width: mu(20), height: mu(20), opacity: muted ? 0.5 : 1 }}
         >
           <span className="block" style={{ ...maskStyle("/assets/menu/sound.svg"), width: mu(15.5), height: mu(13) }} />

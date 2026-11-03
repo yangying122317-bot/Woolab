@@ -22,6 +22,7 @@ import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } 
 import type { DrinkChoice, RoomState } from "../state/roomState";
 import { playDrawer, playNavigate, playTaskDone, startAmbient, stopAmbient } from "../audio/sfx";
 import { config } from "../config";
+import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
 import { useLanguage } from "../i18n/LanguageContext";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { isLifeFirstReady, preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
@@ -62,11 +63,18 @@ export default function LifePage() {
   // 有常显滚动条的机器上舞台会宽出一条滚动条，这个变化 resize 事件不报，只有 ResizeObserver 知道。
   const stageRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  const [mobileView, setMobileView] = useState(() => isMobileView());
+  /* 手机竖屏下把房间基础镜头拉远到 0.62 倍，一屏能看全更多家具，不贴脸 */
+  const roomScale = mobileView ? 0.62 : 1;
   const [maxShift, setMaxShift] = useState(0);
   useEffect(() => {
     const update = () => {
-      const stripW = stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
-      const viewW = stageRef.current?.clientWidth ?? document.documentElement.clientWidth;
+      const isMob = isMobileView();
+      setMobileView(isMob);
+      const scale = isMob ? 0.62 : 1;
+      const rawW = stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
+      const stripW = rawW * scale;
+      const viewW = stageRef.current?.clientWidth ?? getViewWidth();
       setMaxShift(Math.max(0, Math.floor(stripW - viewW)));
     };
     update();
@@ -216,9 +224,28 @@ export default function LifePage() {
   const lenis = useLenis();
   useEffect(() => {
     if (!lenis) return;
-    if (list.open && (list.reason === "user" || list.reason === "done")) lenis.stop();
-    else lenis.start();
-  }, [list, lenis]);
+    if (focus || (list.open && (list.reason === "user" || list.reason === "done"))) {
+      lenis.stop();
+    } else {
+      lenis.start();
+    }
+  }, [focus, list, lenis]);
+
+  /* 专注态（推近任务）期间彻底锁死窗口滚动位置，防止滚轮或触屏带偏镜头 */
+  useEffect(() => {
+    if (!focus) return;
+    const lockedY = window.scrollY;
+    const keepScroll = () => {
+      if (window.scrollY !== lockedY) window.scrollTo(0, lockedY);
+    };
+    const preventWheel = (e: WheelEvent) => e.preventDefault();
+    window.addEventListener("scroll", keepScroll, { passive: true });
+    window.addEventListener("wheel", preventWheel, { passive: false });
+    return () => {
+      window.removeEventListener("scroll", keepScroll);
+      window.removeEventListener("wheel", preventWheel);
+    };
+  }, [focus]);
   /*
    * 抽屉是牛皮色、顶到屏幕顶，压着左上角的 logo：开着时 logo 画成纯白。
    * 收回是 0.42s 的滑出动画，checklistOpen 一变假抽屉还盖在 logo 底下——这段时间 logo 要是切回
@@ -245,13 +272,13 @@ export default function LifePage() {
 
   /** 房间横移到某个横向位置（长卷里的 vh 坐标居中到画面中央），走 Lenis 的缓动 */
   const scrollRoomTo = (centerVh: number) => {
-    const vh = window.innerHeight;
-    const vw = stageRef.current?.clientWidth ?? document.documentElement.clientWidth;
+    const vh = window.innerHeight * roomScale;
+    const vw = stageRef.current?.clientWidth ?? getViewWidth();
     const el = scrollRef.current;
     if (!el) return;
     const shift = Math.min(Math.max((centerVh / 100) * vh - vw / 2, 0), maxShift);
     const progress = maxShift > 0 ? (shift / maxShift) * 0.92 : 0;
-    const y = progress * (el.offsetHeight - vh);
+    const y = progress * (el.offsetHeight - window.innerHeight);
     if (lenis) {
       lenis.start();
       lenis.scrollTo(y, { duration: 1.5, easing: (p: number) => 1 - Math.pow(1 - p, 3), force: true });
@@ -289,7 +316,7 @@ export default function LifePage() {
     setGuideReady(true);
   };
   useMotionValueEvent(x, "change", (v) => {
-    const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight;
+    const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight * roomScale;
     setMiniList(-v > listRightPx);
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;
@@ -403,15 +430,29 @@ export default function LifePage() {
     if (!wrap) return;
     const wr = wrap.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
+    const mobile = wr.width < 560;
+    const vhPx = wr.height / 100;
+    /* 手机竖屏下：按屏宽自适应缩放与中心点，保证整块软木板+10块碎片 / 整张白圆桌（酒瓶+杯+案板+冰桶）同屏完整可见 */
+    const cx =
+      mobile && station.id === "drink"
+        ? r.left + r.width * 0.38
+        : r.left + r.width / 2;
     const cy = r.top + r.height / 2;
+    const scale = mobile
+      ? station.id === "candle"
+        ? Math.min(1.85, (wr.width * 0.84) / (24 * vhPx * roomScale))
+        : station.id === "photo"
+          ? Math.min(1.18, (wr.width * 0.94) / (64 * vhPx * roomScale))
+          : Math.min(1.25, (wr.width * 0.92) / (52 * vhPx * roomScale))
+      : 2;
     setZoomOrigin(`${cx - wr.left}px ${cy - wr.top}px`);
     document.documentElement.style.overflow = "hidden";
+    lenis?.stop();
     setFocus(station);
     void zoomControls.start({
-      scale: 2,
-      x: window.innerWidth / 2 - cx,
-      y: window.innerHeight / 2 - cy,
+      scale,
+      x: wr.left + wr.width / 2 - cx,
+      y: wr.top + wr.height / 2 - cy,
       transition: { duration: 0.6, ease: [0.33, 1, 0.68, 1] },
     });
   };
@@ -419,6 +460,8 @@ export default function LifePage() {
   /** 走进 LAB 门：镜头推进门洞 + 暖光漫满 → 跳转 /lab（Lab 页从同色暖光淡出） */
   const navigate = useNavigate();
   const [labEntry, setLabEntry] = useState<{ cx: number; cy: number } | null>(null);
+  /* 手机视图下支持左右划动/拖拽直接推进房间（电脑端不生效） */
+  useMobileHorizontalDrag(!focus && !checklistOpen && !labEntry);
   const labGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(labGoTimer.current), []);
   const goLab = (cx: number, cy: number, scale: number) => {
@@ -427,11 +470,12 @@ export default function LifePage() {
     const wr = wrap.getBoundingClientRect();
     setZoomOrigin(`${cx - wr.left}px ${cy - wr.top}px`);
     document.documentElement.style.overflow = "hidden";
+    lenis?.stop();
     setLabEntry({ cx, cy });
     void zoomControls.start({
       scale,
-      x: window.innerWidth / 2 - cx,
-      y: window.innerHeight / 2 - cy,
+      x: wr.left + wr.width / 2 - cx,
+      y: wr.top + wr.height / 2 - cy,
       transition: { duration: 1.15, ease: [0.55, 0, 0.68, 0.4] },
     });
     labGoTimer.current = window.setTimeout(() => {
@@ -462,8 +506,8 @@ export default function LifePage() {
 
   /** 拼图进行中：推近软木板但没有面板，互动就在画面里 */
   const photoFocus = focus?.id === "photo" && !isStationDone(room, "photo");
-  /* 软木板是棕的，白字 difference 混上去成了蓝字：推近着的时候顶栏改画纯白 */
-  useReportPlainNav(photoFocus);
+  /* 桌面端推近时棕色软木板顶到屏幕最上方，白字 difference 混上去会变蓝，所以改画纯白；手机竖屏下顶栏背景仍是浅米色墙纸，保持黑字 */
+  useReportPlainNav(photoFocus && !mobileView);
 
   /** 调酒进行中：推近白圆桌但没有面板，互动就在画面里 */
   const drinkFocus = focus?.id === "drink" && !isStationDone(room, "drink");
@@ -516,7 +560,7 @@ export default function LifePage() {
 
   return (
     <div ref={scrollRef} className="relative" style={{ height: `${Math.round(ROOM_TOTAL_VH * 0.9)}vh` }}>
-      <div ref={stageRef} className="sticky top-0 h-screen overflow-hidden">
+      <div ref={stageRef} className="sticky top-0 h-screen overflow-hidden" style={{ backgroundColor: "#F3EFE3" }}>
         {/* 镜头层：专注态时以站点为原点推近 */}
         <motion.div
           ref={wrapRef}
@@ -524,8 +568,33 @@ export default function LifePage() {
           animate={zoomControls}
           style={{ transformOrigin: zoomOrigin }}
         >
-          {/* 房间长卷：滚动驱动横移；willChange 让它独立成层，横移时不重绘整条墙 */}
-          <motion.div ref={stripRef} className="relative h-full" style={{ x, width: `${ROOM_TOTAL_VH}vh`, willChange: "transform" }}>
+          {/* 房间长卷：滚动驱动横移；手机竖屏下用 roomScale 拉远镜头，并将房间主体垂直居中，上下无缝延展墙纸与蓝地板 */}
+          <motion.div
+            ref={stripRef}
+            className="relative h-full"
+            style={{
+              x,
+              scale: roomScale,
+              top: mobileView ? "18vh" : undefined,
+              transformOrigin: "0 0",
+              width: `${ROOM_TOTAL_VH}vh`,
+              willChange: "transform",
+            }}
+          >
+            {/* 手机竖屏下房间主体居中（top: 18vh），向上延伸同款竖条纹墙面保证顶部无缝 */}
+            {mobileView && (
+              <div
+                className="pointer-events-none absolute left-0"
+                style={{
+                  top: "-38vh",
+                  height: "40vh",
+                  right: "-10vw",
+                  backgroundImage: "url(/assets/life/room-bg-tile.webp)",
+                  backgroundSize: `${ROOM_TILE_W_VH}vh 100vh`,
+                  backgroundRepeat: "repeat-x",
+                }}
+              />
+            )}
             {/* 墙面底纹常驻垫底，任何加载阶段都不露白 */}
             <div
               className="absolute inset-y-0 left-0"
@@ -536,14 +605,12 @@ export default function LifePage() {
                 backgroundRepeat: "repeat-x",
               }}
             />
-            {/* 画稿下缘的蓝地板延伸：镜头推近时底部不露白。用墙面贴图最底下那段地板噪点裁的，
-              从它在墙面贴图里的位置开始铺、往上盖住墙面贴图的下边缘：两张图在重叠区像素一致，
-              镜头推近时墙面贴图下边那条半透明的抗锯齿缝就压在同样的地板上，看不出拼接线 */}
+            {/* 画稿下缘的蓝地板延伸：镜头推近或手机拉远时底部不露白 */}
             <div
               className="absolute left-0"
               style={{
                 top: `calc(100% - ${ROOM_FLOOR_TILE_H_VH}vh)`,
-                height: `${60 + ROOM_FLOOR_TILE_H_VH}vh`,
+                height: `${(mobileView ? 95 : 60) + ROOM_FLOOR_TILE_H_VH}vh`,
                 width: "calc(100% + 10vw)",
                 backgroundImage: "url(/assets/life/room-floor-tile.webp)",
                 backgroundSize: `${ROOM_TILE_W_VH}vh auto`,

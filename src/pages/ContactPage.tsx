@@ -16,6 +16,7 @@ import { PHONE, playPhonePickup, preloadPhoneHello } from "../audio/sfx";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../components/IntroLoader";
 import { usePageShift } from "../components/PageShift";
 import { config } from "../config";
+import { getViewWidth } from "../device";
 import { noiseBg, type Box } from "../components/about/geom";
 import { whenContactReady } from "../data/pageAssets";
 
@@ -132,7 +133,13 @@ function Circled({ children, disabled = false }: { children: ReactNode; disabled
   };
 
   return (
-    <span ref={ref} className="relative inline-block" onMouseEnter={enter} onMouseLeave={() => setOn(false)}>
+    <span
+      ref={ref}
+      className="relative inline-block"
+      onMouseEnter={enter}
+      onMouseLeave={() => setOn(false)}
+      onTouchStart={enter}
+    >
       {children}
       {box && !disabled && (
         <motion.img
@@ -161,7 +168,7 @@ function Circled({ children, disabled = false }: { children: ReactNode; disabled
 export default function ContactPage() {
   const { t, lang } = useLanguage();
   const zh = lang === "zh";
-  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const [vp, setVp] = useState(() => ({ w: getViewWidth(), h: window.innerHeight }));
   const [copied, setCopied] = useState(false);
   /** 电话：idle → 已拿起（ring 嘟 / hello 对面说话、底下冒字）→ 放回去 */
   const [call, setCall] = useState<"idle" | "ring" | "hello">("idle");
@@ -175,7 +182,7 @@ export default function ContactPage() {
   };
 
   useEffect(() => {
-    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const on = () => setVp({ w: getViewWidth(), h: window.innerHeight });
     window.addEventListener("resize", on);
     return () => {
       window.removeEventListener("resize", on);
@@ -183,19 +190,31 @@ export default function ContactPage() {
     };
   }, []);
 
-  const s = Math.min(vp.w / FW, vp.h / FH);
+  const mobile = vp.w < 560;
+  /* 桌面端按 720×450 缩放；手机竖屏下按信封宽（380 稿单位）放大铺满屏宽，把小羊和电话移到信封上下方 */
+  const s = mobile
+    ? Math.min(vp.w / 380, (vp.h - 140) / 420)
+    : Math.min(vp.w / FW, vp.h / FH);
   const ox = (vp.w - FW * s) / 2;
-  const oy = (vp.h - FH * s) / 2;
+  const oy = (vp.h - FH * s) / 2 + (mobile ? 24 * s : 0);
+
+  const sheepBox: Box = mobile ? { x: 192, y: 316, w: 85, h: 125 } : ART.sheep;
+  const handsetBox: Box = mobile ? { x: 482, y: -58, w: 39, h: 112 } : ART.handset;
+  const cordX = mobile ? handsetBox.x + 10.59 : ART.cord.x;
+  const cordEnd = mobile ? handsetBox.y + 12 : CORD_END;
+
   /* 电话线顶端要够到视口顶边：比稿高的屏幕上舞台上方有空白，线就得往上接（稿单位，负数） */
   const hangTop = Math.min(ART.cord.y, -oy / s);
-  const cordH = CORD_END - hangTop;
-  const hangH = ART.handset.y + ART.handset.h - hangTop;
+  const cordH = cordEnd - hangTop;
+  const hangH = handsetBox.y + handsetBox.h - hangTop;
   /*
-   * 横向跟着顶栏走：顶栏是贴视口右边排的（单位和 s 一样），稿里电话线正好从 MENU 和 CN 之间穿过去，
-   * 比稿宽的屏幕上舞台两边留白、顶栏却贴着屏幕边，线要保持穿在那个缝里就得一起往右挪 ox/s。
-   * 听筒和它旁边的话跟着线走。
+   * 横向跟着顶栏走：桌面端顶栏贴视口右边排，线穿在 MENU 和 CN 之间；
+   * 手机竖屏下听筒直接挂在信封右上方（handsetBox.x = 482），不再额外外推。
    */
-  const hangX = ox / s + HANG_SHIFT;
+  const hangX = mobile ? 0 : ox / s + HANG_SHIFT;
+  const bubblePos = mobile
+    ? { cx: 365, y: 4, w: 220, size: 12.5 }
+    : { cx: BUBBLE.cx + hangX, y: BUBBLE.y, w: BUBBLE.w, size: BUBBLE.size };
 
   /*
    * 听筒的下落量 y（稿单位）：一开始整只藏在屏幕上面；线顶钉在视口顶边不动，
@@ -499,7 +518,7 @@ export default function ContactPage() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={{ ...art(ART.sheep), transformOrigin: "50% 100%" }}
+          style={{ ...art(sheepBox), transformOrigin: "50% 100%" }}
           animate={{ scaleY: [1, 1.012, 1] }}
           transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -513,7 +532,7 @@ export default function ContactPage() {
             top: hangTop,
             width: FW,
             height: hangH,
-            transformOrigin: `${ART.cord.x + ART.cord.w / 2}px 0px`,
+            transformOrigin: `${cordX + ART.cord.w / 2}px 0px`,
             rotate: rot,
           }}
         >
@@ -523,7 +542,7 @@ export default function ContactPage() {
             draggable={false}
             className="pointer-events-none absolute max-w-none"
             style={{
-              left: ART.cord.x,
+              left: cordX,
               top: 0,
               width: ART.cord.w,
               height: cordH,
@@ -535,10 +554,10 @@ export default function ContactPage() {
           <motion.div
             className="absolute"
             style={{
-              left: ART.handset.x,
-              top: ART.handset.y - hangTop,
-              width: ART.handset.w,
-              height: ART.handset.h,
+              left: handsetBox.x,
+              top: handsetBox.y - hangTop,
+              width: handsetBox.w,
+              height: handsetBox.h,
               y,
               rotate: bodyRot,
               transformOrigin: "50% 4%",
@@ -562,10 +581,10 @@ export default function ContactPage() {
         <div
           className={`${handFont} pointer-events-none absolute text-center text-black`}
           style={{
-            left: BUBBLE.cx + hangX - BUBBLE.w / 2,
-            top: BUBBLE.y,
-            width: BUBBLE.w,
-            fontSize: BUBBLE.size,
+            left: bubblePos.cx - bubblePos.w / 2,
+            top: bubblePos.y,
+            width: bubblePos.w,
+            fontSize: bubblePos.size,
             lineHeight: 1.35,
             whiteSpace: "nowrap",
           }}

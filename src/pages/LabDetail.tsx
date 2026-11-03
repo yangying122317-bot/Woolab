@@ -14,6 +14,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import type { Localized } from "../i18n/dict";
 import { useSmoothContainer } from "../components/SmoothScroll";
 import { MU } from "../components/NavBar";
+import { getViewWidth } from "../device";
 import { useReportDetailOpen } from "../state/chrome";
 
 /**
@@ -64,9 +65,17 @@ const PAPER_BOTTOM = 317 * PAPER_K;
  * 两个都还受屏宽限制（照片总宽 800 要装进屏宽）。
  */
 function boardUnits() {
-  const byW = window.innerWidth / 820;
-  const u = Math.min(2.2, Math.max(0.9, Math.min(window.innerHeight / (LABEL_Y * 2), byW)));
-  const uc = Math.min(1.6, Math.max(0.9, Math.min(window.innerHeight / (PHOTO_TOP + PAPER_BOTTOM + 40), byW)));
+  const vw = getViewWidth();
+  const vh = window.innerHeight;
+  if (vw < 560) {
+    return {
+      u: Math.max(0.78, vw / 470),
+      uc: Math.max(0.58, vw / 610),
+    };
+  }
+  const byW = vw / 820;
+  const u = Math.min(2.2, Math.max(0.9, Math.min(vh / (LABEL_Y * 2), byW)));
+  const uc = Math.min(1.6, Math.max(0.9, Math.min(vh / (PHOTO_TOP + PAPER_BOTTOM + 40), byW)));
   return { u, uc };
 }
 
@@ -321,14 +330,16 @@ export function DetailBackdrop() {
 /* ---------------- 顶部：Meelo's Closet 手写标题（金框单独做成钉在屏上的主角，见 HeroFrame） ---------------- */
 
 function LookbookHead({ u, closet }: { u: number; closet: string }) {
+  const mobile = getViewWidth() < 560;
+  const dy = mobile ? 56 : 0;
   return (
     <Board u={u}>
-      <Rotated u={u} x={297} y={22.44} w={126.87} h={29.1} iw={126.87} ih={29.1} transform="rotate(-2.33deg)">
+      <Rotated u={u} x={297} y={22.44 + dy} w={126.87} h={29.1} iw={126.87} ih={29.1} transform="rotate(-2.33deg)">
         <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 20 * u, lineHeight: 1.2 }}>
           {closet}
         </p>
       </Rotated>
-      <img src={`${A}/underline-closet.svg`} alt="" draggable={false} style={box(u, 306, 47, 118.1, 10.5)} />
+      <img src={`${A}/underline-closet.svg`} alt="" draggable={false} style={box(u, 306, 47 + dy, 118.1, 10.5)} />
     </Board>
   );
 }
@@ -387,9 +398,15 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
   );
 }
 
-/** 标签行：钉在屏幕左右两边的竖直正中（和主角中心一条线），全程不动；换字时短暂淡入淡出 */
+/** 标签行：桌面端钉在屏幕左右两边的竖直正中；手机竖屏下移到屏幕下方（91% 高处），避免与正中大画框和四宫格重叠 */
 function LabelRow({ u, left, right }: { u: number; left: string; right: string }) {
-  const s: CSSProperties = { fontSize: 12 * u, lineHeight: 1.2, top: "50%", transform: "translateY(-50%)" };
+  const mobile = getViewWidth() < 560;
+  const s: CSSProperties = {
+    fontSize: mobile ? Math.max(13, 12 * u) : 12 * u,
+    lineHeight: 1.2,
+    top: mobile ? "91%" : "50%",
+    transform: "translateY(-50%)",
+  };
   const fade = {
     initial: { opacity: 0, y: 4 },
     animate: { opacity: 1, y: 0 },
@@ -398,14 +415,14 @@ function LabelRow({ u, left, right }: { u: number; left: string; right: string }
   };
   return (
     <>
-      <div className="font-look absolute z-30 whitespace-nowrap text-white" style={{ ...s, left: 25 * u }}>
+      <div className="font-look absolute z-30 whitespace-nowrap text-white" style={{ ...s, left: mobile ? 18 : 25 * u }}>
         <AnimatePresence mode="wait">
           <motion.p key={left} {...fade}>
             {left}
           </motion.p>
         </AnimatePresence>
       </div>
-      <div className="font-look absolute z-30 whitespace-nowrap text-right text-white" style={{ ...s, right: 20 * u }}>
+      <div className="font-look absolute z-30 whitespace-nowrap text-right text-white" style={{ ...s, right: mobile ? 18 : 20 * u }}>
         <AnimatePresence mode="wait">
           <motion.p key={right} {...fade}>
             {right}
@@ -423,9 +440,9 @@ const STRIP_W = 799;
 const STRIP_H = 285;
 
 function useViewportWidth() {
-  const [w, setW] = useState(() => window.innerWidth);
+  const [w, setW] = useState(() => getViewWidth());
   useEffect(() => {
-    const on = () => setW(window.innerWidth);
+    const on = () => setW(getViewWidth());
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
@@ -461,12 +478,14 @@ function HeroStrip({
   delay?: number;
 }) {
   const { pick } = useLanguage();
-  const k = useViewportWidth() / STRIP_W;
-  const hand: CSSProperties = { fontSize: 15 * k, lineHeight: 1.2 };
+  const vw = useViewportWidth();
+  const k = vw / STRIP_W;
+  const hScale = vw < 560 ? 1.45 : 1;
+  const hand: CSSProperties = { fontSize: Math.max(12, 15 * k), lineHeight: 1.2 };
   const hidden = "inset(0 0 100% 0)";
   const shown = "inset(0 0 0% 0)";
   const padTop = pad?.top ?? 0;
-  const H = STRIP_H * k + padTop + (pad?.bottom ?? 0);
+  const H = STRIP_H * k * hScale + padTop + (pad?.bottom ?? 0);
   /* 两句标注：字、位置（稿子 799 宽的坐标）都可以每件自己定，默认是 T 恤 01 那张的；false = 不要 */
   const front =
     lb?.captions?.front === false
@@ -500,7 +519,7 @@ function HeroStrip({
               )}
             </motion.div>
             {/* Back / Front 手写标注：跟着照片可见区（加高的那段之下）走；位置每件可以自己调，别压到人 */}
-            <div className="absolute inset-x-0" style={{ top: padTop, height: STRIP_H * k }}>
+            <div className="absolute inset-x-0" style={{ top: padTop, height: STRIP_H * k * hScale }}>
               {front && (
                 <>
                   <Rotated
@@ -708,6 +727,14 @@ function Description({
   /* 圈那张 svg 原本是 178×39 套在约 140×22 的词上，按同样的比例往外扩 */
   const circleW = ci ? ci.w * 1.24 : 0;
   const circleH = ci ? ci.h * 1.85 : 0;
+  const vw = getViewWidth();
+  const mobile = vw < 560;
+  const boxW = mobile ? (vw - 24) / u : 640;
+  const boxX = (BOARD_W - boxW) / 2;
+  /* 手机竖屏下按屏宽收一点字号并保持单行不折行，防止跨行导致手绘下划线错位或压到下方小箭头 */
+  const descFontSize = mobile
+    ? Math.min(16 * u, (vw - 28) / (lang === "en" ? 31 : 21))
+    : 16 * u;
 
   return (
     <motion.div
@@ -717,18 +744,18 @@ function Description({
       animate={play ? "show" : "hidden"}
     >
       <Board u={u}>
-        <Rotated u={u} x={40} y={Y(DESC_TEXT_Y)} w={640} h={60} iw={640} ih={60} transform="rotate(-1.31deg)">
+        <Rotated u={u} x={boxX} y={Y(DESC_TEXT_Y)} w={boxW} h={60} iw={boxW} ih={60} transform="rotate(-1.31deg)">
           <div
             ref={textEl}
-            className="font-hand relative text-center text-white"
+            className="font-hand relative whitespace-nowrap text-center text-white"
             style={{
-              fontSize: 16 * u,
+              fontSize: descFontSize,
               lineHeight: 1.4,
               textTransform: lang === "en" ? "capitalize" : "none",
             }}
           >
             {lines.map((text, i) => (
-              <span key={i} className="block overflow-hidden" style={{ paddingBottom: 0.1 * 16 * u }}>
+              <span key={i} className="block overflow-hidden" style={{ paddingBottom: 0.1 * descFontSize }}>
                 <motion.span className="block" variants={line} custom={delay + i * lineDelay}>
                   {renderMarked(text, markDefs, setRef)}
                 </motion.span>
@@ -746,7 +773,7 @@ function Description({
                 className="pointer-events-none absolute max-w-none"
                 style={{
                   left: ul.l - ul.w * 0.02,
-                  top: ul.t + ul.h - 7 * u,
+                  top: ul.t + ul.h - 5 * u,
                   width: ul.w * 1.04,
                   height: (ul.w * 1.04 * 12.24) / 171.1,
                 }}
@@ -827,6 +854,7 @@ const fadeIn: Variants = {
 function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolean; delay: number }) {
   const { t, pick } = useLanguage();
   const Y = (y: number) => y - COLLAGE_Y0;
+  const mobile = getViewWidth() < 560;
   const rows: [string, string][] = lb.sheet.slice(0, 5).map((r) => [pick(r.label), pick(r.value)]);
   /** 第 i 个元素的出场时刻：0 = 撕纸；之后的等纸擦到八成（0.6s）再每 0.16s 一个 */
   const at = (i: number) => delay + (i === 0 ? 0 : 0.6 + (i - 1) * 0.16);
@@ -843,8 +871,15 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
       initial="hidden"
       animate={play ? "show" : "hidden"}
     >
-      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（拼贴顶 = 纸顶） */}
-      <div className="absolute inset-0" style={{ transform: `scale(${PAPER_K})`, transformOrigin: `${360 * u}px 0` }}>
+      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（手机竖屏下由于右侧拍立得伸出更多，整体左移 36u 让组合居中） */}
+      <div
+        className="absolute inset-0"
+        style={{
+          left: mobile ? -36 * u : 0,
+          transform: `scale(${PAPER_K})`,
+          transformOrigin: `${360 * u}px 0`,
+        }}
+      >
         {/* 撕纸 + 上面的产品表文字，一起擦出来。纸 416×309 @ (152,814)，投影 0/4/4 → 导出框左右各多 4、下面多 8 */}
         <motion.div className="absolute inset-0" variants={wipeIn} custom={at(0)}>
           <div style={box(u, 148, Y(814), 424, 317)}>
@@ -1059,13 +1094,15 @@ type Timeline = {
   /** 主角第一屏的宽 / 墙上每只的宽（屏幕 px） */
   heroW: number;
   wallW: number;
-  /** 主角要落的那一格的中心 x（屏幕 px） */
+  /** 主角要落的那一格的中心坐标（屏幕 px） */
   slotX: number;
+  slotY: number;
 };
 
-/** 主角第一屏的尺寸：高占屏高 HERO_H，太窄的屏按宽限 */
+/** 主角第一屏的尺寸：高占屏高 HERO_H，桌面端受 vw*0.25 限制，手机竖屏放开到 vw*0.46 让正中画框饱满清晰 */
 function heroSize(vw: number, vh: number) {
-  const w = Math.min((vh * HERO_H * FRAME_W) / FRAME_H, vw * 0.25);
+  const maxW = vw < 560 ? vw * 0.46 : vw * 0.25;
+  const w = Math.min((vh * HERO_H * FRAME_W) / FRAME_H, maxW);
   return { w, h: (w * FRAME_H) / FRAME_W };
 }
 
@@ -1075,12 +1112,19 @@ const WALL_SIDE = 130;
 const WALL_GAP_MIN = 1.15;
 
 /**
- * 墙上那排：每只的宽、框心间距、第 i 只的中心 x（整排水平居中）。
- * 4:3 这类窄屏上按屏高算出来的框会把整排撑到屏边、压住两边的标签：
- * 先压间距（最紧 WALL_GAP_MIN 倍），还放不下就整排缩小。
+ * 墙上那排：
+ * - 桌面端：四只框排成一行水平居中；
+ * - 手机竖屏（< 560px）：改为 2×2 上下两组摆放，每只框更大、上方手写标题清晰不挤。
  */
 function wallLayout(vw: number, vh: number) {
   const n = labProjects.length;
+  if (vw < 560) {
+    const wallW = Math.min(vw * 0.34, vh * 0.165);
+    const colGap = wallW * 1.38;
+    const slotX = (i: number) => vw / 2 + ((i % 2) - 0.5) * colGap;
+    const slotY = (i: number) => vh * (Math.floor(i / 2) === 0 ? 0.35 : 0.67);
+    return { wallW, gap: colGap, slotX, slotY };
+  }
   const avail = vw - 2 * WALL_SIDE * boardUnits().u;
   let wallW = heroSize(vw, vh).w * WALL_K;
   let gap = wallW * WALL_GAP_K;
@@ -1094,7 +1138,8 @@ function wallLayout(vw: number, vh: number) {
     }
   }
   const slotX = (i: number) => vw / 2 + (i - (n - 1) / 2) * gap;
-  return { wallW, gap, slotX };
+  const slotY = () => vh * WALL_ROW_CY;
+  return { wallW, gap, slotX, slotY };
 }
 
 /**
@@ -1112,7 +1157,7 @@ function heroPose(s: number, tl: Timeline) {
   const hy0 = tl.vh / 2;
   const aside = smooth((s - tl.asideStart) / (tl.asideEnd - tl.asideStart));
   const land = smooth((s - tl.landStart) / (tl.landEnd - tl.landStart));
-  const ty = tl.vh * WALL_ROW_CY + Math.max(0, tl.wallTop - s);
+  const ty = tl.slotY + Math.max(0, tl.wallTop - s);
   const cx = hx0 + (tl.asideX - hx0) * aside;
   const cy = hy0 + (tl.asideY - hy0) * aside;
   const x = cx + (tl.slotX - cx) * land;
@@ -1197,9 +1242,9 @@ function FrameWall({
   onBackTop: () => void;
 }) {
   const { pick } = useLanguage();
-  const { wallW: W, slotX } = wallLayout(vw, vh);
+  const { wallW: W, slotX, slotY } = wallLayout(vw, vh);
   const H = (W * FRAME_H) / FRAME_W;
-  const rowCy = vh * WALL_ROW_CY;
+  const mobile = vw < 560;
   const [hover, setHover] = useState<number | null>(null);
   const canPick = landed && active;
   const setHovered = (i: number | null) => {
@@ -1230,18 +1275,18 @@ function FrameWall({
           <div
             key={p.id}
             className="absolute"
-            style={{ left: slotX(i) - W / 2, top: rowCy - H / 2, width: W, height: H }}
+            style={{ left: slotX(i) - W / 2, top: slotY(i) - H / 2, width: W, height: H }}
           >
             {/* 手写名字 + 小箭头：hover 的那只亮（没 hover 时当前这只亮），其它暗 */}
             <motion.div
               className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
-              style={{ top: -78 * u }}
+              style={{ top: mobile ? -48 : -78 * u }}
               animate={{ opacity: lit ? 1 : 0.45 }}
               transition={{ duration: 0.25 }}
             >
               <p
                 className="font-hand whitespace-nowrap text-white"
-                style={{ fontSize: 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
+                style={{ fontSize: mobile ? 14 : 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
               >
                 {pick(p.wall?.label ?? p.title)}
               </p>
@@ -1249,7 +1294,12 @@ function FrameWall({
                 src={`${A}/arrow-down.svg`}
                 alt=""
                 draggable={false}
-                style={{ width: 11 * u, height: 25 * u, marginTop: 10 * u, transform: "rotate(14deg)" }}
+                style={{
+                  width: mobile ? 9 : 11 * u,
+                  height: mobile ? 20 : 25 * u,
+                  marginTop: mobile ? 6 : 10 * u,
+                  transform: "rotate(14deg)",
+                }}
               />
             </motion.div>
 
@@ -1476,8 +1526,9 @@ export function DetailPage({
   const topH = Math.round((vw * 64 * 0.8) / 1600);
   const botH = Math.round((vw * 100 * 0.8) / 1600);
   const stripPad = { top: Math.round(topH * 0.5), bottom: Math.round(botH * 0.5) };
-  /* 通栏照片那块的高（照片 + 撕边加高 + 底下留白） */
-  const stripH = STRIP_H * (vw / STRIP_W) + stripPad.top + stripPad.bottom + 24 * uc;
+  /* 通栏照片那块的高（照片 + 撕边加高 + 底下留白；手机竖屏下增高 1.45 倍让产品照片更清晰） */
+  const stripK = (vw / STRIP_W) * (vw < 560 ? 1.45 : 1);
+  const stripH = STRIP_H * stripK + stripPad.top + stripPad.bottom + 24 * uc;
   /*
    * 每一件的布局，一件接一件排下去，全是普通内容一路匀速滚，没有钉住的段落：
    *  - 第一件：页头在顶、主角在正中、那段话在屏幕下部（第一行的顶在 78% 屏高）；
@@ -1486,11 +1537,15 @@ export function DetailPage({
    *  - 每件末尾接通栏照片
    */
   const layouts: LookLayout[] = [];
+  const mobile = vw < 560;
   looks.forEach((_, j) => {
     const start = j === 0 ? 0 : layouts[j - 1].start + layouts[j - 1].blockH + layouts[j - 1].stripH;
     /* 后面几件：那段话上下各留 8% 屏高的空 */
     const descBlockH = j === 0 ? vh : Math.round(DESC_H * u + vh * 0.16);
-    const descTop = j === 0 ? vh * 0.78 - (DESC_TEXT_Y - DESC_Y0) * u : (descBlockH - DESC_H * u) / 2;
+    const descTop =
+      j === 0
+        ? vh * (mobile ? 0.73 : 0.78) - (DESC_TEXT_Y - DESC_Y0) * u
+        : (descBlockH - DESC_H * u) / 2;
     const collageTop = j === 0 ? Math.max(PHOTO_TOP * u, vh + 24 * uc) : descBlockH;
     const blockH = collageTop + (COLLAGE_H + COLLAGE_PAD) * uc;
     layouts.push({ start, descTop, collageTop, blockH, stripH });
@@ -1513,8 +1568,8 @@ export function DetailPage({
     vh,
     asideStart,
     asideEnd,
-    /* 靠边的位置：左上角。y 在屏高 1/4；x 靠左一点，别压到照片左上那句手写标注 */
-    asideX: vw * 0.25 - 130 * u,
+    /* 靠边的位置：左上角。y 在屏高 1/4；x 靠左一点，手机竖屏下保证留在屏内 */
+    asideX: vw < 560 ? vw * 0.24 : vw * 0.25 - 130 * u,
     asideY: vh * 0.25,
     photoAt,
     wallTop,
@@ -1523,6 +1578,7 @@ export function DetailPage({
     heroW: hero.w,
     wallW: wall.wallW,
     slotX: wall.slotX(index),
+    slotY: wall.slotY(index),
   };
 
   const { scrollY } = useScroll({ container: scroller });
@@ -1587,7 +1643,12 @@ export function DetailPage({
           onClick={onClose}
           className="font-look pointer-events-auto absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
           /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
-          style={{ left: 25 * u, top: `calc(${MU} * 26)`, transform: "translateY(-50%)", fontSize: 12 * u }}
+          style={{
+            left: vw < 560 ? 18 : 25 * u,
+            top: `calc(${MU} * 26)`,
+            transform: "translateY(-50%)",
+            fontSize: vw < 560 ? Math.max(13, 12 * u) : 12 * u,
+          }}
         >
           {t("lab.detail.back")}
         </button>
@@ -1660,7 +1721,7 @@ export function DetailPage({
           className="pointer-events-none absolute left-0 top-0 z-20"
           initial={{
             x: wall.slotX(flying) - hero.w / 2,
-            y: vh * WALL_ROW_CY - hero.h / 2,
+            y: wall.slotY(flying) - hero.h / 2,
             scale: wall.wallW / hero.w,
             rotate: 0,
           }}

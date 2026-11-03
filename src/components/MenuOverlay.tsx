@@ -11,6 +11,7 @@ import {
   useVelocity,
 } from "framer-motion";
 import { useLanguage } from "../i18n/LanguageContext";
+import { getViewWidth } from "../device";
 import type { DictKey } from "../i18n/dict";
 import NavBar from "./NavBar";
 import { usePageShift } from "./PageShift";
@@ -155,6 +156,35 @@ const OUT_TOTAL = LIFT_T + MAX_DELAY * 0.6;
 /** 收回：最后一块牌快出屏时蓝底就开始往上抽 */
 const PULL_DELAY = Math.max(0, OUT_TOTAL - 0.15);
 
+function shiftTag(t: TagDef, dx: number, dy: number): TagDef {
+  return {
+    ...t,
+    string: { ...t.string, x: t.string.x + dx, y: t.string.y + dy },
+    clip: { ...t.clip, x: t.clip.x + dx, y: t.clip.y + dy },
+    pivot: { x: t.pivot.x + dx, y: t.pivot.y + dy },
+    body: { ...t.body, x: t.body.x + dx, y: t.body.y + dy },
+    sticker: { ...t.sticker, x: t.sticker.x + dx, y: t.sticker.y + dy },
+    tape: { ...t.tape, cx: t.tape.cx + dx, cy: t.tape.cy + dy },
+    mark: { ...t.mark, x: t.mark.x + dx, y: t.mark.y + dy },
+    head: { cx: t.head.cx + dx, top: t.head.top + dy },
+    note: { ...t.note, cx: t.note.cx + dx, top: t.note.top + dy },
+  };
+}
+
+const MOBILE_FRAME_W = 332;
+const MOBILE_FRAME_H = 540;
+/** 手机竖屏下改为 2×2 上下两排错落挂牌（下排两块先画，绳子自然从上排牌子背后穿过） */
+const MOBILE_TAGS: TagDef[] = [
+  shiftTag(TAGS[2], -335, 175), // life（左下）
+  shiftTag(TAGS[3], -331, 135), // contact（右下）
+  shiftTag(TAGS[0], -44, -65),  // about（左上）
+  shiftTag(TAGS[1], -34, -40),  // lab（右上）
+];
+
+function getMenuViewport() {
+  return { w: getViewWidth(), h: window.innerHeight };
+}
+
 /**
  * 目录：蓝底像块布从上面盖下来（底边带弧，落地收平），四块牛皮纸吊牌跟着被绳子放下来，晃两下停住。
  * 绳子顶端钉在屏幕上边不动，牌子掉多深绳子就放多长，摆动也是绕绳子顶端摆。
@@ -184,7 +214,7 @@ export default function MenuOverlay({
   const [phase, setPhase] = useState<Phase>("in");
   const [picked, setPicked] = useState<TagDef["id"] | null>(null);
   const [hovered, setHovered] = useState<TagDef["id"] | null>(null);
-  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const [vp, setVp] = useState(getMenuViewport);
   const alive = useRef(true);
   /* 整块目录（黑底 + 牌 + 顶栏）的位移，跳页时和新页面一起动 */
   const rootY = useMotionValue(0);
@@ -235,7 +265,7 @@ export default function MenuOverlay({
 
   useEffect(() => {
     alive.current = true;
-    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const on = () => setVp(getMenuViewport());
     window.addEventListener("resize", on);
     /* 打开期间底下页面别跟着滚 */
     const prev = document.documentElement.style.overflow;
@@ -247,9 +277,14 @@ export default function MenuOverlay({
     };
   }, []);
 
-  /* 稿 → 屏：整张 720×450 的稿等比放到宽度铺满（矮屏按高），水平居中，从顶上挂下来 */
-  const s = Math.min(vp.w / FRAME_W, vp.h / FRAME_H);
-  const ox = (vp.w - FRAME_W * s) / 2;
+  /* 稿 → 屏：桌面端整张 720×450 横排；手机竖屏（< 560px）切 2×2 两排挂牌 */
+  const isMobileMenu = vp.w < 560;
+  const fw = isMobileMenu ? MOBILE_FRAME_W : FRAME_W;
+  const fh = isMobileMenu ? MOBILE_FRAME_H : FRAME_H;
+  const activeTags = isMobileMenu ? MOBILE_TAGS : TAGS;
+  const dropDist = isMobileMenu ? 560 : DROP;
+  const s = Math.min(vp.w / fw, vp.h / fh);
+  const ox = (vp.w - fw * s) / 2;
 
   /* 打开：布盖下来，略微欠阻尼，落地轻轻一顿；吊牌落下来的声音跟着起 */
   const dropPlayed = useRef(false);
@@ -356,11 +391,13 @@ export default function MenuOverlay({
 
       {/* 吊牌们：一张按稿等比放的画板，挂在顶边 */}
       {/* 画板本身不吃点击，点到牌子之间的空处要能落到蓝底上关目录 */}
-      <div className="pointer-events-none absolute top-0" style={{ left: ox, width: px(FRAME_W), height: px(FRAME_H) }}>
-        {TAGS.map((tag) => (
+      <div className="pointer-events-none absolute top-0" style={{ left: ox, width: px(fw), height: px(fh) }}>
+        {activeTags.map((tag, i) => (
           <Tag
             key={tag.id}
             tag={tag}
+            idx={i}
+            drop={dropDist}
             s={s}
             vh={vp.h}
             box={box}
@@ -384,6 +421,8 @@ export default function MenuOverlay({
 
 function Tag({
   tag,
+  idx,
+  drop,
   s,
   vh,
   box,
@@ -397,6 +436,8 @@ function Tag({
   onPick,
 }: {
   tag: TagDef;
+  idx: number;
+  drop: number;
   s: number;
   vh: number;
   box: (b: Box) => CSSProperties;
@@ -412,8 +453,8 @@ function Tag({
   onHover: (on: boolean) => void;
   onPick: () => void;
 }) {
-  /* 牌子（夹子以下的一切）的竖向位置：-DROP*s 在屏外，0 挂好 */
-  const y = useMotionValue(-DROP * s);
+  /* 牌子（夹子以下的一切）的竖向位置：-drop*s 在屏外，0 挂好 */
+  const y = useMotionValue(-drop * s);
   const landed = useRef(false);
   /*
    * 摆动：绳子绕顶端转的角度 rot，不写关键帧，落地那一下给个角速度让弹簧自己晃出来——
@@ -424,8 +465,6 @@ function Tag({
   const follow = useSpring(rot, { stiffness: 90, damping: 7, mass: 1 });
   const bodyRot = useTransform([rot, follow], ([r, f]: number[]) => (f - r) * 1.6);
   const kicked = useRef(false);
-  /* 四块牌方向交替、力度略不同，别同步晃 */
-  const idx = TAGS.indexOf(tag);
   /* 轴挪高了，同样角度摆幅更大，力度相应给小 */
   const kick = (idx % 2 ? -1 : 1) * (15 + idx * 2);
   const swing = (velocity: number) => animate(rot, 0, { type: "spring", stiffness: 34, damping: 3, mass: 1, velocity });
@@ -470,7 +509,7 @@ function Tag({
   useEffect(() => {
     if (phase !== "out") return;
     landed.current = false;
-    animate(y, -DROP * s, { duration: LIFT_T, ease: [0.5, 0, 0.8, 0.6], delay: liftDelay(tag) });
+    animate(y, -drop * s, { duration: LIFT_T, ease: [0.5, 0, 0.8, 0.6], delay: liftDelay(tag) });
     animate(rot, 0, { duration: 0.3, ease: "easeOut" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);

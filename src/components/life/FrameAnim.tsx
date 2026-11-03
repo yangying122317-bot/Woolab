@@ -104,6 +104,20 @@ export default function FrameAnim({
     });
     return () => {
       alive = false;
+      /* 动画卸载时释放第 2 帧起的 ImageBitmap 显存（保留第 1 帧在 syncCache 供下次 0ms 瞬切），防止 Safari 显存超标崩溃 */
+      framesRef.current.forEach((f, i) => {
+        if (i === 0 || !f) return;
+        const s = srcs[i];
+        syncCache.delete(s);
+        cache.delete(s);
+        if ("close" in f && typeof f.close === "function") {
+          try {
+            f.close();
+          } catch {
+            /* ignore */
+          }
+        }
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcs]);

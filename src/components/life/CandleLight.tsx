@@ -126,8 +126,9 @@ export default function CandleLight({ lit, active, onDone }: Props) {
     const dx = g.ox / g.unit + (e.clientX - g.px) / (g.k * g.unit);
     const dy = g.oy / g.unit + (e.clientY - g.py) / (g.k * g.unit);
     const toPose = Math.hypot(dx - POSE.x, dy - POSE.y);
+    const snapR = document.body.clientWidth < 560 ? 58 : SNAP_R;
 
-    if (!snapped.current && toPose < SNAP_R) {
+    if (!snapped.current && toPose < snapR) {
       // 火苗尖够到烛芯：吸到凑火位，烛芯冒一小簇火
       snapped.current = true;
       animate(x, POSE.x * g.unit, SNAP_SPRING);

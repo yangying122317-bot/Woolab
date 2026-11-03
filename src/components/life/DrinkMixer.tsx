@@ -180,9 +180,11 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
       const q = toArt(ev.clientX, ev.clientY);
       const cx = q.x - grabX + ICE.w / 2;
       const cy = q.y - grabY + ICE.h / 2;
+      const mobile = document.body.clientWidth < 560;
+      const isTap = mobile && Math.hypot(q.x - at.x, q.y - at.y) < 28;
       setDragIce(null);
-      if (Math.hypot(cx - POUR_AT.x, cy - POUR_AT.y) < SNAP) {
-        iceFrom.current = { x: q.x - grabX, y: q.y - grabY };
+      if (Math.hypot(cx - POUR_AT.x, cy - POUR_AT.y) < (mobile ? 210 : SNAP) || isTap) {
+        iceFrom.current = isTap ? { x: BUCKET.x + 40, y: BUCKET.y + 20 } : { x: q.x - grabX, y: q.y - grabY };
         setIced(true); // 冰块从松手处滑进杯里
         later(playIceClink, 300);
         later(() => {
@@ -216,8 +218,10 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
       const spec = BOTTLE_POS[drinkOf(choice).bottle];
       const cx = q.x - grabX + spec.w / 2;
       const cy = q.y - grabY + spec.h / 2;
+      const mobile = document.body.clientWidth < 560;
+      const isTap = mobile && Math.hypot(q.x - at.x, q.y - at.y) < 28;
       setDrag(null);
-      if (Math.hypot(cx - POUR_AT.x, cy - POUR_AT.y) < SNAP) {
+      if (Math.hypot(cx - POUR_AT.x, cy - POUR_AT.y) < (mobile ? 210 : SNAP) || isTap) {
         setStep("pouring");
         later(playPour, 500);
         later(() => setStep("label"), 2300);

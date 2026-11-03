@@ -99,7 +99,7 @@ export function PageShiftProvider({
     <Ctx.Provider value={{ y, peeling, sy, peelToHome }}>
       {/* 首页持久层：从掀页开始（peeling=true）到切回 "/"（isHome=true）始终是同一个 <Home /> 实例，不卸载不重挂 */}
       {showHome && (
-        <div className={peeling ? "fixed inset-0 z-0 overflow-hidden" : "relative z-0 h-screen overflow-hidden"}>
+        <div className={peeling ? "fixed inset-0 z-0 overflow-hidden" : "relative z-0 h-full overflow-hidden"}>
           {backdrop}
           {pathname === INTRO_PREVIEW_PATH && introPreview}
           {fromLabDoor && (

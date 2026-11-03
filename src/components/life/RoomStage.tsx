@@ -16,6 +16,7 @@ import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { DictKey } from "../../i18n/dict";
 import FrameAnim, { warmFrames } from "./FrameAnim";
+import { isMobileView } from "../../device";
 import { loadImage, preloadLifeInteraction } from "./preload";
 import {
   playLightOff,
@@ -451,37 +452,73 @@ function PendulumSprite({
   kick?: number;
 }) {
   const controls = useAnimationControls();
-  const swingBy = (dir: number, amp = 6) =>
+  const isPendant = layer.src.startsWith("pendant-");
+  const mobile = isMobileView();
+  const baseAmp = isPendant && mobile ? 3.2 : 6;
+  const downPos = useRef<{ x: number; y: number } | null>(null);
+
+  const swingBy = (dir: number, amp = baseAmp) =>
     controls.start({
       rotate: [amp * dir, -amp * 0.75 * dir, amp * 0.5 * dir, -amp * 0.25 * dir, amp * 0.1 * dir, 0],
       transition: { duration: 1.8, ease: "easeInOut" },
     });
-  const swing = (e: React.MouseEvent<HTMLImageElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    swingBy(e.clientX < r.left + r.width / 2 ? 1 : -1);
+  const swing = (clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    void swingBy(clientX < r.left + r.width / 2 ? 1 : -1);
   };
   /* 面板收回去了：荡两下再停 */
   useEffect(() => {
     if (kick) void swingBy(1, 4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kick]);
+
+  /* 手机版房间下移居中后，天花板在灯顶上方约 490 画板像素处；绕天花板摆才不会半空折断 */
+  const origin = isPendant && mobile ? `50% ${vh(-490)}` : (layer.pivot ?? "50% 3%");
+
   return (
-    <motion.img
-      src={layerUrl(layer)}
-      alt=""
-      draggable={false}
-      onMouseEnter={swing}
-      onClick={onClick}
-      className={`absolute max-w-none select-none ${onClick ? "cursor-pointer" : ""}`}
+    <motion.div
+      onMouseEnter={(e) => {
+        if (!mobile) swing(e.clientX, e.currentTarget);
+      }}
+      onPointerDown={(e) => {
+        downPos.current = { x: e.clientX, y: e.clientY };
+      }}
+      onClick={(e) => {
+        if (
+          downPos.current &&
+          Math.hypot(e.clientX - downPos.current.x, e.clientY - downPos.current.y) > 7
+        ) {
+          return;
+        }
+        if (mobile) swing(e.clientX, e.currentTarget);
+        onClick?.();
+      }}
+      className={`absolute select-none ${onClick || isPendant ? "cursor-pointer" : ""}`}
       style={{
         left: vh(layer.x),
         top: vh(layer.y),
         width: vh(layer.w),
         height: vh(layer.h),
-        transformOrigin: layer.pivot ?? "50% 3%",
+        transformOrigin: origin,
       }}
       animate={controls}
-    />
+    >
+      {isPendant && mobile && (
+        <img
+          src="/assets/life/seg02/pendant-cord.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none select-none"
+          style={{ left: 0, top: vh(-594), width: vh(layer.w), height: vh(600) }}
+        />
+      )}
+      <img
+        src={layerUrl(layer)}
+        alt=""
+        draggable={false}
+        className="block h-full w-full max-w-none select-none"
+      />
+    </motion.div>
   );
 }
 
@@ -501,19 +538,25 @@ function PendantLamp({
 }) {
   const [lit, setLit] = useState(false);
   const controls = useAnimationControls();
-  /* 外框把灯体和光锥一起框住，转轴仍在灯体顶部吊线上 */
+  const mobile = isMobileView();
+  const downPos = useRef<{ x: number; y: number } | null>(null);
+  /* 外框把灯体和光锥一起框住，转轴在吊线顶端（手机版在天花板高度） */
   const box = {
     x: Math.min(layer.x, light.x),
     y: layer.y,
     w: Math.max(layer.x + layer.w, light.x + light.w) - Math.min(layer.x, light.x),
     h: light.y + light.h - layer.y,
   };
-  const pivot = { x: layer.x + layer.w / 2 - box.x, y: layer.h * 0.03 };
-  const swing = (e: React.MouseEvent<HTMLImageElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const dir = e.clientX < r.left + r.width / 2 ? 1 : -1;
+  const pivot = {
+    x: layer.x + layer.w / 2 - box.x,
+    y: mobile ? -490 : layer.h * 0.03,
+  };
+  const swing = (clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const dir = clientX < r.left + r.width / 2 ? 1 : -1;
+    const amp = mobile ? 3.2 : 6;
     void controls.start({
-      rotate: [6 * dir, -4.5 * dir, 3 * dir, -1.5 * dir, 0.6 * dir, 0],
+      rotate: [amp * dir, -amp * 0.75 * dir, amp * 0.5 * dir, -amp * 0.25 * dir, amp * 0.1 * dir, 0],
       transition: { duration: 1.8, ease: "easeInOut" },
     });
   };
@@ -544,6 +587,20 @@ function PendantLamp({
         animate={{ opacity: lit ? 1 : 0 }}
         transition={{ duration: lit ? 0.25 : 0.5 }}
       />
+      {mobile && (
+        <img
+          src="/assets/life/seg02/pendant-cord.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none select-none"
+          style={{
+            left: vh(layer.x - box.x),
+            top: vh(-594),
+            width: vh(layer.w),
+            height: vh(600),
+          }}
+        />
+      )}
       <img
         src={layerUrl(layer)}
         alt=""
@@ -555,14 +612,34 @@ function PendantLamp({
           width: vh(layer.w),
           height: vh(layer.h),
         }}
+        onPointerDown={(e) => {
+          downPos.current = { x: e.clientX, y: e.clientY };
+        }}
         onMouseEnter={(e) => {
-          swing(e);
+          if (mobile) return;
+          swing(e.clientX, e.currentTarget);
           setLit(true);
           playLightOn();
         }}
         onMouseLeave={() => {
+          if (mobile) return;
           setLit(false);
           playLightOff();
+        }}
+        onClick={(e) => {
+          if (
+            downPos.current &&
+            Math.hypot(e.clientX - downPos.current.x, e.clientY - downPos.current.y) > 7
+          ) {
+            return;
+          }
+          if (!mobile) return;
+          swing(e.clientX, e.currentTarget);
+          setLit((v) => {
+            if (!v) playLightOn();
+            else playLightOff();
+            return !v;
+          });
         }}
       />
     </motion.div>
@@ -647,20 +724,36 @@ function FridgeHover({ layer }: { layer: SceneLayer }) {
 function SceneSprite({ layer }: { layer: SceneLayer }) {
   const { animate, transformOrigin } = layerMotion(layer);
   return (
-    <motion.img
-      src={layerUrl(layer)}
-      alt=""
-      draggable={false}
-      className="pointer-events-none absolute max-w-none select-none"
-      style={{
-        left: vh(layer.x),
-        top: vh(layer.y),
-        width: vh(layer.w),
-        height: vh(layer.h),
-        transformOrigin,
-      }}
-      animate={animate}
-    />
+    <>
+      {layer.src === "pendant-cheers" && isMobileView() && (
+        <img
+          src="/assets/life/seg02/pendant-cord.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-w-none select-none"
+          style={{
+            left: vh(layer.x),
+            top: vh(layer.y - 594),
+            width: vh(layer.w),
+            height: vh(600),
+          }}
+        />
+      )}
+      <motion.img
+        src={layerUrl(layer)}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={{
+          left: vh(layer.x),
+          top: vh(layer.y),
+          width: vh(layer.w),
+          height: vh(layer.h),
+          transformOrigin,
+        }}
+        animate={animate}
+      />
+    </>
   );
 }
 
@@ -960,9 +1053,11 @@ function HangClothes({
       window.removeEventListener("pointerup", up);
       const q = toArt(ev.clientX, ev.clientY);
       setDrag(null);
-      // 找最近的空挂点
+      // 找最近的空挂点（手机视图下放宽吸附半径与高度容差，大拇指更容易挂上）
+      const mobile = document.body.clientWidth < 560;
+      const snapX = mobile ? 145 : SNAP_X;
       let slot = -1;
-      let best = SNAP_X;
+      let best = snapX;
       HANG_SLOTS.forEach((cx, i) => {
         if (hungNow[i] !== null) return;
         const d = Math.abs(q.x - cx);
@@ -971,7 +1066,7 @@ function HangClothes({
           slot = i;
         }
       });
-      if (slot >= 0 && q.y > 520 && q.y < 1280) {
+      if (slot >= 0 && q.y > (mobile ? 440 : 520) && q.y < (mobile ? 1360 : 1280)) {
         landing.current = { slot, x: q.x, y: q.y };
         hungNow[slot] = piece;
         setHung(hungNow);
@@ -1381,7 +1476,7 @@ function Watering({ interactive }: { interactive: boolean }) {
         {phase === "pour" && <WaterStream />}
       </motion.div>
 
-      {/* 触发区：钉在水壶原位，飞走期间失效，回来后可再摸 */}
+      {/* 触发区：钉在水壶原位，飞走期间失效，回来后可再摸（手机上点击也可触发浇花） */}
       <div
         className="absolute"
         style={{
@@ -1392,6 +1487,7 @@ function Watering({ interactive }: { interactive: boolean }) {
           pointerEvents: interactive && phase === "rest" ? "auto" : "none",
         }}
         onMouseEnter={() => interactive && phase === "rest" && setPhase("up")}
+        onClick={() => interactive && phase === "rest" && setPhase("up")}
       />
     </>
   );

@@ -11,7 +11,7 @@ import {
   stopAmbient,
   warmAmbient,
 } from "../audio/sfx";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AnimatePresence,
   motion,
@@ -22,8 +22,9 @@ import {
 } from "framer-motion";
 import { useTimeOfDay, type TimePhase } from "../timeOfDay";
 import { useWeather } from "../weather";
-import { heroHotspots } from "../data/heroHotspots";
+import { heroHotspots, type HeroHotspot } from "../data/heroHotspots";
 import { config } from "../config";
+import { isMobilePreview } from "../device";
 import {
   INTRO_DISMISSED_EVENT,
   INTRO_PREVIEW_PATH,
@@ -212,6 +213,58 @@ const SPRITES = {
 } as const;
 
 /**
+ * 手机竖屏版院子布局（在 1440×900 画板坐标系下重排前景物件）：
+ * 场景容器放大到 160% 让后方房子单独放大饱满；前景的小黑板、小羊、邮筒和花丛按比例收小并收拢在可视区（x ≈ 270..1170）内。
+ */
+const MOBILE_SPRITES = {
+  ...SPRITES,
+  bushLeft: { src: "/assets/hero-bush-left.png", x: 215, y: 726.7, w: 232.7 },
+  bushRight: { src: "/assets/hero-bush-right.png", x: 995, y: 695.8, w: 255.1 },
+  board: { src: "/assets/hero-board.png", x: 300, y: 815, w: 196 },
+  sheep: {
+    src: "/assets/hero-sheep-still.webp",
+    anim: "/assets/hero-sheep-idle.webp",
+    x: 748,
+    y: 648,
+    w: 198,
+  },
+  sheepShadow: {
+    src: "/assets/hero-sheep-shadow.png",
+    x: 751,
+    y: 649,
+    w: 191,
+  },
+  mailbox: {
+    headClosed: "/assets/hero-mailbox-head-closed.png",
+    headOpen: "/assets/hero-mailbox-head-open.png",
+    post: "/assets/hero-mailbox-post.png",
+    headX: 998,
+    headY: 686,
+    headW: 128,
+    headOpenW: 144,
+    postX: 1035,
+    postY: 818,
+    postW: 48,
+  },
+  bush: { src: "/assets/hero-bush.png", x: 968, y: 884, w: 110 },
+} as const;
+
+const mRect = (x: number, y: number, w: number, h: number) => ({
+  left: (x / FRAME_W) * 100,
+  top: (y / FRAME_H) * 100,
+  width: (w / FRAME_W) * 100,
+  height: (h / FRAME_H) * 100,
+});
+
+const MOBILE_HOTSPOTS: HeroHotspot[] = [
+  { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(745, 645, 204, 315) },
+  { id: "life", path: "/life", labelKey: "nav.life", ...mRect(589, 516, 170, 276) },
+  { id: "about", path: "/about", labelKey: "nav.about", ...mRect(605, 345, 230, 165) },
+  { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(292, 805, 212, 185) },
+  { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(985, 680, 160, 315) },
+];
+
+/**
  * 小鸟扇翅三帧（同一画布尺寸 228x192，已对齐，直接轮播）。
  * 播放顺序：上 → 中 → 下 → 中，循环。
  */
@@ -246,6 +299,7 @@ const basePick = () =>
 export const HERO_PRELOAD: string[] = [
   SPRITES.cloudBig.src,
   basePick(),
+  "/assets/hero-ground-tile.webp",
   "/assets/hero-base-edge-l.png",
   "/assets/hero-base-edge-r.png",
   SPRITES.openSign.src,
@@ -278,7 +332,8 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-firefly-wing-bottom.webp",
   "/assets/lab/gallery-painting-big.webp",
   ...MENU_ASSETS,
-  ...LIFE_CORE_ASSETS,
+  /* 桌面端在小电视阶段直接把 Life 首屏全部解码进内存；手机窄屏不在首页解码 Life 全套大图，防止手机 Safari 显存超标 */
+  ...(typeof window !== "undefined" && window.innerWidth < 768 ? [] : LIFE_CORE_ASSETS),
 ];
 
 let heroWarmed: Promise<void> | null = null;
@@ -418,6 +473,16 @@ export default function HeroScene() {
   }, [phase, rain]);
   useEffect(() => () => stopAmbient(), []);
 
+  const mobilePreview = isMobilePreview();
+
+  if (mobilePreview) {
+    return (
+      <div className="h-full">
+        <SceneCanvas cover={false} />
+      </div>
+    );
+  }
+
   return (
     <>
       {/* 桌面端：全屏场景 */}
@@ -425,10 +490,9 @@ export default function HeroScene() {
         <SceneCanvas cover />
       </div>
 
-      {/* 移动端：完整插画 + 列表导航 */}
-      <div className="flex h-full flex-col md:hidden">
+      {/* 移动端：全屏竖版小羊院子 */}
+      <div className="h-full md:hidden">
         <SceneCanvas cover={false} />
-        <HotspotList />
       </div>
     </>
   );
@@ -438,7 +502,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
+  const sp = cover ? SPRITES : MOBILE_SPRITES;
+  const activeHotspots = cover ? heroHotspots : MOBILE_HOTSPOTS;
   const [hovered, setHovered] = useState<string | null>(null);
+  const tapTimerRef = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(tapTimerRef.current), []);
   const { phase } = useTimeOfDay();
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -811,12 +879,17 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     else if (id === "contact") playMailboxClose();
   };
 
-  /** 点击/回车激活热区：小羊弹身份卡，大门走开门过场，其余直接跳转 */
+  /** 点击/回车激活热区：小羊弹身份卡，大门走开门过场，其余直接跳转（移动端先播微动效与气泡再跳页） */
   const activateHotspot = (id: string, path: string) => {
     if (enteringRef.current || curtainUpRef.current) return;
     if (id === "sheep") {
       /* 点小羊：它跟你打个招呼；身份卡开着的话再弹卡 */
       playHello();
+      if (!cover) {
+        window.clearTimeout(tapTimerRef.current);
+        enterHotspot("sheep");
+        tapTimerRef.current = window.setTimeout(() => setHovered(null), 2600);
+      }
       if (!config.identityCardEnabled) return;
       setCardOpen(true);
       return;
@@ -825,9 +898,57 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       void enterLife();
       return;
     }
+    if (!cover) {
+      window.clearTimeout(tapTimerRef.current);
+      enterHotspot(id);
+      tapTimerRef.current = window.setTimeout(() => {
+        setHovered(null);
+        playNavigate();
+        navigate(path);
+      }, 480);
+      return;
+    }
     playNavigate();
     navigate(path);
   };
+
+  /*
+   * 手机版（!cover）没有鼠标 hover：用"轮流呼吸巡演"把 5 个物件的微动效和名字气泡依次演出来——
+   * 小羊打招呼 → 大门亮灯+晃 OPEN 牌（小羊的生活）→ 屋顶吊灯亮起（关于）→ 小黑板摇晃（实验室）→ 红邮筒开盖（联系），
+   * 每项停留 1.85s、间隔 0.9s，循环往复；用户手动点击时暂停巡演。
+   */
+  useEffect(() => {
+    if (cover || !introGo || entering) return;
+    const TOUR: readonly string[] = ["sheep", "life", "about", "lab", "contact"];
+    let step = 0;
+    let greetIdx = 0;
+    let alive = true;
+    const timers: number[] = [];
+
+    const runStep = () => {
+      if (!alive || enteringRef.current || curtainUpRef.current) return;
+      const id = TOUR[step % TOUR.length];
+      step += 1;
+      if (id === "sheep") {
+        setGreetKey(SHEEP_GREETS[greetIdx % SHEEP_GREETS.length]);
+        greetIdx += 1;
+      }
+      setHovered(id);
+      timers.push(
+        window.setTimeout(() => {
+          if (!alive) return;
+          setHovered((curr) => (curr === id ? null : curr));
+          timers.push(window.setTimeout(runStep, 850));
+        }, 1850),
+      );
+    };
+
+    timers.push(window.setTimeout(runStep, 1100));
+    return () => {
+      alive = false;
+      timers.forEach(window.clearTimeout);
+    };
+  }, [cover, introGo, entering]);
 
   /** 树丛的摇摆：以根部为轴小幅左右摆 + 极轻微的横向压缩，像被风拂过 */
   const bushSway = (amp: number, duration: number, delay: number) =>
@@ -861,7 +982,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   return (
     <div
       ref={stageRef}
-      className={`relative overflow-hidden ${cover ? "h-full" : ""}`}
+      className="relative h-full overflow-hidden"
       style={{ background: theme.sky }}
     >
       {/* 天空：按时段换渐变，新旧两层交叉淡化（渐变本身没法过渡） */}
@@ -894,7 +1015,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
       {/* 镜头层：开场电视那段由幕布驱动缩放 / 位移（场景先缩进电视屏幕，再推到占满整屏），平时就是 1:1 */}
       <motion.div
-        className={cover ? "flex h-full items-end justify-center" : ""}
+        className={cover ? "flex h-full items-end justify-center" : "relative h-full w-full"}
         style={{
           scale: camera.scale,
           x: camera.x,
@@ -902,11 +1023,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           transformOrigin: "50% 50%",
         }}
       >
-        {/* 场景本体：按视口高度完整显示（上下不裁）；
-          屏幕比画板（16:10）宽时，两侧由边缘延伸条补满，
-          比画板窄时左右对称裁切。进门时整体向门洞推近 */}
+        {/* 场景本体：
+            - 桌面端（cover）：按视口高度完整显示，两侧由边缘延伸条补满；
+            - 移动端（!cover）：房子居中占满手机屏宽（width: 144%，对应画板中间 1000 单位），
+              下方无缝延伸灰石板院子地面，把小黑板、小羊、邮筒全部收进竖屏院子里 */}
         <motion.div
-          className="relative shrink-0"
+          className={cover ? "relative shrink-0" : "absolute"}
           animate={zoomControls}
           style={{
             transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
@@ -916,7 +1038,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                   aspectRatio: `${HERO_RATIO}`,
                   width: `calc(100vh * ${HERO_RATIO})`,
                 }
-              : { aspectRatio: `${HERO_RATIO}`, width: "100%" }),
+              : {
+                  aspectRatio: `${HERO_RATIO}`,
+                  width: "160%",
+                  left: "-30%",
+                  bottom: "26%",
+                }),
           }}
           onMouseMove={(e) => {
             // 鼠标靠近栏杆上的小鸟 → 惊飞
@@ -948,7 +1075,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               className="pointer-events-none absolute select-none"
               style={{
                 left: "-1.5%",
-                top: py(SPRITES.cloudBig.y),
+                top: py( cover ? SPRITES.cloudBig.y : 110 ),
                 width: "103%",
                 maxWidth: "none",
               }}
@@ -957,7 +1084,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             />
           </motion.div>
 
-          {/* 建筑与地面（静止底图，不含树丛）；两侧接边缘延伸条补满宽屏。
+          {/* 建筑与地面（静止底图，不含树丛）；两侧接边缘延伸条补满宽屏，移动端往下无缝延伸灰石板院子。
             出场时从下方轻轻浮现，随后各物件依次弹出 */}
           <motion.div
             className="pointer-events-none absolute inset-0"
@@ -971,6 +1098,18 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 : { duration: 0.55, ease: [0.33, 1, 0.68, 1] }
             }
           >
+            {!cover && (
+              <div
+                className="pointer-events-none absolute inset-x-0"
+                style={{
+                  top: "91.5%",
+                  height: "120%",
+                  backgroundImage: "url(/assets/hero-ground-tile.webp)",
+                  backgroundSize: "100% auto",
+                  backgroundRepeat: "repeat-y",
+                }}
+              />
+            )}
             <img
               src={SPRITES.base.src}
               srcSet={SPRITES.base.srcSet}
@@ -1003,13 +1142,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             origin="11.5% 88%"
           >
             <motion.img
-              src={SPRITES.bushLeft.src}
+              src={sp.bushLeft.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: px(SPRITES.bushLeft.x),
-                top: py(SPRITES.bushLeft.y),
-                width: px(SPRITES.bushLeft.w),
+                left: px(sp.bushLeft.x),
+                top: py(sp.bushLeft.y),
+                width: px(sp.bushLeft.w),
                 transformOrigin: "50% 100%",
               }}
               animate={bushSway(1, 4.6, 0)}
@@ -1023,13 +1162,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             origin="86.6% 88%"
           >
             <motion.img
-              src={SPRITES.bushRight.src}
+              src={sp.bushRight.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: px(SPRITES.bushRight.x),
-                top: py(SPRITES.bushRight.y),
-                width: px(SPRITES.bushRight.w),
+                left: px(sp.bushRight.x),
+                top: py(sp.bushRight.y),
+                width: px(sp.bushRight.w),
                 transformOrigin: "50% 100%",
               }}
               animate={bushSway(0.8, 5.4, 1.2)}
@@ -1080,10 +1219,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             play={intro}
             go={introGo}
             delay={INTRO_AT.board}
-            origin="16.5% 91%"
+            origin={cover ? "16.5% 91%" : "27.5% 98%"}
           >
             <HotspotSprite
-              sprite={SPRITES.board}
+              sprite={sp.board}
               active={hovered === "lab"}
               motionSpec={HOVER_MOTION.lab}
               origin="50% 100%"
@@ -1096,24 +1235,24 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             origin="63.4% 91%"
           >
             <img
-              src={SPRITES.sheepShadow.src}
+              src={sp.sheepShadow.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: px(SPRITES.sheepShadow.x),
-                top: py(SPRITES.sheepShadow.y),
-                width: px(SPRITES.sheepShadow.w),
+                left: px(sp.sheepShadow.x),
+                top: py(sp.sheepShadow.y),
+                width: px(sp.sheepShadow.w),
               }}
               draggable={false}
             />
             <img
-              src={sheepAnim ? SPRITES.sheep.anim : SPRITES.sheep.src}
+              src={sheepAnim ? sp.sheep.anim : sp.sheep.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: px(SPRITES.sheep.x),
-                top: py(SPRITES.sheep.y),
-                width: px(SPRITES.sheep.w),
+                left: px(sp.sheep.x),
+                top: py(sp.sheep.y),
+                width: px(sp.sheep.w),
               }}
               draggable={false}
             />
@@ -1124,7 +1263,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             delay={INTRO_AT.mailbox}
             origin="84.4% 91%"
           >
-            <MailboxSprite open={hovered === "contact"} />
+            <MailboxSprite open={hovered === "contact"} mailbox={sp.mailbox} />
           </IntroPop>
 
           {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
@@ -1135,13 +1274,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             origin="80.9% 91%"
           >
             <motion.img
-              src={SPRITES.bush.src}
+              src={sp.bush.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: px(SPRITES.bush.x),
-                top: py(SPRITES.bush.y),
-                width: px(SPRITES.bush.w),
+                left: px(sp.bush.x),
+                top: py(sp.bush.y),
+                width: px(sp.bush.w),
                 transformOrigin: "50% 100%",
               }}
               animate={bushSway(0.8, 5.4, 1.2)}
@@ -1151,13 +1290,16 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
           {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
           <motion.div
-            className="pointer-events-none absolute select-none"
+            className={`absolute select-none ${!cover && birdStanding ? "pointer-events-auto cursor-pointer" : "pointer-events-none"}`}
             style={{
               width: px(BIRD_BOX.w),
               height: py(BIRD_BOX.h),
             }}
             initial={{ left: "135%", top: "14%", opacity: 0 }}
             animate={birdControls}
+            onClick={() => {
+              if (!cover && birdStandingRef.current) birdStartledRef.current = true;
+            }}
           >
             <div className="absolute inset-0">
               {BIRD_FLAP_FRAMES.map((src, i) => (
@@ -1188,12 +1330,14 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           </motion.div>
 
           {/* 时段调色层：multiply 压暗/染色整个场景，线稿保持黑；进门时褪掉。
-            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，不然接缝处一深一浅两条竖带 */}
+            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，移动端上下延伸的天空与地面也一并覆盖 */}
           <motion.div
-            className="pointer-events-none absolute inset-y-0"
+            className="pointer-events-none absolute"
             style={{
               left: "-60%",
               right: "-60%",
+              top: cover ? 0 : "-150%",
+              bottom: cover ? 0 : "-150%",
               background: theme.tint,
               mixBlendMode: "multiply",
             }}
@@ -1232,7 +1376,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             tintFilter={!entering && theme.tintAlpha > 0 ? `url(#hero-leaf-tint-${cover ? "d" : "m"})` : undefined}
           />
           {/* 透明热区（点击跳转 + 悬停触发上面的微动效） */}
-          {heroHotspots.map((h) => (
+          {activeHotspots.map((h) => (
             <div
               key={h.id}
               role="link"
@@ -1244,11 +1388,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 top: `${h.top}%`,
                 width: `${h.width}%`,
                 height: `${h.height}%`,
+                WebkitTapHighlightColor: "transparent",
               }}
-              onMouseEnter={() => enterHotspot(h.id)}
-              onMouseLeave={() => leaveHotspot(h.id)}
-              onFocus={() => enterHotspot(h.id)}
-              onBlur={() => leaveHotspot(h.id)}
+              onMouseEnter={() => cover && enterHotspot(h.id)}
+              onMouseLeave={() => cover && leaveHotspot(h.id)}
+              onFocus={() => cover && enterHotspot(h.id)}
+              onBlur={() => cover && leaveHotspot(h.id)}
               onClick={() => activateHotspot(h.id, h.path)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -1256,12 +1401,14 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 }
               }}
             >
-              {/* 名称标签：悬停时淡入；小羊显示打招呼而不是栏目名 */}
+              {/* 名称标签：悬停或移动端巡演/点击时淡入带轻弹；小羊显示打招呼而不是栏目名 */}
               <span
-                className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300 ${
+                className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-neutral-800 shadow-md transition-all duration-300 ${
+                  cover ? "text-lg" : "text-base"
+                } ${
                   hovered === h.id
-                    ? "opacity-100"
-                    : "pointer-events-none opacity-0"
+                    ? "-translate-y-full scale-100 opacity-100"
+                    : "pointer-events-none -translate-y-[82%] scale-95 opacity-0"
                 }`}
               >
                 {h.id === "sheep" ? t(greetKey) : t(h.labelKey)}
@@ -2129,8 +2276,14 @@ function WoolabSprite({ lit }: { lit: boolean }) {
  * 并带一个微小的"弹开"缩放（以头部后侧为轴心）。
  * 开盖帧和闭合帧按右上角对齐（拱顶不动，盖子朝左下翻开）。
  */
-function MailboxSprite({ open }: { open: boolean }) {
-  const m = SPRITES.mailbox;
+function MailboxSprite({
+  open,
+  mailbox = SPRITES.mailbox,
+}: {
+  open: boolean;
+  mailbox?: typeof SPRITES.mailbox | typeof MOBILE_SPRITES.mailbox;
+}) {
+  const m = mailbox;
   const headRight = `${((FRAME_W - (m.headX + m.headW)) / FRAME_W) * 100}%`;
   const headTop = py(m.headY);
 
@@ -2176,31 +2329,5 @@ function MailboxSprite({ open }: { open: boolean }) {
         />
       </motion.div>
     </>
-  );
-}
-
-function HotspotList() {
-  const { t } = useLanguage();
-
-  return (
-    <ul className="flex flex-1 flex-col gap-3 bg-[#FFF6E9] px-4 py-5">
-      {/* 小羊不跳页（在场景里点它弹身份卡），列表里只放页面入口 */}
-      {heroHotspots
-        .filter((h) => h.path)
-        .map((h) => (
-          <li key={h.id}>
-            <Link
-              to={h.path}
-              onClick={() => playNavigate()}
-              className="flex items-center justify-between rounded-xl border border-[#F0E2CC] bg-white px-4 py-4 shadow-sm transition active:scale-[0.98]"
-            >
-              <span className="font-hand text-lg">{t(h.labelKey)}</span>
-              <span aria-hidden className="text-neutral-400">
-                →
-              </span>
-            </Link>
-          </li>
-        ))}
-    </ul>
   );
 }

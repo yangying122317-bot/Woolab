@@ -43,13 +43,15 @@ const NOTCH_CY = 575.5;
 const NOTCH_MARK = { cx: SW / 2, y: 520, w: 58, h: 54 };
 
 /** 5 张相纸落定的位置（中心点）和歪斜；数组顺序就是叠放顺序（后面的压前面的） */
-const CARDS: { shot: number; cx: number; cy: number; rot: number }[] = [
+const CARDS: { shot: number; cx: number; cy: number; rot: number; scale?: number }[] = [
   { shot: 0, cx: 183.6, cy: 319, rot: -9.5 },
   { shot: 1, cx: 255, cy: 238, rot: 0 },
   { shot: 3, cx: 477.6, cy: 224.8, rot: 8.4 },
   { shot: 4, cx: 587.6, cy: 289.6, rot: 11.3 },
   { shot: 2, cx: 374, cy: 297, rot: 0 },
 ];
+const MOBILE_VERTICAL_DX = [0, -2, 3, -2, 0];
+const MOBILE_VERTICAL_ROT = [-7.5, 0, 8.2, -5.5, 0];
 
 const TITLE = { y: 58 };
 const SUB = { y: 86 };
@@ -79,11 +81,37 @@ export default function NextPage({
   const { lang, pick } = useLanguage();
   const navigate = useNavigate();
 
-  const s = Math.min(vp.w / SW, vp.h / SH);
+  const mobile = vp.w < 560;
+  const s = mobile
+    ? Math.min(vp.w / 390, vp.h / SH)
+    : Math.min(vp.w / SW, vp.h / SH);
   const left = (vp.w - SW * s) / 2;
   const top = vp.h - SH * s;
-  /* 页脚链接和顶栏 logo / 喇叭同一条边距（顶栏按 720×450 缩） */
-  const inset = Math.min(vp.w / 720, vp.h / 450) * 25;
+  /* 页脚链接和顶栏 logo / 喇叭同一条边距 */
+  const inset = mobile ? 18 : Math.min(vp.w / 720, vp.h / 450) * 25;
+
+  /* 手机竖屏下：标题移到顶栏下方，5 张大相纸沿中轴紧密层叠竖排（下一张盖住上一张的白边下巴） */
+  const yScreenTop = -top / s;
+  const titleY = mobile ? yScreenTop + 62 : TITLE.y;
+  const subY = mobile ? titleY + 24 : SUB.y;
+  const lineY = mobile ? 436 : LINE.y;
+  const activeCards = mobile
+    ? (() => {
+        const topBound = subY + 24;
+        const botBound = lineY - 18;
+        const centerY = (topBound + botBound) / 2;
+        const availH = botBound - topBound;
+        const step = Math.min(84, availH * 0.165);
+        const cardScale = Math.min(0.94, Math.max(0.72, (availH - step * 4) / 186));
+        return [0, 1, 2, 3, 4].map((i) => ({
+          shot: i,
+          cx: 360 + MOBILE_VERTICAL_DX[i],
+          cy: centerY + (i - 2) * step,
+          rot: MOBILE_VERTICAL_ROT[i],
+          scale: cardScale,
+        }));
+      })()
+    : CARDS;
 
   /* 盒子比屏幕高出 pad，弧才有地方鼓 */
   const pad = SAG_MAX * vp.h;
@@ -153,7 +181,12 @@ export default function NextPage({
     navigate(path);
   };
 
-  const line = pick(aboutNext.line);
+  const rawLine = pick(aboutNext.line);
+  const line = mobile
+    ? lang === "zh"
+      ? rawLine.replace("，", "，\n")
+      : rawLine.replace("and *spaces* ", "and *spaces*\n")
+    : rawLine;
 
   return (
     <motion.div
@@ -213,7 +246,7 @@ export default function NextPage({
           {/* 标题 / 副标：铺满稿宽居中（motion 会接管 transform，不能靠 translateX(-50%)） */}
           <motion.div
             className="font-nav absolute whitespace-nowrap text-center font-black text-white"
-            style={{ left: 0, width: SW, top: TITLE.y, fontSize: 20, lineHeight: 1.3 }}
+            style={{ left: 0, width: SW, top: titleY, fontSize: 20, lineHeight: 1.3 }}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.55, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -222,7 +255,7 @@ export default function NextPage({
           </motion.div>
           <motion.div
             className="font-look absolute whitespace-nowrap text-center text-white"
-            style={{ left: 0, width: SW, top: SUB.y, fontSize: 14, lineHeight: 1.3 }}
+            style={{ left: 0, width: SW, top: subY, fontSize: 14, lineHeight: 1.3 }}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -231,9 +264,10 @@ export default function NextPage({
           </motion.div>
 
           {/* 5 张相纸：按拍摄顺序一张张从上面掉下来；hover 的那张浮到最前面 */}
-          {CARDS.map((c, i) => {
+          {activeCards.map((c, i) => {
             const shot = shots[c.shot];
             const order = c.shot;
+            const baseScale = c.scale ?? 1;
             const fromRot = c.rot + (c.rot >= 0 ? 16 : -16);
             return (
               <motion.div
@@ -247,11 +281,11 @@ export default function NextPage({
                   zIndex: hover === i ? 10 : i + 1,
                   filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.14))",
                 }}
-                initial={{ y: -(top / s + c.cy + CARD_H), rotate: fromRot, scale: 1 }}
+                initial={{ y: -(top / s + c.cy + CARD_H), rotate: fromRot, scale: baseScale }}
                 animate={{
                   y: hover === i ? -6 : 0,
                   rotate: hover === i ? c.rot * 0.35 : c.rot,
-                  scale: hover === i ? 1.06 : 1,
+                  scale: hover === i ? baseScale * 1.06 : baseScale,
                   transition: landed
                     ? { type: "spring", stiffness: 260, damping: 22 }
                     : {
@@ -268,6 +302,7 @@ export default function NextPage({
                 }}
                 onHoverStart={() => landed && setHover(i)}
                 onHoverEnd={() => setHover((h) => (h === i ? null : h))}
+                onClick={() => landed && setHover((h) => (h === i ? null : i))}
               >
                 <div className="absolute overflow-hidden" style={{ ...box(WINDOW), background: "#F3F1EA" }}>
                   <img
@@ -298,10 +333,10 @@ export default function NextPage({
             key={lang}
             text={line}
             cx={LINE.cx}
-            y={LINE.y}
-            w={LINE.w}
+            y={lineY}
+            w={mobile ? 336 : LINE.w}
             className="font-hand"
-            fontSize={16}
+            fontSize={mobile ? 13.5 : 16}
             lineHeight={1.4}
             color="#FFFFFF"
             tone="light"
@@ -317,8 +352,8 @@ export default function NextPage({
             bottom: 0,
             paddingLeft: inset,
             paddingRight: inset,
-            fontSize: 12 * s,
-            letterSpacing: 0.6 * s,
+            fontSize: mobile ? 11.5 : 12 * s,
+            letterSpacing: mobile ? 0.4 : 0.6 * s,
             color: "#111",
           }}
           initial={{ opacity: 0 }}

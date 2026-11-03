@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useSpring, useTransform, useVelocity } from "framer-motion";
 import { useLocation } from "react-router-dom";
 import { config } from "../config";
+import { isMobilePreview } from "../device";
 import { MU, NavLogo, navBarStyle } from "./NavBar";
 import { noiseBg } from "./about/geom";
 import { whenLifeFirstReady } from "./life/preload";
@@ -24,8 +25,8 @@ const MAX_WAIT = 6;
 const SLIDE_T = 0.7;
 const SAG_MAX = 0.14;
 const SAG_K = 0.1;
-/** 手机端（首页会切成"插画 + 列表"布局）先不播开屏 */
-const isMobile = () => window.innerWidth < 768;
+/** 手机端先不播开屏 */
+const isMobile = () => window.innerWidth < 768 || isMobilePreview();
 
 export default function IntroLoader() {
   const { pathname } = useLocation();

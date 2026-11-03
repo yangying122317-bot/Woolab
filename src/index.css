@@ -69,10 +69,47 @@
   text-transform: uppercase;
 }
 
+:root {
+  --mu-unit: 1.32px;
+  --nav-pad: 16;
+  --nav-gap: 15;
+}
+@media (min-width: 768px) {
+  :root {
+    --mu-unit: min(0.138889vw, 0.222222vh);
+    --nav-pad: 25;
+    --nav-gap: 26;
+  }
+  html.is-mobile-preview {
+    background: #1e1e1e;
+    --mu-unit: 1.32px;
+    --nav-pad: 16;
+    --nav-gap: 15;
+  }
+  html.is-mobile-preview body {
+    width: 390px;
+    margin: 0 auto;
+    background: #f9f6ef;
+    box-shadow:
+      0 0 0 8px #2c2c2e,
+      0 25px 60px rgba(0, 0, 0, 0.65);
+    overflow-x: clip;
+  }
+  html.is-mobile-preview .fixed {
+    max-width: 390px;
+    margin-left: auto;
+    margin-right: auto;
+    left: 0;
+    right: 0;
+  }
+}
+
 html,
 body,
 #root {
   height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /** Lenis 丝滑滚动需要的两条（不引它自带的 css：那份会把 html/body 的 height 改成 auto） */
