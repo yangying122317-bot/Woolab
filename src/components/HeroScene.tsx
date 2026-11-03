@@ -24,7 +24,6 @@ import { useTimeOfDay, type TimePhase } from "../timeOfDay";
 import { useWeather } from "../weather";
 import { heroHotspots } from "../data/heroHotspots";
 import { config } from "../config";
-import { isPhone } from "../device";
 import {
   INTRO_DISMISSED_EVENT,
   INTRO_PREVIEW_PATH,
@@ -279,8 +278,7 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-firefly-wing-bottom.webp",
   "/assets/lab/gallery-painting-big.webp",
   ...MENU_ASSETS,
-  /* 桌面端在小电视阶段直接把 Life 首屏全部解码进内存；手机横屏不在首页解码 Life 图，防止手机 Safari 显存超标 */
-  ...(isPhone() ? [] : LIFE_CORE_ASSETS),
+  ...LIFE_CORE_ASSETS,
 ];
 
 let heroWarmed: Promise<void> | null = null;
@@ -419,14 +417,6 @@ export default function HeroScene() {
     );
   }, [phase, rain]);
   useEffect(() => () => stopAmbient(), []);
-
-  if (isPhone()) {
-    return (
-      <div className="h-full">
-        <SceneCanvas cover />
-      </div>
-    );
-  }
 
   return (
     <>
@@ -825,12 +815,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const activateHotspot = (id: string, path: string) => {
     if (enteringRef.current || curtainUpRef.current) return;
     if (id === "sheep") {
-      /* 点小羊：它跟你打个招呼；触屏手机上点一下同时冒出招呼气泡 */
+      /* 点小羊：它跟你打个招呼；身份卡开着的话再弹卡 */
       playHello();
-      if (isPhone()) {
-        enterHotspot("sheep");
-        window.setTimeout(() => leaveHotspot("sheep"), 2200);
-      }
       if (!config.identityCardEnabled) return;
       setCardOpen(true);
       return;
