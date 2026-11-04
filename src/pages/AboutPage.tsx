@@ -142,7 +142,7 @@ export default function AboutPage() {
         at(120, () => playEject(EJECT_T));
       }, AUTO_AT * 1000);
     };
-    const introUp = config.introEnabled && !sessionStorage.getItem(INTRO_SESSION_KEY);
+    const introUp = config.introEnabled && !mobile && !sessionStorage.getItem(INTRO_SESSION_KEY);
     if (introUp) window.addEventListener(INTRO_DISMISSED_EVENT, shoot, { once: true });
     else shoot();
     return () => {

@@ -24,7 +24,7 @@ import { useTimeOfDay, type TimePhase } from "../timeOfDay";
 import { useWeather } from "../weather";
 import { heroHotspots, type HeroHotspot } from "../data/heroHotspots";
 import { config } from "../config";
-import { getViewWidth, isMobilePreview } from "../device";
+import { getViewWidth, isMobileView } from "../device";
 import {
   INTRO_DISMISSED_EVENT,
   INTRO_PREVIEW_PATH,
@@ -466,28 +466,17 @@ export default function HeroScene() {
   }, [phase, rain]);
   useEffect(() => () => stopAmbient(), []);
 
-  const mobilePreview = isMobilePreview();
-
-  if (mobilePreview) {
-    return (
-      <div className="h-full">
-        <SceneCanvas cover={false} />
-      </div>
-    );
-  }
+  const [mobileView, setMobileView] = useState(() => isMobileView());
+  useEffect(() => {
+    const onResize = () => setMobileView(isMobileView());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
-    <>
-      {/* 桌面端：全屏场景 */}
-      <div className="hidden h-full md:block">
-        <SceneCanvas cover />
-      </div>
-
-      {/* 移动端：全屏竖版小羊院子 */}
-      <div className="h-full md:hidden">
-        <SceneCanvas cover={false} />
-      </div>
-    </>
+    <div className="h-full">
+      <SceneCanvas key={mobileView ? "m" : "d"} cover={!mobileView} />
+    </div>
   );
 }
 
@@ -647,7 +636,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
   // 品牌开屏还盖在上面时先按兵不动；开屏滑开的瞬间常驻小动作（吊牌晃、小鸟飞过）才开始
   const [introGo, setIntroGo] = useState(
-    () => !config.introEnabled || !!sessionStorage.getItem(INTRO_SESSION_KEY),
+    () => !config.introEnabled || !cover || !!sessionStorage.getItem(INTRO_SESSION_KEY),
   );
   // 首次进入主页（本次会话内）才播"物件依次弹出"的出场动画，之后进来直接呈现完整场景。
   // 有开场电视的那一次也弹：电视里先只有空房子，镜头推到位了东西再一个个弹出来（introGo 由幕布快推到位时打开）。
@@ -666,7 +655,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const baseHidden = cloudHidden;
   useEffect(() => {
     sessionStorage.setItem("heroIntroPlayed", "1");
-  }, []);
+    if (!cover) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
+  }, [cover]);
   useEffect(() => {
     if (introGo) return;
     const onDismiss = () => setIntroGo(true);
