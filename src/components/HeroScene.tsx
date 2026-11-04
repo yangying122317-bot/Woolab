@@ -1032,7 +1032,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
       {/* 镜头层：开场电视那段由幕布驱动缩放 / 位移（场景先缩进电视屏幕，再推到占满整屏），平时就是 1:1 */}
       <motion.div
-        className={cover ? "flex h-full items-end justify-center" : "relative h-full w-full"}
+        className={
+          cover
+            ? "flex h-full items-end justify-center"
+            : "relative flex h-full w-full justify-center"
+        }
         style={{
           scale: camera.scale,
           x: camera.x,
@@ -1042,10 +1046,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       >
         {/* 场景本体：
             - 桌面端（cover）：按视口高度完整显示，两侧由边缘延伸条补满；
-            - 移动端（!cover）：房子居中占满手机屏宽（width: 144%，对应画板中间 1000 单位），
-              下方无缝延伸灰石板院子地面，把小黑板、小羊、邮筒全部收进竖屏院子里 */}
+            - 移动端（!cover）：按实际可视高度（100% / dvh）的 70.1% 等比缩放并置于 top: 7.55%，
+              确保在真机 Safari（扣除顶部状态栏与底部地址栏后可视区变矮约 22%）下，
+              顶部白云/飞鸟、中间房屋、底部小羊全身与右下角花丛均按设计稿比例完整呈现不被截断 */}
         <motion.div
-          className={cover ? "relative shrink-0" : "absolute"}
+          className="relative shrink-0"
           animate={zoomControls}
           style={{
             transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
@@ -1057,10 +1062,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 }
               : {
                   aspectRatio: `${HERO_RATIO}`,
-                  width: "243%",
-                  left: "-71.5%",
-                  top: 0,
-                  marginTop: "16.36%",
+                  height: "70.1%",
+                  top: "7.55%",
                 }),
           }}
           onMouseMove={(e) => {
