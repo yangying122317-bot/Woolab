@@ -169,6 +169,7 @@ export default function NavBar({
   onLogo,
   extra,
   hideLogo = false,
+  menuLeft = false,
   hideSound = false,
   soundOnly = false,
   logoOnly = false,
@@ -186,6 +187,8 @@ export default function NavBar({
   extra?: ReactNode;
   /** 不画左边的 logo（Lab 详情页那里左上角是"回画廊"） */
   hideLogo?: boolean;
+  /** 将 MENU 按钮移到顶栏最左侧（手机端 Lab 详情页把"回画廊"移到底部中间后，MENU 居左） */
+  menuLeft?: boolean;
   /** 隐藏最右边的喇叭（手机端牛皮抽屉盖住左 85% 时，纯白层只画 logo + Menu + 中/EN） */
   hideSound?: boolean;
   /** 只保留最右边的喇叭（配合 hideSound，在混合层里单画抽屉外的黑喇叭） */
@@ -209,19 +212,15 @@ export default function NavBar({
       animate={{ opacity: hidden ? 0 : 1 }}
       transition={{ duration: hidden ? 0 : 0.6, ease: "easeOut" }}
     >
-      {/* 左：logo，点回首页 */}
-      {hideLogo || soundOnly ? <span aria-hidden /> : <NavLogo disabled={hidden} onClick={onLogo} />}
-
-      {/* 右：MENU / CN · EN / 喇叭 */}
-      <motion.div
-        className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
-        style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: `calc(var(--mu) * var(--nav-gap, 26))` }}
-        initial={false}
-        animate={{ opacity: rightOff ? 0 : 1 }}
-        transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}
-      >
-        {/* MENU：目录打开期间圈一直留着 */}
-        <div className={soundOnly ? "pointer-events-none invisible" : "contents"}>
+      {/* 左：logo，点回首页（或手机端详情页将 MENU 放在左边） */}
+      {menuLeft && !soundOnly ? (
+        <motion.div
+          className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
+          style={{ fontSize: mu(12), letterSpacing: mu(0.6) }}
+          initial={false}
+          animate={{ opacity: rightOff ? 0 : 1 }}
+          transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}
+        >
           <NavHit held={menuOpen}>
             <button
               type="button"
@@ -233,6 +232,36 @@ export default function NavBar({
               {menuOpen ? t("menu.closeLabel") : t("menu.label")}
             </button>
           </NavHit>
+        </motion.div>
+      ) : hideLogo || soundOnly ? (
+        <span aria-hidden />
+      ) : (
+        <NavLogo disabled={hidden} onClick={onLogo} />
+      )}
+
+      {/* 右：MENU / CN · EN / 喇叭 */}
+      <motion.div
+        className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
+        style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: `calc(var(--mu) * var(--nav-gap, 26))` }}
+        initial={false}
+        animate={{ opacity: rightOff ? 0 : 1 }}
+        transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}
+      >
+        {/* MENU：目录打开期间圈一直留着 */}
+        <div className={soundOnly ? "pointer-events-none invisible" : "contents"}>
+          {!menuLeft && (
+            <NavHit held={menuOpen}>
+              <button
+                type="button"
+                onClick={onMenu}
+                aria-label={menuOpen ? t("menu.close") : t("menu.open")}
+                aria-expanded={menuOpen}
+                className="cursor-pointer"
+              >
+                {menuOpen ? t("menu.closeLabel") : t("menu.label")}
+              </button>
+            </NavHit>
+          )}
 
           <div className="flex items-center" style={{ gap: mu(9) }}>
             <NavHit>

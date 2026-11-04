@@ -356,15 +356,11 @@ function LookbookHead({
   u,
   closet,
   project,
-  leftLabel,
-  rightLabel,
   hideFrame,
 }: {
   u: number;
   closet: string;
   project?: LabProject;
-  leftLabel?: string;
-  rightLabel?: string;
   hideFrame?: boolean;
 }) {
   const mobile = getViewWidth() < 560;
@@ -373,7 +369,7 @@ function LookbookHead({
     const fh = (fw * FRAME_H) / FRAME_W;
     return (
       <Board u={u}>
-        {/* 手机竖屏：画框居顶居中，左右两侧配货号与产品名，标题 + 下划线排在画框下方 */}
+        {/* 手机竖屏：画框居顶居中，标题 + 下划线排在画框下方 */}
         <div
           className="absolute"
           style={{
@@ -386,34 +382,6 @@ function LookbookHead({
         >
           <FramePiece project={project} width={fw} />
         </div>
-        {leftLabel && (
-          <p
-            className="font-hand absolute whitespace-nowrap text-white/85"
-            style={{
-              left: 32 * u,
-              top: 335 * u,
-              transform: "translateY(-50%)",
-              fontSize: 20 * u,
-              lineHeight: 1.2,
-            }}
-          >
-            {leftLabel}
-          </p>
-        )}
-        {rightLabel && (
-          <p
-            className="font-hand absolute whitespace-nowrap text-right text-white/85"
-            style={{
-              right: 32 * u,
-              top: 335 * u,
-              transform: "translateY(-50%)",
-              fontSize: 20 * u,
-              lineHeight: 1.2,
-            }}
-          >
-            {rightLabel}
-          </p>
-        )}
         <Rotated u={u} x={235} y={536} w={250} h={46} iw={250} ih={46} transform="rotate(-2.33deg)">
           <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 35 * u, lineHeight: 1.2 }}>
             {closet}
@@ -1577,28 +1545,9 @@ function LookSection({
               u={u}
               closet={closet}
               project={project}
-              leftLabel={lb ? pick(lb.sku) : undefined}
-              rightLabel={lb ? pick(lb.productName) : undefined}
               hideFrame={hideTopFrame}
             />
           </motion.div>
-        )}
-        {/* 手机竖屏下第 2 件（如 T 恤 02）顶部显示该件的货号与产品名 */}
-        {mobile && !first && lb && (
-          <Board u={u}>
-            <p
-              className="font-hand absolute whitespace-nowrap text-white/85"
-              style={{ left: 32 * u, top: 80 * u, fontSize: 20 * u, lineHeight: 1.2 }}
-            >
-              {pick(lb.sku)}
-            </p>
-            <p
-              className="font-hand absolute whitespace-nowrap text-right text-white/85"
-              style={{ right: 32 * u, top: 80 * u, fontSize: 20 * u, lineHeight: 1.2 }}
-            >
-              {pick(lb.productName)}
-            </p>
-          </Board>
         )}
         <Description
           u={u}
@@ -1624,6 +1573,23 @@ function LookSection({
             )}
           </Board>
         </div>
+        {/* 手机竖屏：货号与产品名排在撕纸产品表与产品实拍图之间的石墙区左右两侧 */}
+        {mobile && lb && (
+          <Board u={u}>
+            <p
+              className="font-hand absolute whitespace-nowrap text-white/90"
+              style={{ left: 32 * u, bottom: 30 * u, fontSize: 20 * u, lineHeight: 1.2 }}
+            >
+              {pick(lb.sku)}
+            </p>
+            <p
+              className="font-hand absolute whitespace-nowrap text-right text-white/90"
+              style={{ right: 32 * u, bottom: 30 * u, fontSize: 20 * u, lineHeight: 1.2 }}
+            >
+              {pick(lb.productName)}
+            </p>
+          </Board>
+        )}
       </div>
 
       {/* 通栏照片：桌面端上下带撕纸边；手机端为利落平边并在照片下方石墙区配向上手绘箭头与说明 */}
@@ -1810,13 +1776,13 @@ export function DetailPage({
     const start = j === 0 ? 0 : layouts[j - 1].start + layouts[j - 1].blockH + layouts[j - 1].stripH;
     if (mobile) {
       const mLines = lb ? lb.mobileLines?.[lang] ?? lb.lines[lang] : [pick(project.description)];
-      const textStart = j === 0 ? 676 * u : 165 * u;
+      const textStart = j === 0 ? 676 * u : 90 * u;
       const descTop = textStart - (DESC_TEXT_Y - DESC_Y0) * u;
       const arrowBottom = textStart + (mLines.length * 42 + 24 + 48) * u;
       const collageTop = arrowBottom + 68 * u;
-      const blockH = collageTop + 365 * uc + 115 * u;
+      const blockH = collageTop + 365 * uc + 125 * u;
       const hasCaps = lb && (lb.captions?.back !== false || lb.captions?.front !== false);
-      const mStripH = (vw * 413) / 720 + (hasCaps ? 245 * u : 60 * u);
+      const mStripH = (vw * 413) / 720 + (hasCaps ? 210 * u : 40 * u);
       layouts.push({ start, descTop, collageTop, blockH, stripH: mStripH });
       return;
     }
@@ -1906,31 +1872,32 @@ export function DetailPage({
       <StoneWall u={u} />
       {/* 窗光：压在内容之上（z-20），顶栏那层（z-30）不受影响 */}
       <LightBeams />
-      {/* 返回按钮钉在角上、两边标签钉在竖直正中，其余都跟着页面滚。
-          刚从画廊翻进来时别一下全在：标题先浮出来，这两样跟在后面淡进来（翻转卡片里那份不动） */}
-      <motion.div
-        className="pointer-events-none absolute inset-0 z-30"
-        initial={interactive ? { opacity: 0 } : false}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.7, delay: base + 0.55, ease: "easeOut" }}
-      >
-        <button
-          type="button"
-          data-lab-detail-close=""
-          onClick={onClose}
-          className="font-look pointer-events-auto absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
-          /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
-          style={{
-            left: vw < 560 ? 18 : 25 * u,
-            top: `calc(${MU} * 26)`,
-            transform: "translateY(-50%)",
-            fontSize: vw < 560 ? Math.max(13, 12 * u) : 12 * u,
-          }}
+      {/* 桌面端：返回按钮钉在左上角、两边标签钉在竖直正中；手机端返回按钮移至页面底部正中 */}
+      {!mobile && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-30"
+          initial={interactive ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.7, delay: base + 0.55, ease: "easeOut" }}
         >
-          {t("lab.detail.back")}
-        </button>
-        {!mobile && <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />}
-      </motion.div>
+          <button
+            type="button"
+            data-lab-detail-close=""
+            onClick={onClose}
+            className="font-look pointer-events-auto absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
+            /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
+            style={{
+              left: 25 * u,
+              top: `calc(${MU} * 26)`,
+              transform: "translateY(-50%)",
+              fontSize: 12 * u,
+            }}
+          >
+            {t("lab.detail.back")}
+          </button>
+          <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />
+        </motion.div>
+      )}
 
       <div
         ref={scroller}
@@ -1971,23 +1938,40 @@ export function DetailPage({
             />
           ))}
 
-          {/* 画框墙：桌面端占一屏 + 主角落下来那段；手机端主角已在顶部排版内，底部四宫格占满一屏即到底 */}
-          <section className="relative" style={{ height: vh * (1 + (mobile ? 0 : WALL_LAND)) }}>
-            <FrameWall
-              u={uc}
-              markU={u}
-              vw={vw}
-              vh={vh}
-              index={index}
-              landed={mobile || landed}
-              active={interactive && flying === null}
-              dim={flying !== null}
-              hideIndex={flying}
-              onHover={setHoverIdx}
-              onOpen={setFlying}
-              onBackTop={backTop}
-            />
-          </section>
+          {/* 手机端去掉底部四个画框展示，在页面底部中间放置"← 回画廊"；桌面端保持画框墙 */}
+          {mobile ? (
+            <div
+              className="relative z-30 flex items-center justify-center"
+              style={{ paddingTop: 28 * u, paddingBottom: 88 * u }}
+            >
+              <button
+                type="button"
+                data-lab-detail-close=""
+                onClick={onClose}
+                className="font-look pointer-events-auto cursor-pointer whitespace-nowrap text-white/90 transition hover:opacity-70"
+                style={{ fontSize: Math.max(14, 24 * u) }}
+              >
+                {t("lab.detail.back")}
+              </button>
+            </div>
+          ) : (
+            <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
+              <FrameWall
+                u={uc}
+                markU={u}
+                vw={vw}
+                vh={vh}
+                index={index}
+                landed={landed}
+                active={interactive && flying === null}
+                dim={flying !== null}
+                hideIndex={flying}
+                onHover={setHoverIdx}
+                onOpen={setFlying}
+                onBackTop={backTop}
+              />
+            </section>
+          )}
         </div>
       </div>
 
