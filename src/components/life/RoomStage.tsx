@@ -972,6 +972,7 @@ function HangClothes({
   onDress: () => void;
 }) {
   const { t } = useLanguage();
+  const mobile = isMobileView();
   /* 衣帽区在不在画面里（滚走了就别出引导） */
   const anchorRef = useRef<HTMLDivElement>(null);
   const inView = useInView(anchorRef, { amount: 0.5 });
@@ -1352,27 +1353,27 @@ function HangClothes({
         show={hintOn && inView && !done && nextPiece >= 0 && !drag}
         text={t("life.guide.hang")}
         rotate={6}
-        arrowH="7vh"
-        fontSize="2.8vh"
-        maxWidth="22vh"
+        arrowH={mobile ? "8.2vh" : "7vh"}
+        fontSize={mobile ? "3.7vh" : "2.8vh"}
+        maxWidth={mobile ? "30vh" : "22vh"}
         tag
         bold
         textSide="left"
         /* 字在左、箭头在右：按右边缘定位，中英文字长不一样箭头也钉在右边那几个挂钩下面 */
-        style={{ left: vh(2020), top: vh(1000), translate: "-100% 0" }}
+        style={{ left: vh(2020), top: vh(mobile ? 985 : 1000), translate: "-100% 0" }}
       />
       {/* 引导 2：挂满了、还没换装——写在衣架上方的空墙上，箭头斜着指向右下的小羊 */}
       <HandHint
         show={hintOn && inView && canDress && whiteSlot >= 0 && !dressDrag}
         text={t("life.guide.dress")}
         rotate={135}
-        arrowH="7vh"
-        fontSize="2.8vh"
-        maxWidth="20vh"
+        arrowH={mobile ? "8.2vh" : "7vh"}
+        fontSize={mobile ? "3.7vh" : "2.8vh"}
+        maxWidth={mobile ? "28vh" : "20vh"}
         tag
         bold
         textSide="left"
-        style={{ left: vh(2020), top: vh(300), translate: "-100% 0" }}
+        style={{ left: vh(2020), top: vh(mobile ? 265 : 300), translate: "-100% 0" }}
       />
     </>
   );
@@ -1515,7 +1516,15 @@ const SPOT_ARROW = "8vh";
  */
 const SPOT_HINT: Record<
   string,
-  { rotate: number; flip?: boolean; at: React.CSSProperties; text: DictKey; textSide: "left" | "right" | "above" | "below"; maxWidth: string }
+  {
+    rotate: number;
+    flip?: boolean;
+    at: React.CSSProperties;
+    text: DictKey;
+    textSide: "left" | "right" | "above" | "below";
+    maxWidth: string;
+    mobileMaxWidth: string;
+  }
 > = {
   /* 软木板右边一点的白墙上，箭头指向左边散落的碎片；纸签挂在箭头下面，落在板子和花瓶之间那块空墙 */
   photo: {
@@ -1524,6 +1533,7 @@ const SPOT_HINT: Record<
     text: "life.guide.photo",
     textSide: "below",
     maxWidth: "21vh",
+    mobileMaxWidth: "28vh",
   },
   /* 桌子左端那三瓶的正上方，箭头指下去，字在箭头上面（字比箭头宽，整体按中线对齐，箭头才不会被字挤偏） */
   drink: {
@@ -1532,6 +1542,7 @@ const SPOT_HINT: Record<
     text: "life.guide.drink",
     textSide: "above",
     maxWidth: "28vh",
+    mobileMaxWidth: "37vh",
   },
   /* 小羊蜡烛罐正上方，箭头指下去（镜像一下让弧弯向字那边）；上面就是屏幕顶，字放箭头左边那块空墙（冰箱顶上方） */
   candle: {
@@ -1541,6 +1552,7 @@ const SPOT_HINT: Record<
     text: "life.guide.candle",
     textSide: "left",
     maxWidth: "34vh",
+    mobileMaxWidth: "45vh",
   },
 };
 
@@ -1558,6 +1570,7 @@ function StationSpot({
   onOpen: (station: LifeStation, el: HTMLElement) => void;
 }) {
   const { pick, t } = useLanguage();
+  const mobile = isMobileView();
   const ref = useRef<HTMLDivElement>(null);
   /* 滚到画面里就出箭头（不等人停下来）；鼠标已经放上去了就不用指了 */
   const inView = useInView(ref, { amount: 0.6 });
@@ -1597,12 +1610,12 @@ function StationSpot({
         show={!done && interactive && hintOn && inView && !hovered}
         text={t(spot.text)}
         textSide={spot.textSide}
-        maxWidth={spot.maxWidth}
-        fontSize="2.8vh"
+        maxWidth={mobile ? spot.mobileMaxWidth : spot.maxWidth}
+        fontSize={mobile ? "3.7vh" : "2.8vh"}
         tag
         rotate={spot.rotate}
         flip={spot.flip}
-        arrowH={SPOT_ARROW}
+        arrowH={mobile ? "8.2vh" : SPOT_ARROW}
         bold
         style={spot.at}
       />
@@ -1732,11 +1745,11 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
         show={guide.entry && interactive}
         text={t("life.guide.list")}
         rotate={-80}
-        arrowH="8vh"
-        fontSize="2.8vh"
+        arrowH={isMobileView() ? "9.5vh" : "8vh"}
+        fontSize={isMobileView() ? "3.9vh" : "2.8vh"}
         bold
         textSide="right"
-        style={{ left: vh(1200), top: vh(292) }}
+        style={{ left: vh(1200), top: vh(isMobileView() ? 265 : 292) }}
       />
 
       {/* 段02 · 起居区：软木板、单人沙发、小圆桌、吊灯、落地植物。
