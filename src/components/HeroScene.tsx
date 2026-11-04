@@ -33,6 +33,7 @@ import {
 } from "../state/intro";
 import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
+import { setMobileThemeColor } from "../state/chrome";
 import {
   LIFE_CORE_ASSETS,
   isImageReady,
@@ -329,8 +330,26 @@ export const HERO_PRELOAD: string[] = [
   ...(typeof window !== "undefined" && window.innerWidth < 768 ? [] : LIFE_CORE_ASSETS),
 ];
 
+/** 手机端首页核心图层：小电视阶段只等这几张首屏静态图层，保证手机首次打开 1.6s 即刻开机，不卡慢网 */
+export const MOBILE_HERO_PRELOAD: string[] = [
+  SPRITES.cloudBig.src,
+  "/assets/hero-base-1920.webp",
+  "/assets/hero-ground-tile.webp",
+  SPRITES.openSign.src,
+  SPRITES.sheep.src,
+  SPRITES.sheepShadow.src,
+  SPRITES.mailbox.headClosed,
+  SPRITES.mailbox.post,
+  SPRITES.woolab.off.src,
+  SPRITES.woolab.on.src,
+  SPRITES.doorLit.src,
+  SPRITES.board.src,
+  SPRITES.bush.src,
+  SPRITES.bushLeft.src,
+  SPRITES.bushRight.src,
+];
+
 let heroWarmed: Promise<void> | null = null;
-/** 直达内页时在后台把首页全套图层解码进内存，点 WOOLAB 回首页时 0 延迟直接呈现 */
 export function warmHero(): Promise<void> {
   if (!heroWarmed) heroWarmed = loadImages(HERO_PRELOAD, 6);
   return heroWarmed;
@@ -500,9 +519,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const edgeDx = (visBoardW - FRAME_W / 2.43) / 2;
 
     const cloudY = lerp(126, MOBILE_SPRITES.cloudBig.y);
-    const sheepY = lerp(654, MOBILE_SPRITES.sheep.y);
-    const bushLeftY = lerp(830, MOBILE_SPRITES.bushLeft.y);
-    const bushRightY = lerp(906, MOBILE_SPRITES.bushRight.y);
+    const sheepY = lerp(646, MOBILE_SPRITES.sheep.y);
+    const bushLeftY = lerp(836, MOBILE_SPRITES.bushLeft.y);
+    const bushRightY = lerp(946, MOBILE_SPRITES.bushRight.y);
 
     const sprites = {
       ...MOBILE_SPRITES,
@@ -545,7 +564,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const canvasW = vp.w * widthRatio;
     const scale = canvasW / FRAME_W;
     // 以右下角花丛底边 + 底部石板路留白作为锚点贴合当前可视区底部；超长屏（aspect > 2.17）上下均分余量
-    const botBoardY = bushRightY + 103 + lerp(24, 105);
+    const botBoardY = bushRightY + 103 + lerp(16, 105);
     const baseTopPx = vp.h - botBoardY * scale;
     const extraTallPx = aspect > 2.17 ? (vp.h - vp.w * 2.17) * 0.45 : 0;
     const topPx = baseTopPx - extraTallPx;
@@ -604,6 +623,22 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     setCurtainUp(false);
     setCurtainSlide(false);
   };
+  useEffect(() => {
+    if (cover) return;
+    if (curtainUp && !curtainSlide) {
+      setMobileThemeColor("#ffffff", "#ffffff");
+      return;
+    }
+    const BARS: Record<string, [string, string]> = {
+      dawn: ["#7b87bb", "#bcb4ae"],
+      day: ["#0e8dd9", "#bdbdbb"],
+      dusk: ["#433f7f", "#b7a59a"],
+      night: ["#060924", "#68708b"],
+      rain: ["#115078", "#979a9e"],
+    };
+    const [topC, botC] = BARS[themeKey] ?? BARS.day;
+    setMobileThemeColor(topC, botC);
+  }, [cover, curtainUp, curtainSlide, themeKey]);
   /* 首页自身素材已在小电视阶段或内页后台全部解码完；已就绪时第一帧直接挂上动态小羊，并立即在后台预加载 Life 页代码与第一屏图层 */
   const [sheepAnim, setSheepAnim] = useState(() => isImageReady(SPRITES.sheep.anim));
   useEffect(() => {
@@ -1084,15 +1119,25 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           exit={{ opacity: 0 }}
           transition={{ duration: TIME_FADE, ease: "easeInOut" }}
         >
-          {theme.stars && <NightSky reducedMotion={!!reducedMotion} />}
+          {cover && theme.stars && <NightSky reducedMotion={!!reducedMotion} />}
         </motion.div>
       </AnimatePresence>
+
+      {/* 手机端星空：放在时段调色层之上、房屋之后（前 32% 天空区域），避免被移动端上移的场景调色层压暗遮挡 */}
+      {!cover && theme.stars && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 overflow-hidden"
+          style={{ height: "32%" }}
+        >
+          <NightSky reducedMotion={!!reducedMotion} />
+        </div>
+      )}
 
       {/* 开场白布：整块盖在场景上；图下完、线描满就拉走，拉走后卸掉 */}
       {curtainUp && (
         <HeroCurtain
           key={curtainRun}
-          preload={HERO_PRELOAD}
+          preload={cover ? HERO_PRELOAD : MOBILE_HERO_PRELOAD}
           preview={introPreview}
           slide={curtainSlide}
           camera={camera}
@@ -1265,13 +1310,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           </IntroPop>
 
           {/* 时段调色层：multiply 压暗/染色背景与建筑，线稿保持黑；进门时褪掉。
-            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，移动端上下延伸的天空与地面也一并覆盖 */}
+            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，移动端用 0 顶底裁剪防止溢出遮住顶部星空 */}
           <motion.div
             className="pointer-events-none absolute"
             style={{
               left: "-60%",
               right: "-60%",
-              top: cover ? 0 : "-150%",
+              top: cover ? 0 : "-50%",
               bottom: cover ? 0 : "-150%",
               background: theme.tint,
               mixBlendMode: "multiply",
@@ -1336,27 +1381,29 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               draggable={false}
             />
           </IntroPop>
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.bushRight}
-            origin={cover ? "86.6% 88%" : "64.5% 120%"}
-          >
-            <motion.img
-              src={sp.bushRight.src}
-              alt=""
-              className="pointer-events-none absolute select-none"
-              style={{
-                left: px(sp.bushRight.x),
-                top: py(sp.bushRight.y),
-                width: px(sp.bushRight.w),
-                transformOrigin: "50% 100%",
-                filter: tintFilter,
-              }}
-              animate={bushSway(0.8, 5.4, 1.2)}
-              draggable={false}
-            />
-          </IntroPop>
+          {cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.bushRight}
+              origin="86.6% 88%"
+            >
+              <motion.img
+                src={sp.bushRight.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.bushRight.x),
+                  top: py(sp.bushRight.y),
+                  width: px(sp.bushRight.w),
+                  transformOrigin: "50% 100%",
+                  filter: tintFilter,
+                }}
+                animate={bushSway(0.8, 5.4, 1.2)}
+                draggable={false}
+              />
+            </IntroPop>
+          )}
 
           <IntroPop
             play={intro}
@@ -1439,6 +1486,30 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               draggable={false}
             />
           </IntroPop>
+
+          {!cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.bushRight}
+              origin="64.5% 120%"
+            >
+              <motion.img
+                src={sp.bushRight.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.bushRight.x),
+                  top: py(sp.bushRight.y),
+                  width: px(sp.bushRight.w),
+                  transformOrigin: "50% 100%",
+                  filter: tintFilter,
+                }}
+                animate={bushSway(0.8, 5.4, 1.2)}
+                draggable={false}
+              />
+            </IntroPop>
+          )}
 
           {/* 小鸟：扇翅三帧 + 站立帧共用一个容器，底部居中对齐，切帧时脚位不变 */}
           <motion.div

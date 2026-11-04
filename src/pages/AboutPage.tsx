@@ -9,6 +9,7 @@ import { getViewWidth } from "../device";
 import { A, CARD_H, CARD_W, FRAME_PAD, WINDOW, box, noiseBg, type Box } from "../components/about/geom";
 import MarkedText, { decoDelay } from "../components/about/MarkedText";
 import NextPage from "../components/about/NextPage";
+import { setMobileThemeColor } from "../state/chrome";
 import { whenAboutReady } from "../data/pageAssets";
 
 /**
@@ -84,10 +85,17 @@ export default function AboutPage() {
   };
 
   useEffect(() => {
-    const on = () => setVp({ w: getViewWidth(), h: window.innerHeight });
+    const on = () =>
+      setVp({
+        w: getViewWidth(),
+        h: Math.round(window.visualViewport?.height || window.innerHeight),
+      });
+    on();
     window.addEventListener("resize", on);
+    window.visualViewport?.addEventListener("resize", on);
     return () => {
       window.removeEventListener("resize", on);
+      window.visualViewport?.removeEventListener("resize", on);
       timers.current.forEach(window.clearTimeout);
     };
   }, []);
@@ -103,6 +111,19 @@ export default function AboutPage() {
   }, []);
 
   const mobile = vp.w < 560;
+  useEffect(() => {
+    if (!mobile) return;
+    const prevTouchAction = document.documentElement.style.touchAction;
+    document.documentElement.style.touchAction = "none";
+    const preventTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    window.addEventListener("touchmove", preventTouchMove, { passive: false });
+    return () => {
+      document.documentElement.style.touchAction = prevTouchAction;
+      window.removeEventListener("touchmove", preventTouchMove);
+    };
+  }, [mobile]);
   /* 桌面端按 720×450 居中；手机竖屏下相机+相纸居中（中点 y≈221），上方放第一段批注+向下箭头，下方放向上箭头+第二段批注 */
   const s = mobile
     ? Math.min(vp.w / 335, (vp.h - 120) / 570)
@@ -171,8 +192,12 @@ export default function AboutPage() {
     at(NOTES_AT * 1000, () => setPhase("ready"));
   };
 
-  /* 最后一张出完 → 往下滚翻到 What's Next；翻回来之后相机是空的，再往下滚还能再翻 */
+  /* 最后一张出完 → 往下滚翻到 What's Next；翻回来之后桌面端相机是空的，手机端自动重新推入第 5 张相纸 */
   const [flipped, setFlipped] = useState(false);
+  useEffect(() => {
+    if (!mobile) return;
+    if (!flipped) setMobileThemeColor(BG, BG);
+  }, [mobile, flipped]);
   const flipReady = !flipped && ((phase === "ready" && last) || phase === "done");
   const flipReadyRef = useRef(false);
   flipReadyRef.current = flipReady;
@@ -201,7 +226,7 @@ export default function AboutPage() {
     let ty = 0;
     const onTs = (e: TouchEvent) => (ty = e.touches[0].clientY);
     const onTe = (e: TouchEvent) => {
-      if (ty - e.changedTouches[0].clientY > 60) flip();
+      if (ty - e.changedTouches[0].clientY > 45) flip();
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKey);
@@ -225,8 +250,12 @@ export default function AboutPage() {
 
   return (
     <div
-      className="relative h-screen overflow-hidden select-none"
-      style={{ backgroundColor: BG, ...noiseBg("cream", s) }}
+      className="relative overflow-hidden select-none"
+      style={{
+        height: mobile ? vp.h : "100vh",
+        backgroundColor: BG,
+        ...noiseBg("cream", s),
+      }}
     >
       {/* 相机那几张图到齐再一起露出来 */}
       <motion.div
@@ -466,8 +495,20 @@ export default function AboutPage() {
         )}
       </AnimatePresence>
 
-      {/* 翻过去的 What's Next：蓝页盖在相机页上；退回去之后卸掉 */}
-      {flipped && <NextPage vp={vp} shots={aboutShots} onBack={() => setFlipped(false)} />}
+      {/* 翻过去的 What's Next：蓝页盖在相机页上；退回去之后卸掉，手机端自动恢复第 5 张相纸 */}
+      {flipped && (
+        <NextPage
+          vp={vp}
+          shots={aboutShots}
+          onBack={() => {
+            setFlipped(false);
+            if (mobile) {
+              setPhase("eject");
+              playEject(EJECT_T);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

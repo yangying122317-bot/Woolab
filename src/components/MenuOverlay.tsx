@@ -18,6 +18,7 @@ import { usePageShift } from "./PageShift";
 import { loadImage, warmBytes, warmLife } from "./life/preload";
 import { warmAbout, warmContact } from "../data/pageAssets";
 import { playMenuDrop, warmAmbient } from "../audio/sfx";
+import { setMobileThemeColor } from "../state/chrome";
 
 /* ---------------- 设计稿坐标（720 × 450 的 0.5x 稿，下面全按 s 倍放） ---------------- */
 
@@ -267,10 +268,15 @@ export default function MenuOverlay({
     /* 打开期间底下页面别跟着滚 */
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const prevTop = meta?.getAttribute("content") || "#ffffff";
+    const prevBot = document.body.style.backgroundColor || "#ffffff";
+    setMobileThemeColor(MENU_BG, MENU_BG);
     return () => {
       alive.current = false;
       window.removeEventListener("resize", on);
       document.documentElement.style.overflow = prev;
+      if (rootY.get() === 0) setMobileThemeColor(prevTop, prevBot);
     };
   }, []);
 

@@ -150,17 +150,12 @@ export function useMobileHorizontalDrag(enabled = true): void {
         if (Math.hypot(dx, dy) < 7) return;
         lockedAxis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
       }
-      /* 真实触屏上纵向滑动（y）直接交给系统原生 120Hz 滚动与惯性处理，不拦截不冲突；
-         仅在横向滑动（x）时拦截并映射为页面推进 */
-      if (lockedAxis === "y") {
-        active = false;
-        return;
-      }
       if (e.cancelable) e.preventDefault();
       const now = performance.now();
       const dt = Math.max(1, now - lastTime);
-      const step = x - lastX;
-      lastX = x;
+      const step = lockedAxis === "x" ? x - lastX : y - startY;
+      if (lockedAxis === "y") startY = y;
+      else lastX = x;
       const deltaScroll = -step * 2.1;
       window.scrollBy(0, deltaScroll);
       velocity = velocity * 0.35 + (deltaScroll / dt) * 16 * 0.65;
@@ -174,7 +169,7 @@ export function useMobileHorizontalDrag(enabled = true): void {
     };
 
     const prevTouchAction = document.documentElement.style.touchAction;
-    document.documentElement.style.touchAction = "pan-y";
+    document.documentElement.style.touchAction = "none";
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", end, { passive: true });

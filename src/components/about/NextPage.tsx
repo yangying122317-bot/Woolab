@@ -13,7 +13,7 @@ import { A, CARD_H, CARD_W, FRAME_PAD, WINDOW, box, noiseBg } from "./geom";
 import MarkedText, { CIRCLE_AR, UNDERLINE_AR, decoDelay } from "./MarkedText";
 import { aboutNext, type AboutShot } from "../../data/aboutShots";
 import { useLanguage } from "../../i18n/LanguageContext";
-import { useReportPlainNav } from "../../state/chrome";
+import { setMobileThemeColor, useReportPlainNav } from "../../state/chrome";
 import { playNavigate } from "../../audio/sfx";
 
 /**
@@ -90,19 +90,19 @@ export default function NextPage({
   /* 页脚链接和顶栏 logo / 喇叭同一条边距 */
   const inset = mobile ? 18 : Math.min(vp.w / 720, vp.h / 450) * 25;
 
-  /* 手机竖屏下：标题移到顶栏下方，5 张大相纸沿中轴紧密层叠竖排（下一张盖住上一张的白边下巴） */
+  /* 手机竖屏下：标题移到顶栏下方（留足安全距离避免与顶栏重叠），5 张大相纸沿中轴紧密层叠竖排（下一张盖住上一张的白边下巴） */
   const yScreenTop = -top / s;
-  const titleY = mobile ? yScreenTop + 62 : TITLE.y;
-  const subY = mobile ? titleY + 24 : SUB.y;
+  const titleY = mobile ? yScreenTop + 56 / s + 12 : TITLE.y;
+  const subY = mobile ? titleY + 23 : SUB.y;
   const lineY = mobile ? 436 : LINE.y;
   const activeCards = mobile
     ? (() => {
-        const topBound = subY + 24;
+        const topBound = subY + 20;
         const botBound = lineY - 18;
         const centerY = (topBound + botBound) / 2;
         const availH = botBound - topBound;
-        const step = Math.min(84, availH * 0.165);
-        const cardScale = Math.min(0.94, Math.max(0.72, (availH - step * 4) / 186));
+        const step = Math.min(78, availH * 0.162);
+        const cardScale = Math.min(0.88, Math.max(0.66, (availH - step * 4) / 186));
         return [0, 1, 2, 3, 4].map((i) => ({
           shot: i,
           cx: 360 + MOBILE_VERTICAL_DX[i],
@@ -127,6 +127,11 @@ export default function NextPage({
   const [coversNav, setCoversNav] = useState(false);
   useMotionValueEvent(edgeTop, "change", (v) => setCoversNav(v < vp.h * 0.05));
   useReportPlainNav(coversNav);
+  useEffect(() => {
+    if (!mobile) return;
+    if (coversNav) setMobileThemeColor(BLUE, CREAM);
+    else setMobileThemeColor(CREAM, CREAM);
+  }, [mobile, coversNav]);
 
   const leaving = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
@@ -161,7 +166,7 @@ export default function NextPage({
     let ty = 0;
     const onTs = (e: TouchEvent) => (ty = e.touches[0].clientY);
     const onTe = (e: TouchEvent) => {
-      if (e.changedTouches[0].clientY - ty > 60) leave();
+      if (e.changedTouches[0].clientY - ty > 40) leave();
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKey);
@@ -350,10 +355,10 @@ export default function NextPage({
           style={{
             top: top + BLUE_BOTTOM * s,
             bottom: 0,
-            paddingLeft: inset,
-            paddingRight: inset,
-            fontSize: mobile ? 11.5 : 12 * s,
-            letterSpacing: mobile ? 0.4 : 0.6 * s,
+            paddingLeft: mobile && lang === "en" ? 12 : inset,
+            paddingRight: mobile && lang === "en" ? 12 : inset,
+            fontSize: mobile ? (lang === "en" ? 9.5 : 11.5) : 12 * s,
+            letterSpacing: mobile ? (lang === "en" ? 0.1 : 0.4) : 0.6 * s,
             color: "#111",
           }}
           initial={{ opacity: 0 }}
@@ -361,7 +366,10 @@ export default function NextPage({
           transition={{ delay: decoDelay(line, LINE_AT) + 0.3, duration: 0.5 }}
         >
           <FootLink label={pick(aboutNext.life)} onClick={() => go("/life")} />
-          <FootLink label={pick(aboutNext.lab)} onClick={() => go("/lab")} />
+          <FootLink
+            label={mobile && lang === "en" ? "Enter Meelo's Gallery" : pick(aboutNext.lab)}
+            onClick={() => go("/lab")}
+          />
         </motion.div>
       </div>
     </motion.div>

@@ -165,3 +165,23 @@ export function useReportDarkNav(active: boolean) {
     };
   }, [active]);
 }
+
+/**
+ * 手机浏览器顶部状态栏（meta[name="theme-color"]）与底部工具栏（html/body 背景色）通栏颜色同步：
+ * 仅在手机真机窄屏（window.innerWidth < 768）下生效，桌面端完全不触碰。
+ */
+export function setMobileThemeColor(topColor: string, bottomColor = topColor) {
+  if (typeof window === "undefined" || window.innerWidth >= 768) return;
+  let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "theme-color";
+    document.head.appendChild(meta);
+  }
+  if (meta.getAttribute("content") !== topColor) {
+    meta.setAttribute("content", topColor);
+  }
+  document.documentElement.style.backgroundColor = bottomColor;
+  document.body.style.backgroundColor = bottomColor;
+}
+

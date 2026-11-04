@@ -18,6 +18,7 @@ import { usePageShift } from "../components/PageShift";
 import { config } from "../config";
 import { getViewWidth } from "../device";
 import { noiseBg, type Box } from "../components/about/geom";
+import { setMobileThemeColor } from "../state/chrome";
 import { whenContactReady } from "../data/pageAssets";
 
 /**
@@ -191,6 +192,9 @@ export default function ContactPage() {
   }, []);
 
   const mobile = vp.w < 560;
+  useEffect(() => {
+    if (mobile) setMobileThemeColor("#F8F9F4", "#F8F9F4");
+  }, [mobile]);
   /* 桌面端按 720×450 缩放；手机竖屏下按信封宽（380 稿单位）放大铺满屏宽，把小羊和电话移到信封上下方 */
   const s = mobile
     ? Math.min(vp.w / 380, (vp.h - 140) / 420)

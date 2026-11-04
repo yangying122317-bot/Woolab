@@ -125,9 +125,10 @@ body,
   text-size-adjust: 100%;
 }
 
-/** Lenis 丝滑滚动需要的两条（不引它自带的 css：那份会把 html/body 的 height 改成 auto） */
+/** Lenis 丝滑滚动需要的两条（不引它自带的 css：那份会把 html/body 的 height 改成 auto；
+ * 注意：html 设有 height: 100%，不能在 .lenis-stopped 上写 overflow: clip，否则当 scrollY > 100vh 时会裁切整个视口的点击命中） */
 .lenis.lenis-stopped {
-  overflow: clip;
+  overscroll-behavior: none;
 }
 .lenis [data-lenis-prevent] {
   overscroll-behavior: contain;

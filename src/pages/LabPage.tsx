@@ -18,7 +18,7 @@ import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
 import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
-import { useReportDarkNav } from "../state/chrome";
+import { setMobileThemeColor, useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
 import { isImageReady, loadImage, loadImages, warmBytes } from "../components/life/preload";
 import { useLenis } from "lenis/react";
@@ -215,9 +215,9 @@ function EntranceWall({
         mobile={mobile}
         onHover={setLampOn}
       />
-      {/* 滚动/滑动提示：桌面端在画框正下方居中；手机端在入口墙脚黑线正下方（两座雕像底座之间） */}
+      {/* 滚动/滑动提示：在画框正下方居中（位于画框底边与墙脚黑线之间的砖红墙面上） */}
       {(!mobile || !paintingHidden) && (() => {
-        const hintTop = mobile ? floorL + 19 : paintT + ENT_PAINT_H + 20;
+        const hintTop = mobile ? paintT + ENT_PAINT_H + 28 : paintT + ENT_PAINT_H + 20;
         return (
           <>
             <motion.img
@@ -1557,8 +1557,9 @@ type IntroRect = { left: number; top: number; width: number; height: number };
 function introBigRect(): IntroRect {
   const vw = getViewWidth();
   const vh = window.innerHeight;
-  /* 1.04 轻微过扫，保证手绘画芯的不规则边缘不露出黑底 */
-  const s = Math.max(vw / INTRO_INNER.w, vh / INTRO_INNER.h) * 1.04;
+  /* 桌面端 1.04 轻微过扫；手机竖屏下加大到 1.18 将金色画框推到高斯模糊采样半径之外，避免 iOS WebKit 分块模糊时在左右边缘渗入黑框形成方块 */
+  const over = vw < 768 ? 1.18 : 1.04;
+  const s = Math.max(vw / INTRO_INNER.w, vh / INTRO_INNER.h) * over;
   return {
     left: vw / 2 - (INTRO_INNER.x + INTRO_INNER.w / 2) * s,
     top: vh / 2 - (INTRO_INNER.y + INTRO_INNER.h / 2) * s,
@@ -1571,6 +1572,7 @@ function introBigRect(): IntroRect {
 const INTRO_TEXT_SHADOW = "0 2px 26px rgba(0,0,0,0.55)";
 
 const INTRO_FILTER_DARK = "brightness(0.45) blur(16px)";
+const INTRO_FILTER_DARK_MOBILE = "brightness(0.45) blur(10px)";
 const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
 
 /**
@@ -1717,6 +1719,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
 
   const textVisible = phase === "text" && hiResReady;
   const lit = phase === "bright" || phase === "hold" || phase === "shrink";
+  const darkFilter = isMobileView() ? INTRO_FILTER_DARK_MOBILE : INTRO_FILTER_DARK;
 
   /* 文字行进出场动画（按块错峰入场，退场整组同步） */
   const lineAnim = (delay: number) => ({
@@ -1749,7 +1752,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         draggable={false}
         className="absolute max-w-none select-none"
         style={{ opacity: hiResReady || startAtShrink ? 1 : 0 }}
-        initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }}
+        initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : darkFilter }}
         animate={
           phase === "shrink" && target
             ? {
@@ -1759,7 +1762,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
                 height: target.height,
                 filter: INTRO_FILTER_LIT,
               }
-            : { ...big, filter: lit ? INTRO_FILTER_LIT : INTRO_FILTER_DARK }
+            : { ...big, filter: lit ? INTRO_FILTER_LIT : darkFilter }
         }
         transition={
           phase === "shrink"
@@ -1920,6 +1923,18 @@ export default function LabPage() {
   /* 沿墙平移快到走廊轴、满屏都是奶油黄之后，顶栏换黑字 */
   const [inCorridor, setInCorridor] = useState(false);
   useReportDarkNav(!introPlaying && inCorridor);
+  useEffect(() => {
+    if (!isMobileView()) return;
+    if (open) {
+      setMobileThemeColor("#262422", "#262422");
+    } else if (introPlaying) {
+      setMobileThemeColor("#1B1916", "#1B1916");
+    } else if (!inCorridor) {
+      setMobileThemeColor("#B1612A", "#FEF0C1");
+    } else {
+      setMobileThemeColor("#FEF0C1", "#FEF0C1");
+    }
+  }, [introPlaying, inCorridor, open]);
 
   /* 走进走廊尽头的门回首页：复刻 Life 页进 Lab 门的同款镜头推进 + 暖光漫满过渡 */
   const navigate = useNavigate();
@@ -1972,7 +1987,10 @@ export default function LabPage() {
     >
       <div
         className="sticky top-0 h-screen overflow-hidden"
-        style={{ background: "#FEF0C1" }}
+        style={{
+          height: isMobileView() ? "100dvh" : undefined,
+          background: "#FEF0C1",
+        }}
         onPointerMove={(e) => {
           if (!homeEntry && !isMobileView()) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
         }}

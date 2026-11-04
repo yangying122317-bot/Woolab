@@ -16,7 +16,7 @@ import { LAB_DOOR, ROOM_FLOOR_TILE_H_VH, ROOM_TILE_W_VH, ROOM_TOTAL_VH, lifeStat
 import type { LifeStation } from "../data/lifeStations";
 import { useLenis } from "lenis/react";
 import { usePageShift } from "../components/PageShift";
-import { useReportPlainLogo, useReportPlainNav } from "../state/chrome";
+import { setMobileThemeColor, useReportPlainLogo, useReportPlainNav } from "../state/chrome";
 import { seg01Layers } from "../data/seg01Layers";
 import { DEFAULT_ROOM, isAllDone, isStationDone, loadRoomState, saveRoomState } from "../state/roomState";
 import type { DrinkChoice, RoomState } from "../state/roomState";
@@ -256,6 +256,14 @@ export default function LifePage() {
     if (checklistOpen) setDrawerShown(true);
   }, [checklistOpen]);
   useReportPlainLogo(checklistOpen || drawerShown);
+  useEffect(() => {
+    if (!mobileView) return;
+    if (checklistOpen || drawerShown) {
+      setMobileThemeColor("#CC9E57", "#CC9E57");
+    } else {
+      setMobileThemeColor("#F3EFE3", "#3694C5");
+    }
+  }, [mobileView, checklistOpen, drawerShown]);
   const [listKick, setListKick] = useState(0);
   const guideHint = useRef(false);
   const hintTimer = useRef<number | undefined>(undefined);
@@ -560,7 +568,14 @@ export default function LifePage() {
 
   return (
     <div ref={scrollRef} className="relative" style={{ height: `${Math.round(ROOM_TOTAL_VH * 0.9)}vh` }}>
-      <div ref={stageRef} className="sticky top-0 h-screen overflow-hidden" style={{ backgroundColor: "#F3EFE3" }}>
+      <div
+        ref={stageRef}
+        className="sticky top-0 h-screen overflow-hidden"
+        style={{
+          height: mobileView ? "100dvh" : undefined,
+          backgroundColor: "#F3EFE3",
+        }}
+      >
         {/* 镜头层：专注态时以站点为原点推近 */}
         <motion.div
           ref={wrapRef}
@@ -673,6 +688,8 @@ export default function LifePage() {
           {miniList && !checklistOpen && !focus && (
             <motion.button
               key="mini-list"
+              type="button"
+              data-lenis-prevent=""
               onClick={openChecklist}
               aria-label={t("life.checklist.title")}
               initial={{ opacity: 0, y: 20, rotate: 4 }}
@@ -680,8 +697,12 @@ export default function LifePage() {
               exit={{ opacity: 0, y: 20, rotate: 4 }}
               whileHover={{ rotate: -5, scale: 1.08 }}
               transition={{ type: "spring", stiffness: 320, damping: 24 }}
-              className="absolute z-20 cursor-pointer"
-              style={{ right: "3vh", bottom: "3vh" }}
+              className="pointer-events-auto absolute z-30 cursor-pointer"
+              style={{
+                right: mobileView ? "2.4vh" : "3vh",
+                bottom: mobileView ? "4.5vh" : "3vh",
+                padding: mobileView ? "1vh" : undefined,
+              }}
             >
               <img
                 src="/assets/life/seg01/list.webp"
@@ -713,7 +734,7 @@ export default function LifePage() {
             <motion.div
               key={`scene-ui-${sceneFocus.id}`}
               className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center"
-              style={{ bottom: "4vh", gap: "1.6vh" }}
+              style={{ bottom: mobileView ? "5.2vh" : "4vh", gap: "1.6vh" }}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
@@ -722,12 +743,14 @@ export default function LifePage() {
               {sceneFocus.howto && <PaperTag>{pick(sceneFocus.howto)}</PaperTag>}
               {/* 「先离开」：一张更小的纸签，直接印在花花绿绿的房间上看不清 */}
               <button
+                type="button"
+                data-lenis-prevent=""
                 onClick={() => void closeFocus()}
                 className="font-look pointer-events-auto text-neutral-800 transition hover:-translate-y-[0.2vh]"
                 style={{
                   ...PAPER_TAG,
                   rotate: "1deg",
-                  padding: mobileView ? "0.55vh 1.7vh 0.65vh" : "0.35vh 1.3vh 0.45vh",
+                  padding: mobileView ? "0.65vh 2vh 0.75vh" : "0.35vh 1.3vh 0.45vh",
                   fontSize: mobileView ? "2.1vh" : "1.6vh",
                   letterSpacing: "0.04em",
                 }}
