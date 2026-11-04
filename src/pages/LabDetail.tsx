@@ -69,8 +69,8 @@ function boardUnits() {
   const vh = window.innerHeight;
   if (vw < 560) {
     return {
-      u: Math.max(0.78, vw / 470),
-      uc: Math.max(0.58, vw / 610),
+      u: vw / 720,
+      uc: vw / 685,
     };
   }
   const byW = vw / 820;
@@ -336,10 +336,11 @@ export function DetailBackdrop() {
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
+  const mobile = getViewWidth() < 560;
   return (
     <div className="relative h-full w-full overflow-hidden">
       <StoneWall u={u} />
-      <Watermark u={u} cy={vh / 2} />
+      <Watermark u={u} cy={mobile ? 335 * u : vh / 2} />
       <LightBeams />
     </div>
   );
@@ -347,17 +348,85 @@ export function DetailBackdrop() {
 
 /* ---------------- 顶部：Meelo's Closet 手写标题（金框单独做成钉在屏上的主角，见 HeroFrame） ---------------- */
 
-function LookbookHead({ u, closet }: { u: number; closet: string }) {
+function LookbookHead({
+  u,
+  closet,
+  project,
+  leftLabel,
+  rightLabel,
+  hideFrame,
+}: {
+  u: number;
+  closet: string;
+  project?: LabProject;
+  leftLabel?: string;
+  rightLabel?: string;
+  hideFrame?: boolean;
+}) {
   const mobile = getViewWidth() < 560;
-  const dy = mobile ? 56 : 0;
+  if (mobile && project) {
+    const fw = 204 * u;
+    const fh = (fw * FRAME_H) / FRAME_W;
+    return (
+      <Board u={u}>
+        {/* 手机竖屏：画框居顶居中，左右两侧配货号与产品名，标题 + 下划线排在画框下方 */}
+        <div
+          className="absolute"
+          style={{
+            left: (BOARD_W * u - fw) / 2,
+            top: 185 * u,
+            width: fw,
+            height: fh,
+            visibility: hideFrame ? "hidden" : "visible",
+          }}
+        >
+          <FramePiece project={project} width={fw} />
+        </div>
+        {leftLabel && (
+          <p
+            className="font-hand absolute whitespace-nowrap text-white/85"
+            style={{
+              left: 32 * u,
+              top: 335 * u,
+              transform: "translateY(-50%)",
+              fontSize: 20 * u,
+              lineHeight: 1.2,
+            }}
+          >
+            {leftLabel}
+          </p>
+        )}
+        {rightLabel && (
+          <p
+            className="font-hand absolute whitespace-nowrap text-right text-white/85"
+            style={{
+              right: 32 * u,
+              top: 335 * u,
+              transform: "translateY(-50%)",
+              fontSize: 20 * u,
+              lineHeight: 1.2,
+            }}
+          >
+            {rightLabel}
+          </p>
+        )}
+        <Rotated u={u} x={235} y={536} w={250} h={46} iw={250} ih={46} transform="rotate(-2.33deg)">
+          <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 35 * u, lineHeight: 1.2 }}>
+            {closet}
+          </p>
+        </Rotated>
+        <img src={`${A}/underline-closet.svg`} alt="" draggable={false} style={box(u, 255, 584, 210, 18.7)} />
+      </Board>
+    );
+  }
   return (
     <Board u={u}>
-      <Rotated u={u} x={297} y={22.44 + dy} w={126.87} h={29.1} iw={126.87} ih={29.1} transform="rotate(-2.33deg)">
+      <Rotated u={u} x={297} y={22.44} w={126.87} h={29.1} iw={126.87} ih={29.1} transform="rotate(-2.33deg)">
         <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 20 * u, lineHeight: 1.2 }}>
           {closet}
         </p>
       </Rotated>
-      <img src={`${A}/underline-closet.svg`} alt="" draggable={false} style={box(u, 306, 47 + dy, 118.1, 10.5)} />
+      <img src={`${A}/underline-closet.svg`} alt="" draggable={false} style={box(u, 306, 47, 118.1, 10.5)} />
     </Board>
   );
 }
@@ -497,13 +566,14 @@ function HeroStrip({
 }) {
   const { pick } = useLanguage();
   const vw = useViewportWidth();
+  const mobile = vw < 560;
   const k = vw / STRIP_W;
-  const hScale = vw < 560 ? 1.45 : 1;
   const hand: CSSProperties = { fontSize: Math.max(12, 15 * k), lineHeight: 1.2 };
   const hidden = "inset(0 0 100% 0)";
   const shown = "inset(0 0 0% 0)";
   const padTop = pad?.top ?? 0;
-  const H = STRIP_H * k * hScale + padTop + (pad?.bottom ?? 0);
+  const photoH = mobile ? (vw * 413) / 720 : STRIP_H * k;
+  const H = photoH + padTop + (pad?.bottom ?? 0);
   /* 两句标注：字、位置（稿子 799 宽的坐标）都可以每件自己定，默认是 T 恤 01 那张的；false = 不要 */
   const front =
     lb?.captions?.front === false
@@ -522,7 +592,7 @@ function HeroStrip({
         {lb ? (
           <>
             {/* 照片本体：正面在下、背面在上，背面右缘压住正面左缘（稿子 356–420 那段）；只有这一层缩放 */}
-            <motion.div className="absolute inset-0" style={{ scale }}>
+            <motion.div className="absolute inset-0" style={{ scale: mobile ? undefined : scale }}>
               {"strip" in lb.photos ? (
                 <Img src={lb.photos.strip} />
               ) : (
@@ -536,70 +606,72 @@ function HeroStrip({
                 </>
               )}
             </motion.div>
-            {/* Back / Front 手写标注：跟着照片可见区（加高的那段之下）走；位置每件可以自己调，别压到人 */}
-            <div className="absolute inset-x-0" style={{ top: padTop, height: STRIP_H * k * hScale }}>
-              {front && (
-                <>
-                  <Rotated
-                    u={k}
-                    x={front.x}
-                    y={front.y}
-                    w={42.26}
-                    h={23.83}
-                    iw={42.26}
-                    ih={23.83}
-                    transform="rotate(-8.68deg)"
-                  >
-                    <p className="font-hand whitespace-nowrap text-black" style={hand}>
-                      {pick(front.text)}
-                    </p>
-                  </Rotated>
-                  {/* 箭头默认从字底往左下指；flip 就往右下指（字放在东西左边的时候用） */}
-                  <Rotated
-                    u={k}
-                    x={front.x + (front.flip ? -8 : 7)}
-                    y={front.y + 31}
-                    w={17.14}
-                    h={32.59}
-                    iw={12.04}
-                    ih={31.64}
-                    transform={front.flip ? "rotate(-10.05deg) scale(-1, -1)" : "rotate(10.05deg) scaleY(-1)"}
-                  >
-                    <Img src={`${A}/arrow-front.svg`} fit="fill" />
-                  </Rotated>
-                </>
-              )}
-              {back && (
-                <>
-                  <Rotated
-                    u={k}
-                    x={back.x}
-                    y={back.y}
-                    w={42.26}
-                    h={23.83}
-                    iw={42.26}
-                    ih={23.83}
-                    transform="rotate(-8.68deg)"
-                  >
-                    <p className="font-hand whitespace-nowrap text-black" style={hand}>
-                      {pick(back.text)}
-                    </p>
-                  </Rotated>
-                  <Rotated
-                    u={k}
-                    x={back.x + 21}
-                    y={back.y + 20}
-                    w={22.69}
-                    h={33.19}
-                    iw={12.04}
-                    ih={31.64}
-                    transform="rotate(157.93deg)"
-                  >
-                    <Img src={`${A}/arrow-back.svg`} fit="fill" />
-                  </Rotated>
-                </>
-              )}
-            </div>
+            {/* Back / Front 手写标注：桌面端叠在照片上；手机端移至照片下方的深灰石墙区（见 LookSection） */}
+            {!mobile && (
+              <div className="absolute inset-x-0" style={{ top: padTop, height: STRIP_H * k }}>
+                {front && (
+                  <>
+                    <Rotated
+                      u={k}
+                      x={front.x}
+                      y={front.y}
+                      w={42.26}
+                      h={23.83}
+                      iw={42.26}
+                      ih={23.83}
+                      transform="rotate(-8.68deg)"
+                    >
+                      <p className="font-hand whitespace-nowrap text-black" style={hand}>
+                        {pick(front.text)}
+                      </p>
+                    </Rotated>
+                    {/* 箭头默认从字底往左下指；flip 就往右下指（字放在东西左边的时候用） */}
+                    <Rotated
+                      u={k}
+                      x={front.x + (front.flip ? -8 : 7)}
+                      y={front.y + 31}
+                      w={17.14}
+                      h={32.59}
+                      iw={12.04}
+                      ih={31.64}
+                      transform={front.flip ? "rotate(-10.05deg) scale(-1, -1)" : "rotate(10.05deg) scaleY(-1)"}
+                    >
+                      <Img src={`${A}/arrow-front.svg`} fit="fill" />
+                    </Rotated>
+                  </>
+                )}
+                {back && (
+                  <>
+                    <Rotated
+                      u={k}
+                      x={back.x}
+                      y={back.y}
+                      w={42.26}
+                      h={23.83}
+                      iw={42.26}
+                      ih={23.83}
+                      transform="rotate(-8.68deg)"
+                    >
+                      <p className="font-hand whitespace-nowrap text-black" style={hand}>
+                        {pick(back.text)}
+                      </p>
+                    </Rotated>
+                    <Rotated
+                      u={k}
+                      x={back.x + 21}
+                      y={back.y + 20}
+                      w={22.69}
+                      h={33.19}
+                      iw={12.04}
+                      ih={31.64}
+                      transform="rotate(157.93deg)"
+                    >
+                      <Img src={`${A}/arrow-back.svg`} fit="fill" />
+                    </Rotated>
+                  </>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/30 bg-[#4a4444]/70 text-white/60">
@@ -747,28 +819,29 @@ function Description({
   const circleH = ci ? ci.h * 1.85 : 0;
   const vw = getViewWidth();
   const mobile = vw < 560;
-  const boxW = mobile ? (vw - 24) / u : 640;
+  const boxW = mobile ? 620 : 640;
   const boxX = (BOARD_W - boxW) / 2;
-  /* 手机竖屏下按屏宽收一点字号并保持单行不折行，防止跨行导致手绘下划线错位或压到下方小箭头 */
-  const descFontSize = mobile
-    ? Math.min(16 * u, (vw - 28) / (lang === "en" ? 31 : 21))
-    : 16 * u;
+  const descFontSize = mobile ? 26.5 * u : 16 * u;
+  const textBoxH = mobile ? lines.length * 42 : 60;
+  const arrowY = mobile ? Y(DESC_TEXT_Y) + lines.length * 42 + 24 : Y(780.5);
+  const arrowW = mobile ? 21 : 13.36;
+  const arrowH = mobile ? 48 : 30.68;
 
   return (
     <motion.div
       className="absolute inset-x-0"
-      style={{ top, height: DESC_H * u }}
+      style={{ top, height: (mobile ? arrowY + arrowH + 20 : DESC_H) * u }}
       initial="hidden"
       animate={play ? "show" : "hidden"}
     >
       <Board u={u}>
-        <Rotated u={u} x={boxX} y={Y(DESC_TEXT_Y)} w={boxW} h={60} iw={boxW} ih={60} transform="rotate(-1.31deg)">
+        <Rotated u={u} x={boxX} y={Y(DESC_TEXT_Y)} w={boxW} h={textBoxH} iw={boxW} ih={textBoxH} transform="rotate(-1.31deg)">
           <div
             ref={textEl}
             className="font-hand relative whitespace-nowrap text-center text-white"
             style={{
               fontSize: descFontSize,
-              lineHeight: 1.4,
+              lineHeight: mobile ? 1.48 : 1.4,
               textTransform: lang === "en" ? "capitalize" : "none",
             }}
           >
@@ -791,7 +864,7 @@ function Description({
                 className="pointer-events-none absolute max-w-none"
                 style={{
                   left: ul.l - ul.w * 0.02,
-                  top: ul.t + ul.h - 5 * u,
+                  top: ul.t + ul.h - (mobile ? 8 * u : 5 * u),
                   width: ul.w * 1.04,
                   height: (ul.w * 1.04 * 12.24) / 171.1,
                 }}
@@ -822,7 +895,7 @@ function Description({
           draggable={false}
           variants={deco}
           custom={decoAt}
-          style={box(u, 353.5 - 13.36 / 2, Y(780.5), 13.36, 30.68)}
+          style={box(u, 353.5 - arrowW / 2, arrowY, arrowW, arrowH)}
         />
       </Board>
     </motion.div>
@@ -1377,6 +1450,8 @@ type LookLayout = {
  */
 function LookSection({
   lb,
+  project,
+  hideTopFrame,
   fallbackLines,
   first,
   closet,
@@ -1394,6 +1469,8 @@ function LookSection({
   fadeIn = false,
 }: {
   lb?: Lookbook;
+  project: LabProject;
+  hideTopFrame?: boolean;
   fallbackLines: string[];
   first: boolean;
   /** 页头标题淡入浮出（首次进来、切项目回顶都走这个），别整块跳出来；翻转卡片里那份不动 */
@@ -1411,8 +1488,9 @@ function LookSection({
   play: boolean;
   delay: number;
 }) {
-  const { t, lang } = useLanguage();
+  const { t, lang, pick } = useLanguage();
   const ref = useRef<HTMLDivElement | null>(null);
+  const mobile = getViewWidth() < 560;
   /* 后面几件：块顶滚进屏幕下 1/3 就开始出场，只出一次 */
   const inView = useInView(ref, { root: scroller, once: true, margin: "0px 0px -30% 0px" });
   const show = play && (first || inView);
@@ -1423,6 +1501,16 @@ function LookSection({
   const enter = layout.start + layout.blockH - vh;
   const photoAt = layout.start + layout.blockH - photoStopY;
   const scale = useTransform(scrollY, (s) => 1 + 0.05 * (1 - smooth((s - enter) / (photoAt - enter))));
+
+  const descLines = lb ? (mobile ? lb.mobileLines?.[lang] ?? lb.lines[lang] : lb.lines[lang]) : fallbackLines;
+  const frontCap =
+    lb?.captions?.front === false
+      ? null
+      : { text: { zh: "正面", en: "Front" }, ...lb?.captions?.front };
+  const backCap =
+    lb?.captions?.back === false
+      ? null
+      : { text: { zh: "背面", en: "Back" }, ...lb?.captions?.back };
 
   return (
     <section ref={ref} className="relative">
@@ -1435,13 +1523,37 @@ function LookSection({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: Math.max(0, delay - 0.15), ease: "easeOut" }}
           >
-            <LookbookHead u={u} closet={closet} />
+            <LookbookHead
+              u={u}
+              closet={closet}
+              project={project}
+              leftLabel={lb ? pick(lb.sku) : undefined}
+              rightLabel={lb ? pick(lb.productName) : undefined}
+              hideFrame={hideTopFrame}
+            />
           </motion.div>
+        )}
+        {/* 手机竖屏下第 2 件（如 T 恤 02）顶部显示该件的货号与产品名 */}
+        {mobile && !first && lb && (
+          <Board u={u}>
+            <p
+              className="font-hand absolute whitespace-nowrap text-white/85"
+              style={{ left: 32 * u, top: 80 * u, fontSize: 20 * u, lineHeight: 1.2 }}
+            >
+              {pick(lb.sku)}
+            </p>
+            <p
+              className="font-hand absolute whitespace-nowrap text-right text-white/85"
+              style={{ right: 32 * u, top: 80 * u, fontSize: 20 * u, lineHeight: 1.2 }}
+            >
+              {pick(lb.productName)}
+            </p>
+          </Board>
         )}
         <Description
           u={u}
           top={layout.descTop}
-          lines={lb ? lb.lines[lang] : fallbackLines}
+          lines={descLines}
           marks={lb?.marks}
           play={show}
           delay={delay}
@@ -1464,17 +1576,108 @@ function LookSection({
         </div>
       </div>
 
-      {/* 通栏照片：上下都是撕纸边，像一张撕下来的照片纸贴在墙上；照片本体跟滚动微微缩放 */}
-      <div className="relative z-10" style={{ paddingBottom: 24 * uc }}>
-        <div className="relative" style={tornMask}>
+      {/* 通栏照片：桌面端上下带撕纸边；手机端为利落平边并在照片下方石墙区配向上手绘箭头与说明 */}
+      <div className="relative z-10" style={{ paddingBottom: mobile ? 0 : 24 * uc }}>
+        <div className="relative" style={mobile ? undefined : tornMask}>
           <HeroStrip
             lb={lb}
             placeholder={t("lab.detail.hero")}
             reveal={first ? play : show}
             scale={scale}
-            pad={stripPad}
+            pad={mobile ? undefined : stripPad}
           />
         </div>
+        {mobile && lb && (backCap || frontCap) && (
+          <div className="relative w-full" style={{ height: 245 * u }}>
+            <Board u={u}>
+              {backCap && frontCap ? (
+                <>
+                  {/* 左列：向上手绘箭头 + 手写标注 */}
+                  <div
+                    className="pointer-events-none absolute flex flex-col items-center"
+                    style={{ left: 212 * u, top: 30 * u, transform: "translateX(-50%)" }}
+                  >
+                    <img
+                      src={`${A}/arrow-down.svg`}
+                      alt=""
+                      draggable={false}
+                      style={{
+                        width: 20 * u,
+                        height: 46 * u,
+                        transform: "scaleY(-1) rotate(-8deg)",
+                      }}
+                    />
+                    <p
+                      className="font-hand text-center whitespace-pre-line text-white"
+                      style={{
+                        marginTop: 26 * u,
+                        fontSize: 25 * u,
+                        lineHeight: 1.25,
+                        transform: "rotate(-2deg)",
+                      }}
+                    >
+                      {pick(backCap.text)}
+                    </p>
+                  </div>
+                  {/* 右列：向上手绘箭头 + 手写标注 */}
+                  <div
+                    className="pointer-events-none absolute flex flex-col items-center"
+                    style={{ left: 508 * u, top: 24 * u, transform: "translateX(-50%)" }}
+                  >
+                    <img
+                      src={`${A}/arrow-down.svg`}
+                      alt=""
+                      draggable={false}
+                      style={{
+                        width: 20 * u,
+                        height: 46 * u,
+                        transform: "scale(-1, -1) rotate(8deg)",
+                      }}
+                    />
+                    <p
+                      className="font-hand text-center whitespace-pre-line text-white"
+                      style={{
+                        marginTop: 32 * u,
+                        fontSize: 25 * u,
+                        lineHeight: 1.25,
+                        transform: "rotate(-2deg)",
+                      }}
+                    >
+                      {pick(frontCap.text)}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div
+                  className="pointer-events-none absolute flex flex-col items-center"
+                  style={{ left: 360 * u, top: 26 * u, transform: "translateX(-50%)" }}
+                >
+                  <img
+                    src={`${A}/arrow-down.svg`}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      width: 20 * u,
+                      height: 46 * u,
+                      transform: "scaleY(-1) rotate(-5deg)",
+                    }}
+                  />
+                  <p
+                    className="font-hand text-center whitespace-pre-line text-white"
+                    style={{
+                      marginTop: 26 * u,
+                      fontSize: 25 * u,
+                      lineHeight: 1.25,
+                      transform: "rotate(-2deg)",
+                    }}
+                  >
+                    {pick((frontCap ?? backCap)!.text)}
+                  </p>
+                </div>
+              )}
+            </Board>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1494,7 +1697,7 @@ export function DetailPage({
   onNext?: (nextIndex: number) => void;
   interactive?: boolean;
 }) {
-  const { t, pick } = useLanguage();
+  const { t, pick, lang } = useLanguage();
   /* 报给全站顶栏：详情盖着，顶栏换成压在详情上的样子（去 logo，右边 MENU / CN·EN / 喇叭照常） */
   useReportDetailOpen();
   const { u, uc } = useBoardUnits();
@@ -1544,29 +1747,35 @@ export function DetailPage({
   const topH = Math.round((vw * 64 * 0.8) / 1600);
   const botH = Math.round((vw * 100 * 0.8) / 1600);
   const stripPad = { top: Math.round(topH * 0.5), bottom: Math.round(botH * 0.5) };
-  /* 通栏照片那块的高（照片 + 撕边加高 + 底下留白；手机竖屏下增高 1.45 倍让产品照片更清晰） */
-  const stripK = (vw / STRIP_W) * (vw < 560 ? 1.45 : 1);
-  const stripH = STRIP_H * stripK + stripPad.top + stripPad.bottom + 24 * uc;
+  const mobile = vw < 560;
+  /* 通栏照片那块的高（桌面端含撕边加高和底下留白；手机竖屏下按参考稿 720×413 比例 + 底部箭头标注区） */
+  const desktopStripH = STRIP_H * (vw / STRIP_W) + stripPad.top + stripPad.bottom + 24 * uc;
   /*
    * 每一件的布局，一件接一件排下去，全是普通内容一路匀速滚，没有钉住的段落：
-   *  - 第一件：页头在顶、主角在正中、那段话在屏幕下部（第一行的顶在 78% 屏高）；
-   *    拼贴推到第一屏以下（屏矮到稿子位置本来就在屏外时按稿子）
-   *  - 后面几件：那段话上下留一点空，底下接拼贴
-   *  - 每件末尾接通栏照片
+   *  - 桌面端：第一件页头在顶、主角在正中、那段话在屏幕下部，拼贴推到第一屏以下
+   *  - 手机竖屏：按参考稿长卷从上到下依次排布（画框+左右标签 → 标题 → 介绍+下箭头 → 产品表 → 产品图 → 上箭头+标注）
    */
   const layouts: LookLayout[] = [];
-  const mobile = vw < 560;
-  looks.forEach((_, j) => {
+  looks.forEach((lb, j) => {
     const start = j === 0 ? 0 : layouts[j - 1].start + layouts[j - 1].blockH + layouts[j - 1].stripH;
+    if (mobile) {
+      const mLines = lb ? lb.mobileLines?.[lang] ?? lb.lines[lang] : [pick(project.description)];
+      const textStart = j === 0 ? 676 * u : 165 * u;
+      const descTop = textStart - (DESC_TEXT_Y - DESC_Y0) * u;
+      const arrowBottom = textStart + (mLines.length * 42 + 24 + 48) * u;
+      const collageTop = arrowBottom + 88 * u;
+      const blockH = collageTop + 390 * uc + 85 * u;
+      const hasCaps = lb && (lb.captions?.back !== false || lb.captions?.front !== false);
+      const mStripH = (vw * 413) / 720 + (hasCaps ? 245 * u : 60 * u);
+      layouts.push({ start, descTop, collageTop, blockH, stripH: mStripH });
+      return;
+    }
     /* 后面几件：那段话上下各留 8% 屏高的空 */
     const descBlockH = j === 0 ? vh : Math.round(DESC_H * u + vh * 0.16);
-    const descTop =
-      j === 0
-        ? vh * (mobile ? 0.73 : 0.78) - (DESC_TEXT_Y - DESC_Y0) * u
-        : (descBlockH - DESC_H * u) / 2;
+    const descTop = j === 0 ? vh * 0.78 - (DESC_TEXT_Y - DESC_Y0) * u : (descBlockH - DESC_H * u) / 2;
     const collageTop = j === 0 ? Math.max(PHOTO_TOP * u, vh + 24 * uc) : descBlockH;
     const blockH = collageTop + (COLLAGE_H + COLLAGE_PAD) * uc;
-    layouts.push({ start, descTop, collageTop, blockH, stripH });
+    layouts.push({ start, descTop, collageTop, blockH, stripH: desktopStripH });
   });
   const last = layouts[layouts.length - 1];
   /*
@@ -1670,7 +1879,7 @@ export function DetailPage({
         >
           {t("lab.detail.back")}
         </button>
-        <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />
+        {!mobile && <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />}
       </motion.div>
 
       <div
@@ -1683,7 +1892,7 @@ export function DetailPage({
            * 第一屏底下的 WOOLAB 石刻水印：跟着内容滚，但放在按项目 key 的段落外面——
            * 切项目时段落整个重挂，水印要是在里面就会重新出现一次；它对每个项目都一样，挂一次就够。
            */}
-          <Watermark u={u} cy={vh / 2} />
+          <Watermark u={u} cy={mobile ? 335 * u : vh / 2} />
           {/*
            * 这个项目的每一件：那段话 + 拼贴 → 通栏照片，一件接一件，全是普通内容一路匀速滚；
            * 钉着不动的只有屏中的主角金框，这些东西从它身后依次过去。
@@ -1692,6 +1901,8 @@ export function DetailPage({
             <LookSection
               key={`${project.id}-${j}`}
               lb={lb}
+              project={project}
+              hideTopFrame={flying !== null}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
               fadeIn={interactive}
@@ -1710,16 +1921,15 @@ export function DetailPage({
             />
           ))}
 
-          {/* 画框墙：占一屏 + 主角落下来那段；飞回屏中的时候只淡画框，墙和水印和页顶那屏一样、不动，
-              切项目跳回页顶那一下背景没有任何变化 */}
-          <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
+          {/* 画框墙：桌面端占一屏 + 主角落下来那段；手机端主角已在顶部排版内，底部四宫格占满一屏即到底 */}
+          <section className="relative" style={{ height: vh * (1 + (mobile ? 0 : WALL_LAND)) }}>
             <FrameWall
               u={uc}
               markU={u}
               vw={vw}
               vh={vh}
               index={index}
-              landed={landed}
+              landed={mobile || landed}
               active={interactive && flying === null}
               dim={flying !== null}
               hideIndex={flying}
@@ -1731,23 +1941,32 @@ export function DetailPage({
         </div>
       </div>
 
-      {/* 主角金框：钉在屏上，姿态跟着滚动走；落到墙上 / 有一只在飞回来的时候藏起来 */}
-      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />
+      {/* 主角金框：桌面端钉在屏上跟着滚动走；手机端画框已排在页头内随页面自然滚动 */}
+      {!mobile && <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />}
 
       {flying !== null && (
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           initial={{
-            x: wall.slotX(flying) - hero.w / 2,
-            y: wall.slotY(flying) - hero.h / 2,
-            scale: wall.wallW / hero.w,
+            x: wall.slotX(flying) - (mobile ? 204 * u : hero.w) / 2,
+            y: wall.slotY(flying) - (mobile ? (204 * u * FRAME_H) / FRAME_W : hero.h) / 2,
+            scale: wall.wallW / (mobile ? 204 * u : hero.w),
             rotate: 0,
           }}
-          animate={{ x: vw / 2 - hero.w / 2, y: vh / 2 - hero.h / 2, scale: 1, rotate: HERO_TILT }}
+          animate={
+            mobile
+              ? {
+                  x: vw / 2 - (204 * u) / 2,
+                  y: 185 * u,
+                  scale: 1,
+                  rotate: 0,
+                }
+              : { x: vw / 2 - hero.w / 2, y: vh / 2 - hero.h / 2, scale: 1, rotate: HERO_TILT }
+          }
           transition={{ duration: 0.85, ease: [0.65, 0, 0.35, 1] }}
           onAnimationComplete={onFlown}
         >
-          <FramePiece project={labProjects[flying]} width={hero.w} />
+          <FramePiece project={labProjects[flying]} width={mobile ? 204 * u : hero.w} />
         </motion.div>
       )}
     </div>

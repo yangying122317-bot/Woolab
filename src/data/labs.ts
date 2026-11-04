@@ -23,8 +23,9 @@ export interface Lookbook {
   closet: Localized;
   /** 通栏主图：两张（左背面、右正面，各约 3:2 横图），或一张已经拼好的横图（strip） */
   photos: { back: string; front: string } | { strip: string };
-  /** 页头下面那段话，按行拆开（打开时逐行出现） */
+  /** 页头下面那段话，按行拆开（打开时逐行出现）；mobileLines 为手机竖屏折行版 */
   lines: { zh: string[]; en: string[] };
+  mobileLines?: { zh?: string[]; en?: string[] };
   /**
    * 那段话里要画手绘装饰的词，中英各写一份（原样写，要和对应语言某一行里的文字完全对上）。
    * 位置是渲染后量出来的，换行、改字不用调坐标。
@@ -111,6 +112,14 @@ export const labProjects: LabProject[] = [
             "fuller back graphic, keeping the mood relaxed and unhurried.",
           ],
         },
+        mobileLines: {
+          en: [
+            "Built around Meelo’s everyday look,",
+            "with a minimal front and a fuller",
+            "back graphic, keeping the",
+            "mood relaxed and unhurried.",
+          ],
+        },
         marks: {
           zh: { underline: ["日常穿着"], circle: "放松、不赶时间" },
           en: { underline: ["Meelo’s everyday look"], circle: "mood relaxed and" },
@@ -143,6 +152,14 @@ export const labProjects: LabProject[] = [
           en: [
             "Inspired by Meelo floating on the water, using",
             "handwritten type and open space to capture a slower,",
+            "more relaxed mood.",
+          ],
+        },
+        mobileLines: {
+          en: [
+            "Inspired by Meelo floating on the",
+            "water, using handwritten type and",
+            "open space to capture a slower,",
             "more relaxed mood.",
           ],
         },
@@ -214,9 +231,18 @@ export const labProjects: LabProject[] = [
             "you use every day.",
           ],
         },
+        mobileLines: {
+          en: [
+            "Built around Meelo’s everyday",
+            "moments and little reactions, turning",
+            "them into small graphics made to",
+            "travel across the things you use",
+            "every day.",
+          ],
+        },
         marks: {
           zh: { underline: ["日常瞬间", "小表情"], circle: "到处走" },
-          en: { underline: ["moments", "little reactions,"], circle: "every day." },
+          en: { underline: ["everyday", "little reactions,"], circle: "every day." },
         },
         sheet: [
           { label: { zh: "名称：", en: "NAME:" }, value: { zh: "Meelo 日常贴纸", en: "Meelo’s Daily Stickers" } },
@@ -232,10 +258,10 @@ export const labProjects: LabProject[] = [
         polaroid: "/assets/lab/detail/sticker-polaroid.webp",
         postage: "/assets/lab/detail/sticker-postage.webp",
         notes: { left: { zh: "日常碎片。", en: "Daily Bits." }, right: { zh: "小表情。", en: "Little Reactions." } },
-        /* 左包左下写 Daily Bits（左上角留给靠边的画框）、右包右边写 Little Reactions */
+        /* 左包左下写 Daily Bits（左上角留给靠边的画框）、右包右边写 Little Reactions；手机端竖排在图下 */
         captions: {
-          back: { text: { zh: "日常碎片", en: "Daily Bits" }, x: 92, y: 196 },
-          front: { text: { zh: "小表情", en: "Little Reactions" }, x: 640, y: 70 },
+          back: { text: { zh: "日常碎片", en: "Everyday\nFragments" }, x: 92, y: 196 },
+          front: { text: { zh: "小表情", en: "Small\nExpressions" }, x: 640, y: 70 },
         },
       },
     ],
@@ -276,6 +302,14 @@ export const labProjects: LabProject[] = [
             "Built around the idea of a small glass made for one sip,",
             "pairing a simple shape with Woolab graphics — nothing more,",
             "just enough.",
+          ],
+        },
+        mobileLines: {
+          en: [
+            "Built around the idea of a small",
+            "glass made for one sip, pairing a",
+            "simple shape with Woolab graphics —",
+            "nothing more, just enough.",
           ],
         },
         marks: {
@@ -335,6 +369,14 @@ export const labProjects: LabProject[] = [
           en: [
             "Built around the quiet hours after dark, using warm candlelight",
             "and Meelo graphics to bring a softer mood into the room.",
+          ],
+        },
+        mobileLines: {
+          en: [
+            "Built around the quiet hours after",
+            "dark, using warm candlelight and",
+            "Meelo graphics to bring",
+            "a softer mood into the room.",
           ],
         },
         marks: {
