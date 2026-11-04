@@ -214,39 +214,40 @@ const SPRITES = {
 
 /**
  * 手机竖屏版院子布局（在 1440×900 画板坐标系下重排前景物件）：
- * 场景容器放大到 160% 让后方房子单独放大饱满；前景的小黑板、小羊、邮筒和花丛按比例收小并收拢在可视区（x ≈ 270..1170）内。
+ * 场景容器放大到 243% 让房子主体居中铺满竖屏；前景的小黑板、小羊、邮筒和三处花丛按参考稿精确落位在可视区（x ≈ 425..1017）内。
  */
 const MOBILE_SPRITES = {
   ...SPRITES,
-  bushLeft: { src: "/assets/hero-bush-left.png", x: 215, y: 726.7, w: 232.7 },
-  bushRight: { src: "/assets/hero-bush-right.png", x: 995, y: 695.8, w: 255.1 },
-  board: { src: "/assets/hero-board.png", x: 300, y: 815, w: 196 },
+  cloudBig: { src: "/assets/hero-cloud-big.png", x: 274, y: 76, w: 816 },
+  bushLeft: { src: "/assets/hero-bush-left.png", x: 425, y: 850, w: 212 },
+  bushRight: { src: "/assets/hero-bush-right.png", x: 805, y: 981, w: 248 },
+  board: { src: "/assets/hero-board.png", x: 469, y: 704, w: 164 },
   sheep: {
     src: "/assets/hero-sheep-still.webp",
     anim: "/assets/hero-sheep-idle.webp",
-    x: 748,
-    y: 648,
-    w: 198,
+    x: 688,
+    y: 683,
+    w: 204,
   },
   sheepShadow: {
     src: "/assets/hero-sheep-shadow.png",
-    x: 751,
-    y: 649,
-    w: 191,
+    x: 691,
+    y: 684,
+    w: 197,
   },
   mailbox: {
     headClosed: "/assets/hero-mailbox-head-closed.png",
     headOpen: "/assets/hero-mailbox-head-open.png",
     post: "/assets/hero-mailbox-post.png",
-    headX: 998,
-    headY: 686,
-    headW: 128,
-    headOpenW: 144,
-    postX: 1035,
-    postY: 818,
-    postW: 48,
+    headX: 883,
+    headY: 614,
+    headW: 112,
+    headOpenW: 126,
+    postX: 917,
+    postY: 733,
+    postW: 43,
   },
-  bush: { src: "/assets/hero-bush.png", x: 968, y: 884, w: 110 },
+  bush: { src: "/assets/hero-bush.png", x: 846, y: 792, w: 92 },
 } as const;
 
 const mRect = (x: number, y: number, w: number, h: number) => ({
@@ -257,11 +258,11 @@ const mRect = (x: number, y: number, w: number, h: number) => ({
 });
 
 const MOBILE_HOTSPOTS: HeroHotspot[] = [
-  { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(745, 645, 204, 315) },
-  { id: "life", path: "/life", labelKey: "nav.life", ...mRect(589, 516, 170, 276) },
+  { id: "life", path: "/life", labelKey: "nav.life", ...mRect(595, 515, 215, 255) },
+  { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(688, 683, 204, 315) },
   { id: "about", path: "/about", labelKey: "nav.about", ...mRect(605, 345, 230, 165) },
-  { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(292, 805, 212, 185) },
-  { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(985, 680, 160, 315) },
+  { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(465, 700, 172, 140) },
+  { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(878, 610, 120, 230) },
 ];
 
 /**
@@ -664,6 +665,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
     const stopFlap = () => clearInterval(flapTimer);
 
+    const rightStart = cover ? "135%" : "78%";
+    const leftExit = cover ? "-40%" : "18%";
+    const approachX = cover ? "72%" : "62%";
+
     /** 已经落到栏杆上：收翅站定 → 歇一会（鼠标靠近会惊飞）→ 起飞、往左飞出画面 */
     const perchAndLeave = async () => {
       // 收翅站定，轻轻下沉一下作落地缓冲
@@ -701,11 +706,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       });
       if (!alive) return;
       await birdControls.start({
-        left: [PERCH.left, "-40%"],
+        left: [PERCH.left, leftExit],
         top: [PERCH.top, `${rand(6, 11)}%`],
         y: 0,
         transition: {
-          duration: startled ? 2.6 : 4.2,
+          duration: startled ? (cover ? 2.6 : 1.6) : cover ? 4.2 : 2.5,
           ease: startled ? "easeOut" : "easeIn",
         },
       });
@@ -716,7 +721,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       setBirdStanding(false);
       birdStandingRef.current = false;
       birdControls.set({
-        left: "135%",
+        left: rightStart,
         top: `${cruiseTop}%`,
         opacity: 1,
         y: 0,
@@ -728,19 +733,19 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const flyInAndPerch = async (cruiseTop: number) => {
       takeOffFromRight(cruiseTop);
       await birdControls.start({
-        left: ["135%", "72%"],
+        left: [rightStart, approachX],
         top: [
           `${cruiseTop}%`,
           `${cruiseTop - 2}%`,
           `${cruiseTop + 1.5}%`,
-          "24%",
+          cover ? "24%" : "18%",
         ],
-        transition: { duration: 2.6, ease: "easeOut" },
+        transition: { duration: cover ? 2.6 : 1.6, ease: "easeOut" },
       });
       if (!alive) return;
       await birdControls.start({
-        left: ["72%", PERCH.left],
-        top: ["24%", PERCH.top],
+        left: [approachX, PERCH.left],
+        top: [cover ? "24%" : "18%", PERCH.top],
         transition: { duration: 1.1, ease: "easeOut" },
       });
       if (!alive) return;
@@ -755,7 +760,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         stopFlap();
         setBirdStanding(false);
         birdStandingRef.current = false;
-        birdControls.set({ left: "135%", top: "12%", opacity: 0, y: 0 });
+        birdControls.set({ left: rightStart, top: "12%", opacity: 0, y: 0 });
         while (alive && curtainUpRef.current) {
           await sleep(100);
         }
@@ -764,6 +769,16 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           await sleep(300);
           if (!alive) return;
           await flyInAndPerch(rand(9, 19));
+          if (!alive) return;
+          stopFlap();
+          birdControls.set({ opacity: 0 });
+        }
+      } else if (!cover && birdOut()) {
+        birdControls.set({ left: rightStart, top: "13%", opacity: 0, y: 0 });
+        await sleep(intro ? 1400 : 400);
+        if (!alive) return;
+        if (birdOut()) {
+          await flyInAndPerch(rand(11, 15));
           if (!alive) return;
           stopFlap();
           birdControls.set({ opacity: 0 });
@@ -785,7 +800,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           // 直接横穿画面：带扇翅节奏的波浪路线
           const c = cruiseTop;
           await birdControls.start({
-            left: ["135%", "-40%"],
+            left: [rightStart, leftExit],
             top: [
               `${c}%`,
               `${c - 2.2}%`,
@@ -795,7 +810,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               `${c - 1.8}%`,
               `${c + rand(-1, 2)}%`,
             ],
-            transition: { duration: rand(6.5, 9), ease: "linear" },
+            transition: { duration: cover ? rand(6.5, 9) : rand(4, 5.5), ease: "linear" },
           });
         }
         stopFlap();
@@ -1040,9 +1055,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 }
               : {
                   aspectRatio: `${HERO_RATIO}`,
-                  width: "160%",
-                  left: "-30%",
-                  bottom: "26%",
+                  width: "243%",
+                  left: "-71.5%",
+                  top: 0,
+                  marginTop: "16.36%",
                 }),
           }}
           onMouseMove={(e) => {
@@ -1070,13 +1086,13 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             }
           >
             <motion.img
-              src={SPRITES.cloudBig.src}
+              src={sp.cloudBig.src}
               alt=""
               className="pointer-events-none absolute select-none"
               style={{
-                left: "-1.5%",
-                top: py( cover ? SPRITES.cloudBig.y : 110 ),
-                width: "103%",
+                left: cover ? "-1.5%" : px(sp.cloudBig.x),
+                top: py(sp.cloudBig.y),
+                width: cover ? "103%" : px(sp.cloudBig.w),
                 maxWidth: "none",
               }}
               animate={drift(16, 46)}
@@ -1139,7 +1155,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             play={intro}
             go={introGo}
             delay={INTRO_AT.bushLeft}
-            origin="11.5% 88%"
+            origin={cover ? "11.5% 88%" : "36.8% 102%"}
           >
             <motion.img
               src={sp.bushLeft.src}
@@ -1159,7 +1175,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             play={intro}
             go={introGo}
             delay={INTRO_AT.bushRight}
-            origin="86.6% 88%"
+            origin={cover ? "86.6% 88%" : "64.5% 120%"}
           >
             <motion.img
               src={sp.bushRight.src}
@@ -1219,7 +1235,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             play={intro}
             go={introGo}
             delay={INTRO_AT.board}
-            origin={cover ? "16.5% 91%" : "27.5% 98%"}
+            origin={cover ? "16.5% 91%" : "38.3% 93%"}
           >
             <HotspotSprite
               sprite={sp.board}
@@ -1231,8 +1247,39 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           <IntroPop
             play={intro}
             go={introGo}
+            delay={INTRO_AT.mailbox}
+            origin={cover ? "84.4% 91%" : "65.1% 93%"}
+          >
+            <MailboxSprite open={hovered === "contact"} mailbox={sp.mailbox} />
+          </IntroPop>
+
+          {/* 邮箱前的灌木（盖在邮箱杆前面、小羊后面），跟着右边树丛一起摇 */}
+          <IntroPop
+            play={intro}
+            go={introGo}
+            delay={INTRO_AT.bush}
+            origin={cover ? "80.9% 91%" : "61.9% 93%"}
+          >
+            <motion.img
+              src={sp.bush.src}
+              alt=""
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: px(sp.bush.x),
+                top: py(sp.bush.y),
+                width: px(sp.bush.w),
+                transformOrigin: "50% 100%",
+              }}
+              animate={bushSway(0.8, 5.4, 1.2)}
+              draggable={false}
+            />
+          </IntroPop>
+
+          <IntroPop
+            play={intro}
+            go={introGo}
             delay={INTRO_AT.sheep}
-            origin="63.4% 91%"
+            origin={cover ? "63.4% 91%" : "54.9% 110%"}
           >
             <img
               src={sp.sheepShadow.src}
@@ -1254,36 +1301,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 top: py(sp.sheep.y),
                 width: px(sp.sheep.w),
               }}
-              draggable={false}
-            />
-          </IntroPop>
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.mailbox}
-            origin="84.4% 91%"
-          >
-            <MailboxSprite open={hovered === "contact"} mailbox={sp.mailbox} />
-          </IntroPop>
-
-          {/* 邮箱前的灌木（盖在邮箱杆前面），跟着右边树丛一起摇 */}
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.bush}
-            origin="80.9% 91%"
-          >
-            <motion.img
-              src={sp.bush.src}
-              alt=""
-              className="pointer-events-none absolute select-none"
-              style={{
-                left: px(sp.bush.x),
-                top: py(sp.bush.y),
-                width: px(sp.bush.w),
-                transformOrigin: "50% 100%",
-              }}
-              animate={bushSway(0.8, 5.4, 1.2)}
               draggable={false}
             />
           </IntroPop>
