@@ -70,7 +70,7 @@ function boardUnits() {
   if (vw < 560) {
     return {
       u: vw / 720,
-      uc: vw / 685,
+      uc: vw / 657,
     };
   }
   const byW = vw / 820;
@@ -244,8 +244,12 @@ const FRAME_CY = (95 + 262) / 2;
  * 底部画框墙后面也用同一份、同一个 cy：换项目跳回页顶那一瞬间两边背景逐像素一样，看不出切换。
  */
 function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
-  const { w, h } = stoneSize(u);
   const mobile = getViewWidth() < 560;
+  /* 手机竖屏下按 2400:1610 原图比例固定缩放（不随 window.innerHeight 纵向拉大 cover），
+     使 WOOLAB GOODS 浮雕恰好完整落入手机屏宽内，左右不裁切 */
+  const { w, h } = mobile
+    ? { w: 2365 * u, h: 2365 * (1610 / 2400) * u }
+    : stoneSize(u);
   const half = MARK_HALF * h;
   /*
    * 只露水印四周那一截，上下都是渐隐：这张带水印的石纹和底下钉死的石墙纹路对不齐，
@@ -365,7 +369,7 @@ function LookbookHead({
 }) {
   const mobile = getViewWidth() < 560;
   if (mobile && project) {
-    const fw = 204 * u;
+    const fw = 236 * u;
     const fh = (fw * FRAME_H) / FRAME_W;
     return (
       <Board u={u}>
@@ -374,7 +378,7 @@ function LookbookHead({
           className="absolute"
           style={{
             left: (BOARD_W * u - fw) / 2,
-            top: 185 * u,
+            top: 172 * u,
             width: fw,
             height: fh,
             visibility: hideFrame ? "hidden" : "visible",
@@ -539,6 +543,13 @@ function useViewportWidth() {
 /** 擦开用的缓动 */
 const WIPE_EASE = [0.76, 0, 0.24, 1] as const;
 
+/** 手机竖屏下 2400×950 横图若左右两张照片分得较开，按左右分栏各自对准主体中心，防止窄屏裁掉边缘重点 */
+const MOBILE_STRIP_SPLIT: Record<string, { leftRatio: number; cx1: number; cx2: number }> = {
+  "/assets/lab/detail/tee02-photo.webp": { leftRatio: 0.5, cx1: 490, cx2: 1920 },
+  "/assets/lab/detail/drink-photo.webp": { leftRatio: 0.52, cx1: 505, cx2: 1810 },
+  "/assets/lab/detail/candle-photo.webp": { leftRatio: 0.5, cx1: 615, cx2: 1965 },
+};
+
 function HeroStrip({
   lb,
   placeholder,
@@ -581,6 +592,8 @@ function HeroStrip({
       : { text: { zh: "正面", en: "Front" }, x: 654, y: 16, flip: false, ...lb?.captions?.front };
   const back =
     lb?.captions?.back === false ? null : { text: { zh: "背面", en: "Back" }, x: 172, y: 50, ...lb?.captions?.back };
+  const stripSrc = lb && "strip" in lb.photos ? lb.photos.strip : undefined;
+  const splitCfg = mobile && stripSrc ? MOBILE_STRIP_SPLIT[stripSrc] : undefined;
   return (
     <div className="relative w-full overflow-hidden" style={{ height: H }}>
       <motion.div
@@ -594,14 +607,41 @@ function HeroStrip({
             {/* 照片本体：正面在下、背面在上，背面右缘压住正面左缘（稿子 356–420 那段）；只有这一层缩放 */}
             <motion.div className="absolute inset-0" style={{ scale: mobile ? undefined : scale }}>
               {"strip" in lb.photos ? (
-                <Img src={lb.photos.strip} />
+                splitCfg && stripSrc ? (
+                  <>
+                    {[
+                      { left: 0, w: vw * splitCfg.leftRatio, cx: splitCfg.cx1 },
+                      { left: vw * splitCfg.leftRatio, w: vw * (1 - splitCfg.leftRatio), cx: splitCfg.cx2 },
+                    ].map((pane, idx) => {
+                      const imgW = (H * 2400) / 950;
+                      const imgLeft = pane.w / 2 - (pane.cx * H) / 950;
+                      return (
+                        <div
+                          key={idx}
+                          className="absolute top-0 overflow-hidden"
+                          style={{ left: pane.left, width: pane.w, height: H }}
+                        >
+                          <img
+                            src={stripSrc}
+                            alt=""
+                            draggable={false}
+                            className="pointer-events-none absolute top-0 max-w-none select-none"
+                            style={{ left: imgLeft, width: imgW, height: H }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <Img src={lb.photos.strip} />
+                )
               ) : (
                 <>
                   <div style={{ ...box(k, 366, 0, 433), top: 0, height: H }}>
-                    <Img src={lb.photos.front} />
+                    <Img src={lb.photos.front} style={mobile ? { objectPosition: "62% center" } : undefined} />
                   </div>
                   <div style={{ ...box(k, 0, 0, 430), top: 0, height: H }}>
-                    <Img src={lb.photos.back} />
+                    <Img src={lb.photos.back} style={mobile ? { objectPosition: "58% center" } : undefined} />
                   </div>
                 </>
               )}
@@ -962,11 +1002,11 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
       initial="hidden"
       animate={play ? "show" : "hidden"}
     >
-      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（手机竖屏下由于右侧拍立得伸出更多，整体左移 36u 让组合居中） */}
+      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（手机竖屏下由于右侧拍立得伸出，整体左移 25u 让组合居中） */}
       <div
         className="absolute inset-0"
         style={{
-          left: mobile ? -36 * u : 0,
+          left: mobile ? -25 * u : 0,
           transform: `scale(${PAPER_K})`,
           transformOrigin: `${360 * u}px 0`,
         }}
@@ -1016,8 +1056,18 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
           ))}
         </motion.div>
 
-        {/* 拍立得（相纸 + 照片 + 胶带，已经转好 10°）：稿子里 154.17×188.85 @ (425.8,890)，以左上角为锚放大 */}
-        <motion.div variants={stickOn} custom={at(1)} style={box(u, 425.8, Y(890), 154.17 * PHOTO_K, 188.85 * PHOTO_K)}>
+        {/* 拍立得（相纸 + 照片 + 胶带）：稿子里 154.17×188.85 @ (425.8,890)；桌面端放大 PHOTO_K，手机端按原稿比例与位置摆放 */}
+        <motion.div
+          variants={stickOn}
+          custom={at(1)}
+          style={box(
+            u,
+            mobile ? 448 : 425.8,
+            Y(mobile ? 872 : 890),
+            154.17 * (mobile ? 1.05 : PHOTO_K),
+            188.85 * (mobile ? 1.05 : PHOTO_K),
+          )}
+        >
           <Img src={lb.polaroid} fit="fill" />
         </motion.div>
 
@@ -1032,12 +1082,12 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
         <motion.div className="absolute inset-0" variants={fadeIn} custom={at(3)}>
           <Rotated
             u={u}
-            x={352.44}
-            y={Y(957.76)}
-            w={165.44}
-            h={163.07}
-            iw={128.8}
-            ih={124.6}
+            x={mobile ? 344 : 352.44}
+            y={Y(mobile ? 964 : 957.76)}
+            w={mobile ? 152 : 165.44}
+            h={mobile ? 150 : 163.07}
+            iw={mobile ? 118 : 128.8}
+            ih={mobile ? 114 : 124.6}
             transform="rotate(21.45deg)"
             style={{ mixBlendMode: "multiply", opacity: 0.3 }}
           >
@@ -1210,8 +1260,8 @@ const WALL_GAP_MIN = 1.15;
 function wallLayout(vw: number, vh: number) {
   const n = labProjects.length;
   if (vw < 560) {
-    const wallW = Math.min(vw * 0.34, vh * 0.165);
-    const colGap = wallW * 1.38;
+    const wallW = Math.min(vw * 0.38, vh * 0.19);
+    const colGap = wallW * 1.3;
     const slotX = (i: number) => vw / 2 + ((i % 2) - 0.5) * colGap;
     const slotY = (i: number) => vh * (Math.floor(i / 2) === 0 ? 0.35 : 0.67);
     return { wallW, gap: colGap, slotX, slotY };
@@ -1763,8 +1813,8 @@ export function DetailPage({
       const textStart = j === 0 ? 676 * u : 165 * u;
       const descTop = textStart - (DESC_TEXT_Y - DESC_Y0) * u;
       const arrowBottom = textStart + (mLines.length * 42 + 24 + 48) * u;
-      const collageTop = arrowBottom + 88 * u;
-      const blockH = collageTop + 390 * uc + 85 * u;
+      const collageTop = arrowBottom + 68 * u;
+      const blockH = collageTop + 365 * uc + 115 * u;
       const hasCaps = lb && (lb.captions?.back !== false || lb.captions?.front !== false);
       const mStripH = (vw * 413) / 720 + (hasCaps ? 245 * u : 60 * u);
       layouts.push({ start, descTop, collageTop, blockH, stripH: mStripH });
@@ -1948,16 +1998,16 @@ export function DetailPage({
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           initial={{
-            x: wall.slotX(flying) - (mobile ? 204 * u : hero.w) / 2,
-            y: wall.slotY(flying) - (mobile ? (204 * u * FRAME_H) / FRAME_W : hero.h) / 2,
-            scale: wall.wallW / (mobile ? 204 * u : hero.w),
+            x: wall.slotX(flying) - (mobile ? 236 * u : hero.w) / 2,
+            y: wall.slotY(flying) - (mobile ? (236 * u * FRAME_H) / FRAME_W : hero.h) / 2,
+            scale: wall.wallW / (mobile ? 236 * u : hero.w),
             rotate: 0,
           }}
           animate={
             mobile
               ? {
-                  x: vw / 2 - (204 * u) / 2,
-                  y: 185 * u,
+                  x: vw / 2 - (236 * u) / 2,
+                  y: 172 * u,
                   scale: 1,
                   rotate: 0,
                 }
@@ -1966,7 +2016,7 @@ export function DetailPage({
           transition={{ duration: 0.85, ease: [0.65, 0, 0.35, 1] }}
           onAnimationComplete={onFlown}
         >
-          <FramePiece project={labProjects[flying]} width={mobile ? 204 * u : hero.w} />
+          <FramePiece project={labProjects[flying]} width={mobile ? 236 * u : hero.w} />
         </motion.div>
       )}
     </div>
