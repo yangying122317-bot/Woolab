@@ -83,7 +83,7 @@
 }
 
 :root {
-  --mu-unit: 1.32px;
+  --mu-unit: clamp(1.18px, 0.3385vw, 1.52px);
   --nav-pad: 16;
   --nav-gap: 15;
 }

@@ -24,7 +24,7 @@ import { useTimeOfDay, type TimePhase } from "../timeOfDay";
 import { useWeather } from "../weather";
 import { heroHotspots, type HeroHotspot } from "../data/heroHotspots";
 import { config } from "../config";
-import { isMobilePreview } from "../device";
+import { getViewWidth, isMobilePreview } from "../device";
 import {
   INTRO_DISMISSED_EVENT,
   INTRO_PREVIEW_PATH,
@@ -256,14 +256,6 @@ const mRect = (x: number, y: number, w: number, h: number) => ({
   width: (w / FRAME_W) * 100,
   height: (h / FRAME_H) * 100,
 });
-
-const MOBILE_HOTSPOTS: HeroHotspot[] = [
-  { id: "life", path: "/life", labelKey: "nav.life", ...mRect(595, 515, 215, 255) },
-  { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(688, 683, 204, 315) },
-  { id: "about", path: "/about", labelKey: "nav.about", ...mRect(605, 345, 230, 165) },
-  { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(465, 700, 172, 140) },
-  { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(878, 610, 120, 230) },
-];
 
 /**
  * 小鸟扇翅三帧（同一画布尺寸 228x192，已对齐，直接轮播）。
@@ -503,8 +495,83 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
-  const sp = cover ? SPRITES : MOBILE_SPRITES;
-  const activeHotspots = cover ? heroHotspots : MOBILE_HOTSPOTS;
+  const [vp, setVp] = useState(() => ({
+    w: typeof window !== "undefined" ? getViewWidth() : 393,
+    h: typeof window !== "undefined" ? window.innerHeight : 852,
+  }));
+  const mobileLayout = useMemo(() => {
+    const aspect = vp.h / Math.max(1, vp.w);
+    // t = 0 对应真机 Safari 展开上下工具栏（高宽比约 1.66）；t = 1 对应全屏设计稿（高宽比 2.17）
+    const t = Math.max(0, Math.min(1, (aspect - 1.66) / (2.17 - 1.66)));
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+
+    // 主流全面屏手机（aspect >= 1.66）保持 243% 饱满画布宽度；极矮屏（如 iPhone SE 1.46）按比例微收宽度防上下裁切
+    const widthRatio = 2.43 * Math.min(1, aspect / 1.66);
+    const visBoardW = FRAME_W / widthRatio;
+    const edgeDx = (visBoardW - FRAME_W / 2.43) / 2;
+
+    const cloudY = lerp(126, MOBILE_SPRITES.cloudBig.y);
+    const sheepY = lerp(654, MOBILE_SPRITES.sheep.y);
+    const bushLeftY = lerp(830, MOBILE_SPRITES.bushLeft.y);
+    const bushRightY = lerp(906, MOBILE_SPRITES.bushRight.y);
+
+    const sprites = {
+      ...MOBILE_SPRITES,
+      cloudBig: { ...MOBILE_SPRITES.cloudBig, y: cloudY },
+      bushLeft: {
+        ...MOBILE_SPRITES.bushLeft,
+        x: MOBILE_SPRITES.bushLeft.x - edgeDx * 0.7,
+        y: bushLeftY,
+      },
+      bushRight: {
+        ...MOBILE_SPRITES.bushRight,
+        x: MOBILE_SPRITES.bushRight.x + edgeDx * 0.7,
+        y: bushRightY,
+      },
+      board: {
+        ...MOBILE_SPRITES.board,
+        x: MOBILE_SPRITES.board.x - edgeDx * 0.35,
+      },
+      mailbox: {
+        ...MOBILE_SPRITES.mailbox,
+        headX: MOBILE_SPRITES.mailbox.headX + edgeDx * 0.35,
+        postX: MOBILE_SPRITES.mailbox.postX + edgeDx * 0.35,
+      },
+      bush: {
+        ...MOBILE_SPRITES.bush,
+        x: MOBILE_SPRITES.bush.x + edgeDx * 0.35,
+      },
+      sheep: { ...MOBILE_SPRITES.sheep, y: sheepY },
+      sheepShadow: { ...MOBILE_SPRITES.sheepShadow, y: sheepY + 1 },
+    };
+
+    const hotspots: HeroHotspot[] = [
+      { id: "life", path: "/life", labelKey: "nav.life", ...mRect(595, 515, 215, 255) },
+      { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(688, sheepY, 204, 315) },
+      { id: "about", path: "/about", labelKey: "nav.about", ...mRect(605, 345, 230, 165) },
+      { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(sprites.board.x - 4, 700, 172, 140) },
+      { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(sprites.mailbox.headX - 5, 610, 120, 230) },
+    ];
+
+    const canvasW = vp.w * widthRatio;
+    const scale = canvasW / FRAME_W;
+    // 以右下角花丛底边 + 底部石板路留白作为锚点贴合当前可视区底部；超长屏（aspect > 2.17）上下均分余量
+    const botBoardY = bushRightY + 103 + lerp(24, 105);
+    const baseTopPx = vp.h - botBoardY * scale;
+    const extraTallPx = aspect > 2.17 ? (vp.h - vp.w * 2.17) * 0.45 : 0;
+    const topPx = baseTopPx - extraTallPx;
+
+    return {
+      sprites,
+      hotspots,
+      widthPct: `${(widthRatio * 100).toFixed(2)}%`,
+      leftPct: `${(((1 - widthRatio) * 50)).toFixed(2)}%`,
+      topPx: `${Math.round(topPx)}px`,
+    };
+  }, [vp.w, vp.h]);
+
+  const sp = cover ? SPRITES : mobileLayout.sprites;
+  const activeHotspots = cover ? heroHotspots : mobileLayout.hotspots;
   const [hovered, setHovered] = useState<string | null>(null);
   const tapTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(tapTimerRef.current), []);
@@ -635,6 +702,22 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     stage.addEventListener("scroll", pin);
     return () => stage.removeEventListener("scroll", pin);
   }, []);
+
+  useEffect(() => {
+    if (cover) return;
+    const measure = () => {
+      const w = stageRef.current?.clientWidth || getViewWidth();
+      const h = stageRef.current?.clientHeight || window.innerHeight;
+      setVp((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, [cover]);
   const [birdFlapIdx, setBirdFlapIdx] = useState(0);
   const [birdStanding, setBirdStanding] = useState(false);
   /** 鼠标靠近栏杆上的小鸟时置位，由状态机消费（用 ref 避免闭包读到旧值） */
@@ -709,7 +792,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       if (!alive) return;
       await birdControls.start({
         left: [PERCH.left, leftExit],
-        top: [PERCH.top, `${rand(6, 11)}%`],
+        top: [PERCH.top, `${rand(cover ? 6 : 14, cover ? 11 : 18)}%`],
         y: 0,
         transition: {
           duration: startled ? (cover ? 2.6 : 1.6) : cover ? 4.2 : 2.5,
@@ -776,11 +859,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           birdControls.set({ opacity: 0 });
         }
       } else if (!cover && birdOut()) {
-        birdControls.set({ left: rightStart, top: "13%", opacity: 0, y: 0 });
+        birdControls.set({ left: rightStart, top: "16%", opacity: 0, y: 0 });
         await sleep(intro ? 1400 : 400);
         if (!alive) return;
         if (birdOut()) {
-          await flyInAndPerch(rand(11, 15));
+          await flyInAndPerch(rand(15, 19));
           if (!alive) return;
           stopFlap();
           birdControls.set({ opacity: 0 });
@@ -793,7 +876,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         // 夜里、下雨小鸟不出来
         if (!birdOut()) continue;
 
-        const cruiseTop = rand(9, 19);
+        const cruiseTop = cover ? rand(9, 19) : rand(14, 19);
         if (Math.random() < 0.5) {
           await flyInAndPerch(cruiseTop);
           if (!alive) break;
@@ -1032,11 +1115,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
       {/* 镜头层：开场电视那段由幕布驱动缩放 / 位移（场景先缩进电视屏幕，再推到占满整屏），平时就是 1:1 */}
       <motion.div
-        className={
-          cover
-            ? "flex h-full items-end justify-center"
-            : "relative flex h-full w-full justify-center"
-        }
+        className={cover ? "flex h-full items-end justify-center" : "relative h-full w-full"}
         style={{
           scale: camera.scale,
           x: camera.x,
@@ -1046,11 +1125,12 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       >
         {/* 场景本体：
             - 桌面端（cover）：按视口高度完整显示，两侧由边缘延伸条补满；
-            - 移动端（!cover）：按实际可视高度（100% / dvh）的 70.1% 等比缩放并置于 top: 7.55%，
-              确保在真机 Safari（扣除顶部状态栏与底部地址栏后可视区变矮约 22%）下，
-              顶部白云/飞鸟、中间房屋、底部小羊全身与右下角花丛均按设计稿比例完整呈现不被截断 */}
+            - 移动端（!cover）：根据当前机型可视区的实际宽高比（vp.h / vp.w）动态计算：
+              主流全面屏保持 243% 饱满画布宽度，极矮屏（如 iPhone SE）自动微收宽度，
+              并以右下角花丛与石板路底沿锚定可视区底部，同时弹性收放云朵与前景物件纵坐标，
+              确保在所有手机机型与浏览器形态下既保持饱满构图又绝不截断 */}
         <motion.div
-          className="relative shrink-0"
+          className={cover ? "relative shrink-0" : "absolute"}
           animate={zoomControls}
           style={{
             transformOrigin: `${DOOR_FOCUS.x} ${DOOR_FOCUS.y}`,
@@ -1062,8 +1142,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 }
               : {
                   aspectRatio: `${HERO_RATIO}`,
-                  height: "70.1%",
-                  top: "7.55%",
+                  width: mobileLayout.widthPct,
+                  left: mobileLayout.leftPct,
+                  top: mobileLayout.topPx,
                 }),
           }}
           onMouseMove={(e) => {
@@ -2327,7 +2408,18 @@ function MailboxSprite({
   tintFilter,
 }: {
   open: boolean;
-  mailbox?: typeof SPRITES.mailbox | typeof MOBILE_SPRITES.mailbox;
+  mailbox?: {
+    headClosed: string;
+    headOpen: string;
+    post: string;
+    headX: number;
+    headY: number;
+    headW: number;
+    headOpenW: number;
+    postX: number;
+    postY: number;
+    postW: number;
+  };
   tintFilter?: string;
 }) {
   const m = mailbox;
