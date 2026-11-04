@@ -594,9 +594,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const [curtainRun, setCurtainRun] = useState(0);
   const [curtainUp, setCurtainUp] = useState(
     () =>
-      cover &&
-      (introPreview ||
-        (config.introEnabled && !sessionStorage.getItem(INTRO_SESSION_KEY))),
+      introPreview ||
+      (config.introEnabled && !sessionStorage.getItem(INTRO_SESSION_KEY)),
   );
   const [curtainSlide, setCurtainSlide] = useState(false);
   const curtainUpRef = useRef(curtainUp);
@@ -623,7 +622,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   }, [curtainUp]);
   /* 预览入口的 REPLAY：重新盖上布、状态机重跑 */
   useEffect(() => {
-    if (!introPreview || !cover) return;
+    if (!introPreview) return;
     const replay = () => {
       setCurtainSlide(false);
       setCurtainUp(true);
@@ -632,11 +631,11 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
     window.addEventListener(INTRO_REPLAY_EVENT, replay);
     return () => window.removeEventListener(INTRO_REPLAY_EVENT, replay);
-  }, [introPreview, cover]);
+  }, [introPreview]);
 
   // 品牌开屏还盖在上面时先按兵不动；开屏滑开的瞬间常驻小动作（吊牌晃、小鸟飞过）才开始
   const [introGo, setIntroGo] = useState(
-    () => !config.introEnabled || !cover || !!sessionStorage.getItem(INTRO_SESSION_KEY),
+    () => !config.introEnabled || !!sessionStorage.getItem(INTRO_SESSION_KEY),
   );
   // 首次进入主页（本次会话内）才播"物件依次弹出"的出场动画，之后进来直接呈现完整场景。
   // 有开场电视的那一次也弹：电视里先只有空房子，镜头推到位了东西再一个个弹出来（introGo 由幕布快推到位时打开）。
@@ -655,8 +654,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   const baseHidden = cloudHidden;
   useEffect(() => {
     sessionStorage.setItem("heroIntroPlayed", "1");
-    if (!cover) sessionStorage.setItem(INTRO_SESSION_KEY, "1");
-  }, [cover]);
+  }, []);
   useEffect(() => {
     if (introGo) return;
     const onDismiss = () => setIntroGo(true);
@@ -843,7 +841,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         if (birdOut()) {
           await sleep(300);
           if (!alive) return;
-          await flyInAndPerch(rand(9, 19));
+          await flyInAndPerch(cover ? rand(9, 19) : rand(15, 19));
           if (!alive) return;
           stopFlap();
           birdControls.set({ opacity: 0 });
@@ -1033,7 +1031,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       );
     };
 
-    timers.push(window.setTimeout(runStep, 1100));
+    timers.push(window.setTimeout(runStep, intro ? 2200 : 1100));
     return () => {
       alive = false;
       timers.forEach(window.clearTimeout);

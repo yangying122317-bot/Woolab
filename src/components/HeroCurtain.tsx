@@ -10,6 +10,7 @@ import {
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { useReportNavHidden } from "../state/chrome";
 import { useLanguage } from "../i18n/LanguageContext";
+import { getViewWidth } from "../device";
 import { loadImageStrict } from "./life/preload";
 
 /**
@@ -154,15 +155,20 @@ export default function HeroCurtain({
   useReportNavHidden(true);
   const { t } = useLanguage();
 
-  const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [vp, setVp] = useState(() => ({ w: getViewWidth(), h: window.innerHeight }));
   useEffect(() => {
-    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const on = () => setVp({ w: getViewWidth(), h: window.innerHeight });
     window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    window.visualViewport?.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.visualViewport?.removeEventListener("resize", on);
+    };
   }, []);
   const { w: vw, h: vh } = vp;
-  /* 画板按"盖满"缩放 */
-  const u = Math.max(vw / BOARD_W, vh / BOARD_H);
+  const mobile = vw < 768;
+  /* 桌面端画板按"盖满"缩放；手机竖屏按屏幕宽度等比缩放小电视（约占屏宽 62%），使小电视在手机屏幕正中清晰饱满 */
+  const u = mobile ? vw / 205 : Math.max(vw / BOARD_W, vh / BOARD_H);
   const boardLeft = (vw - BOARD_W * u) / 2;
   const boardTop = (vh - BOARD_H * u) / 2;
 
@@ -172,6 +178,8 @@ export default function HeroCurtain({
     const y = boardTop + SCREEN.y * u;
     const w = SCREEN.w * u;
     const h = SCREEN.h * u;
+    const refW = mobile ? vw * 1.85 : vw;
+    const refH = mobile ? vw * (1.85 / 1.6) : vh;
     return {
       x,
       y,
@@ -179,12 +187,12 @@ export default function HeroCurtain({
       h,
       cx: x + w / 2,
       cy: y + h / 2,
-      sceneScale: Math.max(w / vw, h / vh) * 1.04,
+      sceneScale: Math.max(w / refW, h / refH) * 1.04,
       mask: `url("data:image/svg+xml;utf8,${encodeURIComponent(
         `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${vw} ${vh}'><path fill-rule='evenodd' d='M0 0H${vw}V${vh}H0Z ${screenPathAt(x, y, w, h, SCREEN.holeInset * u)}'/></svg>`,
       )}")`,
     };
-  }, [boardLeft, boardTop, u, vw, vh]);
+  }, [boardLeft, boardTop, mobile, u, vw, vh]);
 
   /* 白布自己的缩放：绕 pivot 放大 */
   const clothScale = useMotionValue(1);
@@ -543,7 +551,7 @@ export default function HeroCurtain({
             style={{
               x: textX,
               y: textY,
-              fontSize: TV_TEXT.size * u,
+              fontSize: (mobile ? 10.5 : TV_TEXT.size) * u,
               lineHeight: 1.1,
               fontWeight: 900,
               color: TV_TEXT.color,
