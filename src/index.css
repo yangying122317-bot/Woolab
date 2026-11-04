@@ -49,6 +49,14 @@
   font-display: swap;
 }
 
+/** DM Sans（Google Fonts latin 子集，可变字重 100–1000）：供 Lab 详情页撕纸表单印刷标签使用 */
+@font-face {
+  font-family: "DM Sans";
+  src: url("/assets/fonts/dm-sans.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+}
+
 /**
  * 手写：提示、标注、清单、便条这类点缀文字。
  */
@@ -61,6 +69,11 @@
  */
 .font-look {
   font-family: "IntroHand", "ScrollHand", "IntroHandZh", "HandZh", system-ui, -apple-system, "PingFang SC", sans-serif;
+}
+
+/** 撕纸产品表上的印刷表头与字段名（PRODUCT SHEET / NAME: / MATERIAL: 等） */
+.font-sheet {
+  font-family: "DM Sans", system-ui, -apple-system, "PingFang SC", sans-serif;
 }
 
 /** 强制大写：顶栏 MENU / CN / EN、目录吊牌、序号小标题（同样是手写体） */

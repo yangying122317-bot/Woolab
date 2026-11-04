@@ -904,7 +904,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
             <Img src={`${A}/paper-sheet.webp`} fit="fill" />
           </div>
           <p
-            className="font-look absolute whitespace-nowrap font-medium text-black"
+            className="font-sheet absolute whitespace-nowrap font-medium text-black"
             style={{
               left: 206 * u,
               top: Y(853) * u,
@@ -918,7 +918,7 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
           {rows.map(([k, v], i) => (
             <div key={k}>
               <p
-                className="font-look absolute whitespace-nowrap font-medium text-black"
+                className="font-sheet absolute whitespace-nowrap font-medium text-black"
                 style={{
                   left: 206 * u,
                   top: Y(894 + i * 37) * u,
