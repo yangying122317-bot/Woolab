@@ -1377,71 +1377,8 @@ function FrameWall({
             className="absolute"
             style={{ left: slotX(i) - W / 2, top: slotY(i) - H / 2, width: W, height: H }}
           >
-            {/* 手写名字 + 小箭头：桌面端在画框正上方；手机端第 1、3 个在画框左侧，第 2、4 个在画框右侧 */}
-            {mobile ? (
-              <motion.div
-                className="pointer-events-none absolute top-1/2 flex items-center"
-                style={
-                  i % 2 === 0
-                    ? { right: "calc(100% + 8px)", transform: "translateY(-50%)", gap: 5 }
-                    : { left: "calc(100% + 8px)", transform: "translateY(-50%)", gap: 5 }
-                }
-                animate={{ opacity: lit ? 1 : 0.45 }}
-                transition={{ duration: 0.25 }}
-              >
-                {i % 2 === 0 ? (
-                  <>
-                    <p
-                      className="font-hand whitespace-nowrap text-white"
-                      style={{ fontSize: 14.5, lineHeight: 1.2, transform: "rotate(-2.5deg)" }}
-                    >
-                      {pick(p.wall?.label ?? p.title)}
-                    </p>
-                    <div
-                      className="flex shrink-0 items-center justify-center"
-                      style={{ width: 18, height: 12 }}
-                    >
-                      <img
-                        src={`${A}/arrow-down.svg`}
-                        alt=""
-                        draggable={false}
-                        style={{
-                          width: 8.5,
-                          height: 19,
-                          maxWidth: "none",
-                          transform: "rotate(-90deg)",
-                        }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      className="flex shrink-0 items-center justify-center"
-                      style={{ width: 18, height: 12 }}
-                    >
-                      <img
-                        src={`${A}/arrow-down.svg`}
-                        alt=""
-                        draggable={false}
-                        style={{
-                          width: 8.5,
-                          height: 19,
-                          maxWidth: "none",
-                          transform: "scaleX(-1) rotate(-90deg)",
-                        }}
-                      />
-                    </div>
-                    <p
-                      className="font-hand whitespace-nowrap text-white"
-                      style={{ fontSize: 14.5, lineHeight: 1.2, transform: "rotate(-2.5deg)" }}
-                    >
-                      {pick(p.wall?.label ?? p.title)}
-                    </p>
-                  </>
-                )}
-              </motion.div>
-            ) : (
+            {/* 手写名字 + 小箭头：仅桌面端在画框正上方显示；手机端去掉文字只保留垂直排列的实体画框 */}
+            {!mobile && (
               <motion.div
                 className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
                 style={{ top: -78 * u }}
