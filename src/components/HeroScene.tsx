@@ -509,31 +509,32 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   }));
   const mobileLayout = useMemo(() => {
     const aspect = vp.h / Math.max(1, vp.w);
-    // t = 0 对应真机 Safari 展开上下工具栏（高宽比约 1.66）；t = 1 对应全屏设计稿（高宽比 2.17）
-    const t = Math.max(0, Math.min(1, (aspect - 1.66) / (2.17 - 1.66)));
+    // t = 0 对应真机 Safari 展开上下工具栏（高宽比约 1.68）；t = 1 对应全屏设计稿（高宽比 2.17）
+    const t = Math.max(0, Math.min(1, (aspect - 1.68) / (2.17 - 1.68)));
     const lerp = (a: number, b: number) => a + (b - a) * t;
 
-    // 主流全面屏手机（aspect >= 1.66）保持 243% 饱满画布宽度；极矮屏（如 iPhone SE 1.46）按比例微收宽度防上下裁切
-    const widthRatio = 2.43 * Math.min(1, aspect / 1.66);
+    // 按当前可视区高宽比等比缩放画布（Safari 带工具栏时约 205%，全屏时 243%），
+    // 完全保留设计稿原本的纵向间距（不压缩白云、小羊与花丛的相对距离），让画面舒展透气
+    const widthRatio = Math.min(2.43, Math.max(1.82, aspect * 1.21));
     const visBoardW = FRAME_W / widthRatio;
     const edgeDx = (visBoardW - FRAME_W / 2.43) / 2;
 
-    const cloudY = lerp(126, MOBILE_SPRITES.cloudBig.y);
-    const sheepY = lerp(646, MOBILE_SPRITES.sheep.y);
-    const bushLeftY = lerp(836, MOBILE_SPRITES.bushLeft.y);
-    const bushRightY = lerp(946, MOBILE_SPRITES.bushRight.y);
+    const cloudY = MOBILE_SPRITES.cloudBig.y;
+    const sheepY = MOBILE_SPRITES.sheep.y;
+    const bushLeftY = MOBILE_SPRITES.bushLeft.y;
+    const bushRightY = MOBILE_SPRITES.bushRight.y;
 
     const sprites = {
       ...MOBILE_SPRITES,
       cloudBig: { ...MOBILE_SPRITES.cloudBig, y: cloudY },
       bushLeft: {
         ...MOBILE_SPRITES.bushLeft,
-        x: MOBILE_SPRITES.bushLeft.x - edgeDx * 0.7,
+        x: MOBILE_SPRITES.bushLeft.x - edgeDx * 0.65,
         y: bushLeftY,
       },
       bushRight: {
         ...MOBILE_SPRITES.bushRight,
-        x: MOBILE_SPRITES.bushRight.x + edgeDx * 0.7,
+        x: MOBILE_SPRITES.bushRight.x + edgeDx * 0.65,
         y: bushRightY,
       },
       board: {
@@ -564,7 +565,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const canvasW = vp.w * widthRatio;
     const scale = canvasW / FRAME_W;
     // 以右下角花丛底边 + 底部石板路留白作为锚点贴合当前可视区底部；超长屏（aspect > 2.17）上下均分余量
-    const botBoardY = bushRightY + 103 + lerp(16, 105);
+    const botBoardY = bushRightY + 103 + lerp(44, 105);
     const baseTopPx = vp.h - botBoardY * scale;
     const extraTallPx = aspect > 2.17 ? (vp.h - vp.w * 2.17) * 0.45 : 0;
     const topPx = baseTopPx - extraTallPx;

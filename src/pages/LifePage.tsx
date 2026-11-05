@@ -586,27 +586,29 @@ export default function LifePage() {
           {/* 房间长卷：滚动驱动横移；手机竖屏下用 roomScale 拉远镜头，并将房间主体垂直居中，上下无缝延展墙纸与蓝地板 */}
           <motion.div
             ref={stripRef}
-            className="relative h-full"
+            className="relative"
             style={{
               x,
               scale: roomScale,
               top: mobileView ? "18vh" : undefined,
               transformOrigin: "0 0",
               width: `${ROOM_TOTAL_VH}vh`,
+              height: "100vh",
               willChange: "transform",
             }}
           >
-            {/* 手机竖屏下房间主体居中（top: 18vh），向上延伸同款竖条纹墙面保证顶部无缝 */}
+            {/* 手机竖屏下房间主体居中（top: 18vh），向上延伸同款竖条纹墙面（scaleY(-1) 镜像对接 y=0 边缘且使用完全一致的 vh 尺寸，保证每根竖条纹像素级无缝贯通） */}
             {mobileView && (
               <div
                 className="pointer-events-none absolute left-0"
                 style={{
-                  top: "-38vh",
+                  top: "-40vh",
                   height: "40vh",
                   right: "-10vw",
                   backgroundImage: "url(/assets/life/room-bg-tile.webp)",
                   backgroundSize: `${ROOM_TILE_W_VH}vh 100vh`,
                   backgroundRepeat: "repeat-x",
+                  transform: "scaleY(-1)",
                 }}
               />
             )}
@@ -616,7 +618,7 @@ export default function LifePage() {
               style={{
                 right: "-10vw",
                 backgroundImage: "url(/assets/life/room-bg-tile.webp)",
-                backgroundSize: "auto 100%",
+                backgroundSize: `${ROOM_TILE_W_VH}vh 100vh`,
                 backgroundRepeat: "repeat-x",
               }}
             />
