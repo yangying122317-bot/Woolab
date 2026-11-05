@@ -91,10 +91,18 @@ export default function NextPage({
   /* 页脚链接和顶栏 logo / 喇叭同一条边距 */
   const inset = mobile ? 18 : Math.min(vp.w / 720, vp.h / 450) * 25;
 
-  /* 手机竖屏下：标题移到顶栏下方，5 张大相纸沿中轴紧密层叠竖排（与上方副标题保持舒适呼吸间距，不顶到文字上） */
+  /* 手机竖屏下：读取顶栏真实底边像素高度（兼容 iOS 26 灵动岛偏移）将标题稳稳排在顶栏下方 14px 处，5 张拍立得沿中轴层叠竖排 */
+  const headerBot =
+    typeof document !== "undefined"
+      ? document.querySelector("header")?.getBoundingClientRect().bottom ?? 0
+      : 0;
+  const navH = Math.max(
+    headerBot,
+    52 * Math.max(1.18, Math.min(1.52, vp.w * 0.003385)),
+  );
   const yScreenTop = -top / s;
-  const titleY = mobile ? yScreenTop + 52 / s + 8 : TITLE.y;
-  const subY = mobile ? titleY + 22 : SUB.y;
+  const titleY = mobile ? yScreenTop + (navH + 14) / s : TITLE.y;
+  const subY = mobile ? titleY + 23 : SUB.y;
   const lineY = mobile ? 444 : LINE.y;
   const activeCards = mobile
     ? (() => {
@@ -102,8 +110,8 @@ export default function NextPage({
         const botBound = lineY - 14;
         const centerY = (topBound + botBound) / 2;
         const availH = botBound - topBound;
-        const step = Math.min(72, availH * 0.156);
-        const cardScale = Math.min(0.84, Math.max(0.65, (availH - step * 4) / 186));
+        const step = Math.min(70, availH * 0.155);
+        const cardScale = Math.min(0.84, Math.max(0.64, (availH - step * 4) / 186));
         return [0, 1, 2, 3, 4].map((i) => ({
           shot: i,
           cx: 360 + MOBILE_VERTICAL_DX[i],
@@ -217,11 +225,12 @@ export default function NextPage({
     >
       {/* 下面这层的坐标都从可见区顶边算 */}
       <div className="absolute inset-x-0 bottom-0" style={{ top: pad }}>
-        {/* 米白条 + 半圆缺口（两块噪点对到同一原点，拼起来没缝） */}
+        {/* 米白条 + 半圆缺口（两块噪点对到同一原点，拼起来没缝；bottom 向下多延展 120px 防止 iOS 26 悬浮胶囊栏下方露底） */}
         <div
-          className="absolute inset-x-0 bottom-0"
+          className="absolute inset-x-0"
           style={{
             top: top + BLUE_BOTTOM * s,
+            bottom: -120,
             backgroundColor: CREAM,
             ...noiseBg("cream", s, 0, top + BLUE_BOTTOM * s),
           }}

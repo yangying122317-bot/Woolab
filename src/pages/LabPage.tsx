@@ -1438,18 +1438,30 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const closingRef = useRef(false);
   const close = async () => {
-    if (phase !== "open") return;
+    if (closingRef.current) return;
+    closingRef.current = true;
     setPhase("fade");
+    const fallback = window.setTimeout(() => {
+      if (alive.current) onClosed();
+    }, (FADE_T + EXPAND_T + FLIP_T) * 1000 + 120);
     await new Promise((r) => window.setTimeout(r, FADE_T * 1000));
-    if (!alive.current) return;
+    if (!alive.current) {
+      window.clearTimeout(fallback);
+      return;
+    }
     setPhase("shrink");
     animate(k, 0, { duration: EXPAND_T, ease: EXPAND_EASE });
     await animate(s, 1, { duration: EXPAND_T, ease: EXPAND_EASE });
-    if (!alive.current) return;
+    if (!alive.current) {
+      window.clearTimeout(fallback);
+      return;
+    }
     animate(shadowA, 0.32, { duration: 0.2 });
     setPhase("unflip");
     await animate(ry, 0, { duration: FLIP_T, ease: UNFLIP_EASE });
+    window.clearTimeout(fallback);
     if (alive.current) onClosed();
   };
 

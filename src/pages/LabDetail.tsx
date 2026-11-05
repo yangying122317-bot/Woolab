@@ -1719,8 +1719,9 @@ export function DetailPage({
   const { u, uc } = useBoardUnits();
   const scroller = useRef<HTMLDivElement | null>(null);
   const content = useRef<HTMLDivElement | null>(null);
-  /* 详情页自己的滚动条也走丝滑滚动；翻转卡片里那份不滚，不用 */
-  const lenis = useSmoothContainer(scroller, content, interactive);
+  const backTouchStart = useRef<{ x: number; y: number } | null>(null);
+  /* 桌面端详情页自己的滚动条走丝滑滚动；手机端直接走原生滚动，避免 Lenis 容器拦截底部按钮点击 */
+  const lenis = useSmoothContainer(scroller, content, interactive && getViewWidth() >= 560);
   /* 这个项目的几件；一件都没填的渲染一段占位 */
   const looks: (Lookbook | undefined)[] = project.looks?.length ? project.looks : [undefined];
   const closet = pick(project.wall?.label ?? looks[0]?.closet ?? { zh: "Meelo 的衣柜", en: "Meelo's Closet" });
@@ -1941,15 +1942,45 @@ export function DetailPage({
           {/* 手机端去掉底部四个画框展示，在页面底部中间放置"← 回画廊"；桌面端保持画框墙 */}
           {mobile ? (
             <div
-              className="relative z-30 flex items-center justify-center"
-              style={{ paddingTop: 28 * u, paddingBottom: 88 * u }}
+              className="relative z-40 flex items-center justify-center"
+              style={{
+                paddingTop: 24 * u,
+                paddingBottom: `calc(${115 * u}px + env(safe-area-inset-bottom, 24px))`,
+              }}
             >
               <button
                 type="button"
                 data-lab-detail-close=""
                 onClick={onClose}
-                className="font-look pointer-events-auto cursor-pointer whitespace-nowrap text-white/90 transition hover:opacity-70"
-                style={{ fontSize: Math.max(14, 24 * u) }}
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    backTouchStart.current = {
+                      x: e.touches[0].clientX,
+                      y: e.touches[0].clientY,
+                    };
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  const s0 = backTouchStart.current;
+                  backTouchStart.current = null;
+                  if (
+                    s0 &&
+                    e.changedTouches.length === 1 &&
+                    Math.hypot(
+                      e.changedTouches[0].clientX - s0.x,
+                      e.changedTouches[0].clientY - s0.y,
+                    ) < 12
+                  ) {
+                    e.preventDefault();
+                    onClose();
+                  }
+                }}
+                className="font-look pointer-events-auto relative z-40 cursor-pointer whitespace-nowrap px-8 py-4 text-white/90 transition hover:opacity-70 active:opacity-60"
+                style={{
+                  fontSize: Math.max(16, 26 * u),
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
               >
                 {t("lab.detail.back")}
               </button>

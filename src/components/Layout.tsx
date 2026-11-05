@@ -7,7 +7,7 @@ import { Outlet } from "react-router-dom";
 export default function Layout() {
   return (
     <div className="relative min-h-full bg-[#F4F4F4] text-neutral-800">
-      <main className="min-h-screen">
+      <main className="min-h-dvh md:min-h-screen">
         <Outlet />
       </main>
     </div>

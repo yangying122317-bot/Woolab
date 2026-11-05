@@ -17,7 +17,12 @@ import { useLanguage } from "../../i18n/LanguageContext";
 import type { DictKey } from "../../i18n/dict";
 import FrameAnim, { warmFrames } from "./FrameAnim";
 import { isMobileView } from "../../device";
-import { loadImage, preloadLifeInteraction } from "./preload";
+import {
+  isWindowAnimReady,
+  loadImage,
+  preloadLifeFirst,
+  preloadLifeInteraction,
+} from "./preload";
 import {
   playLightOff,
   playLightOn,
@@ -158,7 +163,19 @@ const windowFrameSrc = (i: number) =>
 function WindowAnim() {
   const [tick, setTick] = useState(0);
   const [running, setRunning] = useState(false);
+  const [framesReady, setFramesReady] = useState(() => isWindowAnimReady());
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (framesReady) return;
+    let alive = true;
+    void preloadLifeFirst().then(() => {
+      if (alive) setFramesReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [framesReady]);
 
   // 窗户滚出视野时停播，省掉不可见区域的开销
   useEffect(() => {
@@ -170,16 +187,16 @@ function WindowAnim() {
   }, []);
 
   useEffect(() => {
-    if (!running) return;
+    if (!running || !framesReady) return;
     const id = setInterval(
       () => setTick((t) => (t + 1) % WINDOW_CYCLE),
       1000 / WINDOW_FPS,
     );
     return () => clearInterval(id);
-  }, [running]);
+  }, [running, framesReady]);
 
-  const frame = tick < WINDOW_FRAMES ? tick : WINDOW_CYCLE - tick;
-  // 所有帧常驻 DOM 只切换透明度，避免每次换帧重新解码图片
+  const frame = framesReady ? (tick < WINDOW_FRAMES ? tick : WINDOW_CYCLE - tick) : 0;
+  // f00 始终垫底不透明，其余帧全部解码就绪后才开始轮播切换，彻底杜绝进门时窗户闪烁
   return (
     <div
       ref={ref}
@@ -191,16 +208,26 @@ function WindowAnim() {
         height: vh(WINDOW_RECT.h),
       }}
     >
-      {Array.from({ length: WINDOW_FRAMES }, (_, i) => (
-        <img
-          key={i}
-          src={windowFrameSrc(i)}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full max-w-none"
-          style={{ opacity: i === frame ? 1 : 0 }}
-        />
-      ))}
+      <img
+        src={windowFrameSrc(0)}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full max-w-none"
+      />
+      {framesReady &&
+        Array.from({ length: WINDOW_FRAMES - 1 }, (_, idx) => {
+          const i = idx + 1;
+          return (
+            <img
+              key={i}
+              src={windowFrameSrc(i)}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 h-full w-full max-w-none"
+              style={{ opacity: i === frame ? 1 : 0 }}
+            />
+          );
+        })}
     </div>
   );
 }

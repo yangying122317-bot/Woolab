@@ -164,9 +164,21 @@ export function preloadLifeCore(): Promise<void> {
 }
 
 /** 第一屏完整素材（核心层 + 窗户其余 23 帧）：返回全部解码完成的 Promise（重复调用复用同一个） */
+let windowReady = false;
+export function isWindowAnimReady(): boolean {
+  return (
+    windowReady ||
+    LIFE_WINDOW_REST.every((u) => readySet.has(u))
+  );
+}
+
 export function preloadLifeFirst(): Promise<void> {
   if (!first) {
-    first = preloadLifeCore().then(() => loadAll(LIFE_WINDOW_REST, 6));
+    first = preloadLifeCore().then(() =>
+      loadAll(LIFE_WINDOW_REST, 6).then(() => {
+        windowReady = true;
+      }),
+    );
   }
   return first;
 }

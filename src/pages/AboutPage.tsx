@@ -88,14 +88,12 @@ export default function AboutPage() {
     const on = () =>
       setVp({
         w: getViewWidth(),
-        h: Math.round(window.visualViewport?.height || window.innerHeight),
+        h: window.innerHeight,
       });
     on();
     window.addEventListener("resize", on);
-    window.visualViewport?.addEventListener("resize", on);
     return () => {
       window.removeEventListener("resize", on);
-      window.visualViewport?.removeEventListener("resize", on);
       timers.current.forEach(window.clearTimeout);
     };
   }, []);
@@ -113,27 +111,41 @@ export default function AboutPage() {
   const mobile = vp.w < 560;
   useEffect(() => {
     if (!mobile) return;
+    window.scrollTo(0, 0);
+    const keepTop = () => {
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
     const prevTouchAction = document.documentElement.style.touchAction;
     document.documentElement.style.touchAction = "none";
     const preventTouchMove = (e: TouchEvent) => {
       if (e.cancelable) e.preventDefault();
     };
+    window.addEventListener("scroll", keepTop, { passive: true });
     window.addEventListener("touchmove", preventTouchMove, { passive: false });
     return () => {
       document.documentElement.style.touchAction = prevTouchAction;
+      window.removeEventListener("scroll", keepTop);
       window.removeEventListener("touchmove", preventTouchMove);
     };
   }, [mobile]);
-  /* 桌面端按 720×450 居中；手机竖屏下相机+相纸居中（中点 y≈221），上方放第一段批注+向下箭头，下方放向上箭头+第二段批注 */
+  /* 桌面端按 720×450 居中；手机竖屏下读取顶栏真实底边高度（兼容 iOS 26 灵动岛偏移）与底部页脚后居中，绝不与顶栏重叠 */
+  const headerBot =
+    typeof document !== "undefined"
+      ? document.querySelector("header")?.getBoundingClientRect().bottom ?? 0
+      : 0;
+  const navH = Math.max(
+    headerBot,
+    52 * Math.max(1.18, Math.min(1.52, vp.w * 0.003385)),
+  );
   const s = mobile
-    ? Math.min(vp.w / 335, (vp.h - 120) / 570)
+    ? Math.min(vp.w / 345, (vp.h - navH - 44) / 560)
     : Math.min(vp.w / FW, vp.h / FH);
   const ox = (vp.w - FW * s) / 2;
-  const oy = mobile ? (vp.h - 442 * s) / 2 : (vp.h - FH * s) / 2;
+  const oy = mobile ? (navH + 6 + (vp.h - 34)) / 2 - 232 * s : (vp.h - FH * s) / 2;
   /** 相纸要掉到屏幕底下看不见为止（稿单位） */
   const dropTo = (vp.h - oy) / s - PHOTO.y + 80;
   /** 底部序号 / 小标题贴着屏幕底边（比稿高的窄屏上别浮在半空），离底边和稿里一样远 */
-  const footY = mobile ? (vp.h - oy - 34) / s : (vp.h - oy) / s - (FH - FOOT.y);
+  const footY = mobile ? (vp.h - oy - 28) / s : (vp.h - oy) / s - (FH - FOOT.y);
   const footInset = mobile ? 24 / s : FOOT.inset;
 
   const shot = aboutShots[idx];
@@ -250,9 +262,10 @@ export default function AboutPage() {
 
   return (
     <div
-      className="relative overflow-hidden select-none"
+      className="relative h-screen overflow-hidden select-none"
       style={{
-        height: mobile ? vp.h : "100vh",
+        height: mobile ? "100dvh" : "100vh",
+        minHeight: mobile ? vp.h : undefined,
         backgroundColor: BG,
         ...noiseBg("cream", s),
       }}
