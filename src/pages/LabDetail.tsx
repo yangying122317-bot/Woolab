@@ -357,33 +357,14 @@ export function DetailBackdrop() {
 function LookbookHead({
   u,
   closet,
-  project,
-  hideFrame,
 }: {
   u: number;
   closet: string;
-  project?: LabProject;
-  hideFrame?: boolean;
 }) {
   const mobile = getViewWidth() < 560;
-  if (mobile && project) {
-    const fw = 236 * u;
-    const fh = (fw * FRAME_H) / FRAME_W;
+  if (mobile) {
     return (
       <Board u={u}>
-        {/* 手机竖屏：画框居顶居中，标题 + 下划线排在画框下方 */}
-        <div
-          className="absolute"
-          style={{
-            left: (BOARD_W * u - fw) / 2,
-            top: 172 * u,
-            width: fw,
-            height: fh,
-            visibility: hideFrame ? "hidden" : "visible",
-          }}
-        >
-          <FramePiece project={project} width={fw} />
-        </div>
         <Rotated u={u} x={235} y={536} w={250} h={46} iw={250} ih={46} transform="rotate(-2.33deg)">
           <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 35 * u, lineHeight: 1.2 }}>
             {closet}
@@ -1190,6 +1171,9 @@ const smooth = (t: number) => {
 type Timeline = {
   vw: number;
   vh: number;
+  hx0: number;
+  hy0: number;
+  tilt0: number;
   /** 主角让路：从 asideStart 开始往边上滑、缩小，到 asideEnd 靠边停稳（中心 x = asideX） */
   asideStart: number;
   asideEnd: number;
@@ -1210,10 +1194,13 @@ type Timeline = {
   slotY: number;
 };
 
-/** 主角第一屏的尺寸：高占屏高 HERO_H，桌面端受 vw*0.25 限制，手机竖屏放开到 vw*0.46 让正中画框饱满清晰 */
+/** 主角第一屏的尺寸：桌面端高占屏高 HERO_H（受 vw*0.25 限制）；手机竖屏固定为 236u 宽，衬在顶部 WOOLAB GOODS 水印正中 */
 function heroSize(vw: number, vh: number) {
-  const maxW = vw < 560 ? vw * 0.46 : vw * 0.25;
-  const w = Math.min((vh * HERO_H * FRAME_W) / FRAME_H, maxW);
+  if (vw < 560) {
+    const w = 236 * (vw / 720);
+    return { w, h: (w * FRAME_H) / FRAME_W };
+  }
+  const w = Math.min((vh * HERO_H * FRAME_W) / FRAME_H, vw * 0.25);
   return { w, h: (w * FRAME_H) / FRAME_W };
 }
 
@@ -1225,16 +1212,19 @@ const WALL_GAP_MIN = 1.15;
 /**
  * 墙上那排：
  * - 桌面端：四只框排成一行水平居中；
- * - 手机竖屏（< 560px）：改为 2×2 上下两组摆放，每只框更大、上方手写标题清晰不挤。
+ * - 手机竖屏（< 560px）：改为单列 4 个垂直居中排布，每只框上方配手写标题与小箭头。
  */
 function wallLayout(vw: number, vh: number) {
   const n = labProjects.length;
   if (vw < 560) {
-    const wallW = Math.min(vw * 0.38, vh * 0.19);
-    const colGap = wallW * 1.3;
-    const slotX = (i: number) => vw / 2 + ((i % 2) - 0.5) * colGap;
-    const slotY = (i: number) => vh * (Math.floor(i / 2) === 0 ? 0.35 : 0.67);
-    return { wallW, gap: colGap, slotX, slotY };
+    const wallW = Math.min(vw * 0.23, (vh * 0.145 * FRAME_W) / FRAME_H);
+    const wallH = (wallW * FRAME_H) / FRAME_W;
+    const stepY = Math.max(wallH + 46, vh * 0.215);
+    const totalSpan = (n - 1) * stepY;
+    const startY = (vh - totalSpan) / 2 + 18;
+    const slotX = () => vw / 2;
+    const slotY = (i: number) => startY + i * stepY;
+    return { wallW, gap: stepY, slotX, slotY };
   }
   const avail = vw - 2 * WALL_SIDE * boardUnits().u;
   let wallW = heroSize(vw, vh).w * WALL_K;
@@ -1264,8 +1254,7 @@ function wallLayout(vw: number, vh: number) {
  *  - 角度：一开始 HERO_TILT，整条路上单调扶正，落到墙上正好 0
  */
 function heroPose(s: number, tl: Timeline) {
-  const hx0 = tl.vw / 2;
-  const hy0 = tl.vh / 2;
+  const { hx0, hy0, tilt0 } = tl;
   const aside = smooth((s - tl.asideStart) / (tl.asideEnd - tl.asideStart));
   const land = smooth((s - tl.landStart) / (tl.landEnd - tl.landStart));
   const ty = tl.slotY + Math.max(0, tl.wallTop - s);
@@ -1273,7 +1262,7 @@ function heroPose(s: number, tl: Timeline) {
   const cy = hy0 + (tl.asideY - hy0) * aside;
   const x = cx + (tl.slotX - cx) * land;
   /* 落墙那段走一条往上拱的弧线，别直接从别的框身上扫过去 */
-  const arc = Math.sin(Math.PI * land) * tl.vh * 0.3;
+  const arc = Math.sin(Math.PI * land) * tl.vh * (tl.vw < 560 ? 0.14 : 0.3);
   const y = cy + (ty - cy) * land - arc;
   const midK = 1 + (HERO_MID_K - 1) * aside;
   const w = tl.heroW;
@@ -1281,7 +1270,7 @@ function heroPose(s: number, tl: Timeline) {
   return {
     x: x - w / 2,
     y: y - h / 2,
-    rotate: HERO_TILT * (1 - smooth(s / tl.landEnd)),
+    rotate: tilt0 * (1 - smooth(s / tl.landEnd)),
     scale: midK + (tl.wallW / tl.heroW - midK) * land,
     land,
   };
@@ -1370,8 +1359,8 @@ function FrameWall({
 
   return (
     <div className="sticky top-0 h-screen overflow-hidden">
-      {/* 背景和页顶那屏一模一样（同一套缩放、水印对屏幕正中）：有一只飞回去时只淡画框，墙和水印不动 */}
-      <Watermark u={markU} cy={vh / 2} />
+      {/* 背景和页顶那屏一模一样（同一套缩放、手机端对准 335*markU、桌面端对准屏中）：有一只飞回去时只淡画框，墙和水印不动 */}
+      <Watermark u={markU} cy={mobile ? 335 * markU : vh / 2} />
 
       <motion.div
         className="absolute inset-0"
@@ -1391,13 +1380,13 @@ function FrameWall({
             {/* 手写名字 + 小箭头：hover 的那只亮（没 hover 时当前这只亮），其它暗 */}
             <motion.div
               className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
-              style={{ top: mobile ? -48 : -78 * u }}
+              style={{ top: mobile ? -38 : -78 * u }}
               animate={{ opacity: lit ? 1 : 0.45 }}
               transition={{ duration: 0.25 }}
             >
               <p
                 className="font-hand whitespace-nowrap text-white"
-                style={{ fontSize: mobile ? 14 : 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
+                style={{ fontSize: mobile ? 13 : 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
               >
                 {pick(p.wall?.label ?? p.title)}
               </p>
@@ -1406,9 +1395,9 @@ function FrameWall({
                 alt=""
                 draggable={false}
                 style={{
-                  width: mobile ? 9 : 11 * u,
-                  height: mobile ? 20 : 25 * u,
-                  marginTop: mobile ? 6 : 10 * u,
+                  width: mobile ? 8 : 11 * u,
+                  height: mobile ? 17 : 25 * u,
+                  marginTop: mobile ? 3 : 10 * u,
                   transform: "rotate(14deg)",
                 }}
               />
@@ -1419,14 +1408,14 @@ function FrameWall({
               <motion.button
                 type="button"
                 className="absolute inset-0 block"
-                style={{ cursor: canPick ? "pointer" : "default" }}
+                style={{ cursor: canPick ? "pointer" : "default", touchAction: "manipulation" }}
                 whileHover={canPick ? { scale: 1.05, y: -8 } : undefined}
                 transition={{ type: "spring", stiffness: 300, damping: 24 }}
                 onHoverStart={() => canPick && setHovered(i)}
                 onHoverEnd={() => setHovered(null)}
-                onTap={() => {
+                onClick={() => {
                   if (!canPick) return;
-                  if (i === index) onBackTop();
+                  if (!mobile && i === index) onBackTop();
                   else onOpen(i);
                 }}
                 aria-label={pick(p.wall?.label ?? p.title)}
@@ -1470,8 +1459,6 @@ type LookLayout = {
  */
 function LookSection({
   lb,
-  project,
-  hideTopFrame,
   fallbackLines,
   first,
   closet,
@@ -1489,8 +1476,6 @@ function LookSection({
   fadeIn = false,
 }: {
   lb?: Lookbook;
-  project: LabProject;
-  hideTopFrame?: boolean;
   fallbackLines: string[];
   first: boolean;
   /** 页头标题淡入浮出（首次进来、切项目回顶都走这个），别整块跳出来；翻转卡片里那份不动 */
@@ -1543,12 +1528,7 @@ function LookSection({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: Math.max(0, delay - 0.15), ease: "easeOut" }}
           >
-            <LookbookHead
-              u={u}
-              closet={closet}
-              project={project}
-              hideFrame={hideTopFrame}
-            />
+            <LookbookHead u={u} closet={closet} />
           </motion.div>
         )}
         <Description
@@ -1802,21 +1782,26 @@ export function DetailPage({
    * 这样那段话正好从中间干净地过去，不会被盖。
    */
   const descTextDoc = layouts[0].descTop + (DESC_TEXT_Y - DESC_Y0) * u;
-  const asideStart = Math.max(0, descTextDoc - (vh / 2 + hero.h / 2) - 20);
-  const asideEnd = asideStart + vh * 0.5;
+  const hx0 = vw / 2;
+  const hy0 = mobile ? 172 * u + hero.h / 2 : vh / 2;
+  const asideStart = mobile ? 20 * u : Math.max(0, descTextDoc - (hy0 + hero.h / 2) - 20);
+  const asideEnd = mobile ? 260 * u : asideStart + vh * 0.5;
   /* 照片走到主角（已缩到中等）底边下面一点的那一刻；照片从屏底进来到那儿是缩放缓动的区间 */
-  const photoStopY = vh / 2 + (hero.h * HERO_MID_K) / 2 + PHOTO_GAP * u;
+  const photoStopY = hy0 + (hero.h * HERO_MID_K) / 2 + PHOTO_GAP * u;
   const photoAt = last.start + last.blockH - photoStopY;
   /* 滚动时间轴 */
   const wallTop = last.start + last.blockH + last.stripH;
   const tl: Timeline = {
     vw,
     vh,
+    hx0,
+    hy0,
+    tilt0: mobile ? 0 : HERO_TILT,
     asideStart,
     asideEnd,
-    /* 靠边的位置：左上角。y 在屏高 1/4；x 靠左一点，手机竖屏下保证留在屏内 */
-    asideX: vw < 560 ? vw * 0.24 : vw * 0.25 - 130 * u,
-    asideY: vh * 0.25,
+    /* 靠边的位置：左上角。y 在屏高 1/4（手机端在顶栏下方约 0.19 屏高）；x 靠左一点，手机竖屏下保证留在屏内 */
+    asideX: mobile ? vw * 0.22 : vw * 0.25 - 130 * u,
+    asideY: mobile ? vh * 0.19 : vh * 0.25,
     photoAt,
     wallTop,
     landStart: Math.max(photoAt + 1, wallTop - vh * 0.6),
@@ -1861,7 +1846,13 @@ export function DetailPage({
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
   const onFlown = () => {
     if (flying === null) return;
-    onNext?.(flying);
+    if (flying === index) {
+      const el = scroller.current;
+      if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
+      else if (el) el.scrollTop = 0;
+    } else {
+      onNext?.(flying);
+    }
     flyTimer.current = window.setTimeout(() => setFlying(null), 220);
   };
   const backTop = () => {
@@ -1875,32 +1866,56 @@ export function DetailPage({
       <StoneWall u={u} />
       {/* 窗光：压在内容之上（z-20），顶栏那层（z-30）不受影响 */}
       <LightBeams />
-      {/* 桌面端：返回按钮钉在左上角、两边标签钉在竖直正中；手机端返回按钮移至页面底部正中 */}
-      {!mobile && (
-        <motion.div
-          className="pointer-events-none absolute inset-0 z-30"
-          initial={interactive ? { opacity: 0 } : false}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.7, delay: base + 0.55, ease: "easeOut" }}
+      {/* 返回按钮钉在左上角（对齐顶栏高度）；桌面端同时在竖直正中挂左右标签 */}
+      <motion.div
+        className="pointer-events-none absolute inset-0 z-30"
+        initial={interactive ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.7, delay: base + 0.55, ease: "easeOut" }}
+      >
+        <button
+          type="button"
+          data-lab-detail-close=""
+          onClick={onClose}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              backTouchStart.current = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+              };
+            }
+          }}
+          onTouchEnd={(e) => {
+            const s0 = backTouchStart.current;
+            backTouchStart.current = null;
+            if (
+              s0 &&
+              e.changedTouches.length === 1 &&
+              Math.hypot(
+                e.changedTouches[0].clientX - s0.x,
+                e.changedTouches[0].clientY - s0.y,
+              ) < 12
+            ) {
+              e.preventDefault();
+              onClose();
+            }
+          }}
+          className="font-look pointer-events-auto absolute z-30 cursor-pointer whitespace-nowrap text-white/90 transition hover:opacity-70 active:opacity-60"
+          /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
+          style={{
+            left: mobile ? `calc(${MU} * 16)` : 25 * u,
+            top: `calc(${MU} * 26)`,
+            transform: "translateY(-50%)",
+            fontSize: mobile ? `calc(${MU} * 12)` : 12 * u,
+            padding: mobile ? "8px 8px 8px 0" : undefined,
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
+          }}
         >
-          <button
-            type="button"
-            data-lab-detail-close=""
-            onClick={onClose}
-            className="font-look pointer-events-auto absolute z-30 whitespace-nowrap text-white/90 transition hover:opacity-70"
-            /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
-            style={{
-              left: 25 * u,
-              top: `calc(${MU} * 26)`,
-              transform: "translateY(-50%)",
-              fontSize: 12 * u,
-            }}
-          >
-            {t("lab.detail.back")}
-          </button>
-          <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />
-        </motion.div>
-      )}
+          {t("lab.detail.back")}
+        </button>
+        {!mobile && <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />}
+      </motion.div>
 
       <div
         ref={scroller}
@@ -1921,8 +1936,6 @@ export function DetailPage({
             <LookSection
               key={`${project.id}-${j}`}
               lb={lb}
-              project={project}
-              hideTopFrame={flying !== null}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
               fadeIn={interactive}
@@ -1941,89 +1954,42 @@ export function DetailPage({
             />
           ))}
 
-          {/* 手机端去掉底部四个画框展示，在页面底部中间放置"← 回画廊"；桌面端保持画框墙 */}
-          {mobile ? (
-            <div
-              className="relative z-40 flex items-center justify-center"
-              style={{
-                paddingTop: 24 * u,
-                paddingBottom: `calc(${115 * u}px + env(safe-area-inset-bottom, 24px))`,
-              }}
-            >
-              <button
-                type="button"
-                data-lab-detail-close=""
-                onClick={onClose}
-                onTouchStart={(e) => {
-                  if (e.touches.length === 1) {
-                    backTouchStart.current = {
-                      x: e.touches[0].clientX,
-                      y: e.touches[0].clientY,
-                    };
-                  }
-                }}
-                onTouchEnd={(e) => {
-                  const s0 = backTouchStart.current;
-                  backTouchStart.current = null;
-                  if (
-                    s0 &&
-                    e.changedTouches.length === 1 &&
-                    Math.hypot(
-                      e.changedTouches[0].clientX - s0.x,
-                      e.changedTouches[0].clientY - s0.y,
-                    ) < 12
-                  ) {
-                    e.preventDefault();
-                    onClose();
-                  }
-                }}
-                className="font-look pointer-events-auto relative z-40 cursor-pointer whitespace-nowrap px-8 py-4 text-white/90 transition hover:opacity-70 active:opacity-60"
-                style={{
-                  fontSize: Math.max(16, 26 * u),
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                {t("lab.detail.back")}
-              </button>
-            </div>
-          ) : (
-            <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
-              <FrameWall
-                u={uc}
-                markU={u}
-                vw={vw}
-                vh={vh}
-                index={index}
-                landed={landed}
-                active={interactive && flying === null}
-                dim={flying !== null}
-                hideIndex={flying}
-                onHover={setHoverIdx}
-                onOpen={setFlying}
-                onBackTop={backTop}
-              />
-            </section>
-          )}
+          {/* 底部画框墙（桌面端四框横排，手机端四框垂直单列排布；顶部主角画框随滚动落入空位，点击任一框其余隐藏、该框飞回顶部 WOOLAB 标志位） */}
+          <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
+            <FrameWall
+              u={uc}
+              markU={u}
+              vw={vw}
+              vh={vh}
+              index={index}
+              landed={landed}
+              active={interactive && flying === null}
+              dim={flying !== null}
+              hideIndex={flying}
+              onHover={setHoverIdx}
+              onOpen={setFlying}
+              onBackTop={backTop}
+            />
+          </section>
         </div>
       </div>
 
-      {/* 主角金框：桌面端钉在屏上跟着滚动走；手机端画框已排在页头内随页面自然滚动 */}
-      {!mobile && <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />}
+      {/* 主角金框：钉在屏上跟着滚动走，滑到底部落入画框墙对应槽位 */}
+      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />
 
       {flying !== null && (
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           initial={{
-            x: wall.slotX(flying) - (mobile ? 236 * u : hero.w) / 2,
-            y: wall.slotY(flying) - (mobile ? (236 * u * FRAME_H) / FRAME_W : hero.h) / 2,
-            scale: wall.wallW / (mobile ? 236 * u : hero.w),
+            x: wall.slotX(flying) - hero.w / 2,
+            y: wall.slotY(flying) - hero.h / 2,
+            scale: wall.wallW / hero.w,
             rotate: 0,
           }}
           animate={
             mobile
               ? {
-                  x: vw / 2 - (236 * u) / 2,
+                  x: vw / 2 - hero.w / 2,
                   y: 172 * u,
                   scale: 1,
                   rotate: 0,
@@ -2033,7 +1999,7 @@ export function DetailPage({
           transition={{ duration: 0.85, ease: [0.65, 0, 0.35, 1] }}
           onAnimationComplete={onFlown}
         >
-          <FramePiece project={labProjects[flying]} width={mobile ? 236 * u : hero.w} />
+          <FramePiece project={labProjects[flying]} width={hero.w} />
         </motion.div>
       )}
     </div>

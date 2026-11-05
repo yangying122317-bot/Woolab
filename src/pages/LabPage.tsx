@@ -1470,9 +1470,16 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
   }, []);
 
   const closingRef = useRef(false);
-  const close = async () => {
+  const historyPushedRef = useRef(false);
+  const close = async (fromPopState = false) => {
     if (closingRef.current) return;
     closingRef.current = true;
+    if (!fromPopState && historyPushedRef.current) {
+      historyPushedRef.current = false;
+      window.history.back();
+    } else {
+      historyPushedRef.current = false;
+    }
     setPhase("fade");
     const fallback = window.setTimeout(() => {
       if (alive.current) onClosed();
@@ -1495,6 +1502,21 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
     window.clearTimeout(fallback);
     if (alive.current) onClosed();
   };
+
+  useEffect(() => {
+    window.history.pushState({ woolabOverlay: "lab-detail" }, "");
+    historyPushedRef.current = true;
+    const onPopState = () => {
+      if (!historyPushedRef.current) return;
+      historyPushedRef.current = false;
+      void close(true);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2097,10 +2119,17 @@ export default function LabPage() {
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY);
+      if (e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      // 预留屏幕左右边缘 24px 给 iOS/Android 浏览器原生的侧滑返回手势
+      if (x < 24 || x > window.innerWidth - 24) {
+        activeDrag = false;
+        return;
+      }
+      start(x, e.touches[0].clientY);
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
+      if (e.touches.length === 1 && activeDrag) {
         move(e.touches[0].clientX, e.touches[0].clientY, () => {
           if (e.cancelable) e.preventDefault();
         });
@@ -2113,8 +2142,8 @@ export default function LabPage() {
       if (activeDrag) move(e.clientX, e.clientY, () => e.preventDefault());
     };
 
-    const prevTouchAction = document.documentElement.style.touchAction;
-    document.documentElement.style.touchAction = "none";
+    const prevOverscroll = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overscrollBehavior = "none";
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", end, { passive: true });
@@ -2124,7 +2153,7 @@ export default function LabPage() {
     window.addEventListener("mouseup", end);
     return () => {
       animCtrl?.stop();
-      document.documentElement.style.touchAction = prevTouchAction;
+      document.documentElement.style.overscrollBehavior = prevOverscroll;
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", end);

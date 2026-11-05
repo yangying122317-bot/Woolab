@@ -83,7 +83,6 @@ export default function TopNav() {
           onLogo={onLogo}
           extra={extra}
           hideLogo={detail || plainLogo}
-          menuLeft={detail && isMobileView()}
           soundOnly={mobileDrawerNav}
           logoOnly={logoOnly}
           hidden={navHidden}

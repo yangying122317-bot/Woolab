@@ -143,6 +143,7 @@ export default function NextPage({
   }, [mobile, coversNav]);
 
   const leaving = useRef(false);
+  const historyPushedRef = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
   /* 相纸全落定之前，动画带着各自的延时；落定后 hover 的进出要即时 */
   const [landed, setLanded] = useState(false);
@@ -157,15 +158,28 @@ export default function NextPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const leave = () => {
+  const leave = (fromPopState = false) => {
     if (leaving.current) return;
     leaving.current = true;
+    if (!fromPopState && historyPushedRef.current) {
+      historyPushedRef.current = false;
+      window.history.back();
+    } else {
+      historyPushedRef.current = false;
+    }
     animate(y, hidden, { duration: LEAVE_T, ease: [0.5, 0, 0.8, 0.6] });
     window.setTimeout(onBack, LEAVE_T * 1000 + 40);
   };
 
-  /* 往上滚 / 手机端上下划动 / 方向键 → 退回相机页 */
+  /* 往上滚 / 手机端上下划动 / 浏览器后退或侧滑返回 / 方向键 → 退回相机页 */
   useEffect(() => {
+    window.history.pushState({ woolabOverlay: "about-next" }, "");
+    historyPushedRef.current = true;
+    const onPopState = () => {
+      if (!historyPushedRef.current) return;
+      historyPushedRef.current = false;
+      leave(true);
+    };
     const enterAt = performance.now();
     const canLeave = () => performance.now() - enterAt > 450;
     const onWheel = (e: WheelEvent) => {
@@ -185,11 +199,13 @@ export default function NextPage({
       const dx = e.changedTouches[0].clientX - tx;
       if (canLeave() && Math.abs(dy) > 36 && Math.abs(dy) > Math.abs(dx)) leave();
     };
+    window.addEventListener("popstate", onPopState);
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKey);
     window.addEventListener("touchstart", onTs, { passive: true });
     window.addEventListener("touchend", onTe);
     return () => {
+      window.removeEventListener("popstate", onPopState);
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("touchstart", onTs);
@@ -199,8 +215,9 @@ export default function NextPage({
   }, []);
 
   const go = (path: string) => {
+    historyPushedRef.current = false;
     playNavigate();
-    navigate(path);
+    navigate(path, { replace: true });
   };
 
   const rawLine = pick(aboutNext.line);

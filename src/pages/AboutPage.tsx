@@ -115,16 +115,21 @@ export default function AboutPage() {
     const keepTop = () => {
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
-    const prevTouchAction = document.documentElement.style.touchAction;
-    document.documentElement.style.touchAction = "none";
+    let startX = 0;
+    const onTs = (e: TouchEvent) => {
+      if (e.touches.length === 1) startX = e.touches[0].clientX;
+    };
     const preventTouchMove = (e: TouchEvent) => {
+      // 放行屏幕左右边缘 24px 的系统原生侧滑返回手势
+      if (startX < 24 || startX > window.innerWidth - 24) return;
       if (e.cancelable) e.preventDefault();
     };
     window.addEventListener("scroll", keepTop, { passive: true });
+    window.addEventListener("touchstart", onTs, { passive: true });
     window.addEventListener("touchmove", preventTouchMove, { passive: false });
     return () => {
-      document.documentElement.style.touchAction = prevTouchAction;
       window.removeEventListener("scroll", keepTop);
+      window.removeEventListener("touchstart", onTs);
       window.removeEventListener("touchmove", preventTouchMove);
     };
   }, [mobile]);

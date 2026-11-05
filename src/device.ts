@@ -159,7 +159,14 @@ export function useMobileHorizontalDrag(enabled = true, maxVel = 36): void {
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY, e.target);
+      if (e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      // 预留屏幕左右边缘 24px 给 iOS/Android 浏览器原生的侧滑返回手势
+      if (x < 24 || x > window.innerWidth - 24) {
+        active = false;
+        return;
+      }
+      start(x, e.touches[0].clientY, e.target);
     };
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length !== 1 || !active) return;
@@ -174,8 +181,8 @@ export function useMobileHorizontalDrag(enabled = true, maxVel = 36): void {
       if (active) move(e.clientX, e.clientY, 1.45, () => e.preventDefault());
     };
 
-    const prevTouchAction = document.documentElement.style.touchAction;
-    document.documentElement.style.touchAction = "none";
+    const prevOverscroll = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overscrollBehavior = "none";
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", end, { passive: true });
@@ -185,7 +192,7 @@ export function useMobileHorizontalDrag(enabled = true, maxVel = 36): void {
     window.addEventListener("mouseup", end);
     return () => {
       stopMomentum();
-      document.documentElement.style.touchAction = prevTouchAction;
+      document.documentElement.style.overscrollBehavior = prevOverscroll;
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", end);
