@@ -1983,12 +1983,12 @@ export default function LabPage() {
       }
       const refFrom = fromIdx !== clamped ? fromIdx : Math.max(0, clamped - 1);
       const fullSpan = Math.abs(MOBILE_SNAP_Q[clamped] - MOBILE_SNAP_Q[refFrom]) || 0.15;
-      const baseDur = 1.08;
-      const dur = Math.max(0.68, Math.min(1.18, baseDur * (rem / fullSpan)));
+      const baseDur = 1.65;
+      const dur = Math.max(1.15, Math.min(1.85, baseDur * (rem / fullSpan)));
       animCtrl?.stop();
       animCtrl = animate(mobileQ, targetQ, {
         duration: dur,
-        ease: [0.32, 0.94, 0.42, 1],
+        ease: [0.42, 0, 0.22, 1],
       });
     };
 
@@ -2027,11 +2027,11 @@ export default function LabPage() {
       const baseQ = MOBILE_SNAP_Q[curIdx];
       if (dragPx >= 0) {
         const nextQ = MOBILE_SNAP_Q[Math.min(MOBILE_SNAP_Q.length - 1, curIdx + 1)];
-        const k = Math.min(0.75, dragPx / 380);
+        const k = Math.min(0.45, dragPx / 620);
         mobileQ.set(baseQ + (nextQ - baseQ) * k);
       } else {
         const prevQ = MOBILE_SNAP_Q[Math.max(0, curIdx - 1)];
-        const k = Math.min(0.75, -dragPx / 380);
+        const k = Math.min(0.45, -dragPx / 620);
         mobileQ.set(baseQ - (baseQ - prevQ) * k);
       }
     };
