@@ -244,7 +244,15 @@ const FRAME_CY = (95 + 262) / 2;
  * 直接把浮雕中心对到 cy（屏幕 px）：放在页头后面，对到金框中心，浮雕底下往下渐隐进墙里，那段话压在渐隐区上面。
  * 底部画框墙后面也用同一份、同一个 cy：换项目跳回页顶那一瞬间两边背景逐像素一样，看不出切换。
  */
-function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
+function Watermark({
+  u,
+  cy = FRAME_CY * u,
+  fadeTop = false,
+}: {
+  u: number;
+  cy?: number;
+  fadeTop?: boolean;
+}) {
   const mobile = getViewWidth() < 560;
   /* 手机竖屏下按 2400:1610 原图比例固定缩放（不随 window.innerHeight 纵向拉大 cover），
      使 WOOLAB GOODS 浮雕恰好完整落入手机屏宽内，左右不裁切 */
@@ -260,7 +268,8 @@ function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
   const top = cy - MARK_CY * h - boxTop;
   const fadeFrom = cy + half + 16 - boxTop;
   const height = fadeFrom + 130;
-  const mask = `linear-gradient(to bottom, transparent 0, #000 ${boxTop > 0 ? 90 : 0}px, #000 ${fadeFrom}px, transparent 100%)`;
+  const topFeather = boxTop > 0 || fadeTop ? 90 : 0;
+  const mask = `linear-gradient(to bottom, transparent 0, #000 ${topFeather}px, #000 ${fadeFrom}px, transparent 100%)`;
   return (
     <div
       className="pointer-events-none absolute inset-x-0 overflow-hidden"
@@ -357,14 +366,33 @@ export function DetailBackdrop() {
 function LookbookHead({
   u,
   closet,
+  project,
+  hideFrame,
 }: {
   u: number;
   closet: string;
+  project?: LabProject;
+  hideFrame?: boolean;
 }) {
   const mobile = getViewWidth() < 560;
-  if (mobile) {
+  if (mobile && project) {
+    const fw = 236 * u;
+    const fh = (fw * FRAME_H) / FRAME_W;
     return (
       <Board u={u}>
+        {/* 手机竖屏：画框居顶居中随页面自然滚动，标题 + 下划线排在画框下方 */}
+        <div
+          className="absolute"
+          style={{
+            left: (BOARD_W * u - fw) / 2,
+            top: 172 * u,
+            width: fw,
+            height: fh,
+            visibility: hideFrame ? "hidden" : "visible",
+          }}
+        >
+          <FramePiece project={project} width={fw} />
+        </div>
         <Rotated u={u} x={235} y={536} w={250} h={46} iw={250} ih={46} transform="rotate(-2.33deg)">
           <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 35 * u, lineHeight: 1.2 }}>
             {closet}
@@ -1346,7 +1374,7 @@ function FrameWall({
   const H = (W * FRAME_H) / FRAME_W;
   const mobile = vw < 560;
   const [hover, setHover] = useState<number | null>(null);
-  const canPick = landed && active;
+  const canPick = (mobile || landed) && active;
   const setHovered = (i: number | null) => {
     setHover(i);
     onHover(i);
@@ -1360,7 +1388,7 @@ function FrameWall({
   return (
     <div className="sticky top-0 overflow-hidden" style={{ height: vh }}>
       {/* 背景和页顶那屏一模一样（同一套缩放、手机端对准 335*markU、桌面端对准屏中）：有一只飞回去时只淡画框，墙和水印不动 */}
-      <Watermark u={markU} cy={mobile ? 335 * markU : vh / 2} />
+      <Watermark u={markU} cy={mobile ? 335 * markU : vh / 2} fadeTop />
 
       <motion.div
         className="absolute inset-0"
@@ -1369,7 +1397,7 @@ function FrameWall({
         transition={{ duration: 0.45 }}
       >
       {labProjects.map((p, i) => {
-        const shown = (landed || i !== index) && i !== hideIndex;
+        const shown = (mobile || landed || i !== index) && i !== hideIndex;
         const lit = hover === null ? i === index : hover === i;
         return (
           <div
@@ -1461,6 +1489,8 @@ type LookLayout = {
  */
 function LookSection({
   lb,
+  project,
+  hideTopFrame,
   fallbackLines,
   first,
   closet,
@@ -1478,6 +1508,8 @@ function LookSection({
   fadeIn = false,
 }: {
   lb?: Lookbook;
+  project: LabProject;
+  hideTopFrame?: boolean;
   fallbackLines: string[];
   first: boolean;
   /** 页头标题淡入浮出（首次进来、切项目回顶都走这个），别整块跳出来；翻转卡片里那份不动 */
@@ -1530,7 +1562,12 @@ function LookSection({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: Math.max(0, delay - 0.15), ease: "easeOut" }}
           >
-            <LookbookHead u={u} closet={closet} />
+            <LookbookHead
+              u={u}
+              closet={closet}
+              project={project}
+              hideFrame={hideTopFrame}
+            />
           </motion.div>
         )}
         <Description
@@ -1940,6 +1977,8 @@ export function DetailPage({
             <LookSection
               key={`${project.id}-${j}`}
               lb={lb}
+              project={project}
+              hideTopFrame={flying !== null}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
               fadeIn={interactive}
@@ -1978,8 +2017,8 @@ export function DetailPage({
         </div>
       </div>
 
-      {/* 主角金框：钉在屏上跟着滚动走，滑到底部落入画框墙对应槽位 */}
-      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />
+      {/* 主角金框：桌面端钉在屏上跟着滚动走；手机端主画框已排在第一屏顶部随页面自然滚动，不会遮挡中间的模特图 */}
+      {!mobile && <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />}
 
       {flying !== null && (
         <motion.div

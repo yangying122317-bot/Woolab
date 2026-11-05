@@ -20,7 +20,7 @@ import { usePageShift } from "../components/PageShift";
 import { getViewWidth, isMobileView } from "../device";
 import { setMobileThemeColor, useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
-import { isImageReady, loadImage, loadImages, warmBytes } from "../components/life/preload";
+import { isImageReady, loadImage, loadImages } from "../components/life/preload";
 import { useLenis } from "lenis/react";
 import { warmLabDetail, warmLabProject } from "../components/lab/preload";
 
@@ -221,9 +221,9 @@ function EntranceWall({
           className="pointer-events-none absolute flex items-center justify-center"
           style={{
             left: px(axisL),
-            top: px(paintT + ENT_PAINT_H + 28),
+            top: px(paintT + ENT_PAINT_H + 26),
             transform: "translateX(-50%)",
-            gap: px(7),
+            gap: px(8),
           }}
         >
           <motion.img
@@ -232,8 +232,8 @@ function EntranceWall({
             draggable={false}
             className="select-none"
             style={{
-              width: px(14),
-              height: px(18.5),
+              width: px(16.5),
+              height: px(21.5),
               rotate: -90,
             }}
             animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
@@ -242,9 +242,9 @@ function EntranceWall({
           <span
             className="font-hand whitespace-nowrap"
             style={{
-              fontSize: px(14),
+              fontSize: px(17.5),
               color: "#7E4218",
-              WebkitTextStroke: `${px(1)}px #7E4218`,
+              WebkitTextStroke: `${px(1.05)}px #7E4218`,
             }}
           >
             {t("life.entry.swipe")}
@@ -1562,9 +1562,16 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
             alt=""
             draggable={false}
             className="absolute inset-0 h-full w-full select-none"
-            style={{ backfaceVisibility: "hidden" }}
+            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
           />
-          <div className="absolute inset-0" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+            }}
+          >
             <motion.div
               className="absolute inset-0 bg-black"
               style={{ ...maskStyle, y: 16, filter: "blur(14px)", opacity: shadowA }}
@@ -1947,8 +1954,7 @@ export default function LabPage() {
   /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场只放最后"缩小归位"那一段 */
   const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
   const [introPlaying, setIntroPlaying] = useState(true);
-  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧；
-     手机端只暖 HTTP 缓存，避免进画廊滑动时占用数十 MB 额外位图显存 */
+  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧或丢失翻转背面的石墙 */
   useEffect(() => {
     const urls = [
       ...STATION_CFG.map((c) => `/assets/lab/${c.mask}.png`),
@@ -1960,11 +1966,7 @@ export default function LabPage() {
       "/assets/life/seg03/lab-door.webp",
       "/assets/life/seg03/lab-door-open.webp",
     ];
-    if (isMobileView()) {
-      void warmBytes(urls, 4);
-      return;
-    }
-    void loadImages(urls);
+    void loadImages(urls, 4);
   }, []);
   /* 开场播完再在后台把详情页的画、纸、照片都拉好，点画框翻面时框里不会空一下 */
   useEffect(() => {
