@@ -47,10 +47,11 @@ export function isPhone(): boolean {
 }
 
 /**
- * 手机竖屏视图下支持手指/鼠标左右划动直接推进横向长卷（Life 房间 / Lab 画廊）：
+ * 手机竖屏视图下支持手指/鼠标左右或上下划动直接推进横向长卷（Life 房间 / Lab 画廊）：
  * 电脑正常大屏（!isMobileView()）直接跳过，100% 不影响桌面端滚轮手感。
+ * maxStepPx 限制单次滑动手势（含松手惯性）的最大推进距离，防止快速一划直接滑到底。
  */
-export function useMobileHorizontalDrag(enabled = true): void {
+export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
   useEffect(() => {
     if (!enabled || !isMobileView()) return;
 
@@ -61,7 +62,20 @@ export function useMobileHorizontalDrag(enabled = true): void {
     let lastX = 0;
     let lastTime = 0;
     let velocity = 0;
+    let startScrollY = 0;
     let raf = 0;
+
+    const clampVel = (v: number) => Math.max(-22, Math.min(22, v));
+    const scrollClamped = (delta: number) => {
+      const cur = window.scrollY;
+      const target = Math.max(
+        startScrollY - maxStepPx,
+        Math.min(startScrollY + maxStepPx, cur + delta),
+      );
+      const actual = target - cur;
+      if (Math.abs(actual) > 0.2) window.scrollBy(0, actual);
+      return actual;
+    };
 
     const isInteractiveTarget = (target: EventTarget | null): boolean => {
       let el = target instanceof Element ? target : (target as Node | null)?.parentElement ?? null;
@@ -97,6 +111,7 @@ export function useMobileHorizontalDrag(enabled = true): void {
       lockedAxis = null;
       startX = lastX = x;
       startY = y;
+      startScrollY = window.scrollY;
       lastTime = performance.now();
       velocity = 0;
     };
@@ -111,13 +126,13 @@ export function useMobileHorizontalDrag(enabled = true): void {
       }
       prevent?.();
       const now = performance.now();
-      const dt = Math.max(1, now - lastTime);
+      const dt = Math.max(8, now - lastTime);
       const step = lockedAxis === "x" ? x - lastX : y - startY;
       if (lockedAxis === "y") startY = y;
       else lastX = x;
-      const deltaScroll = -step * 1.45;
-      window.scrollBy(0, deltaScroll);
-      velocity = velocity * 0.35 + (deltaScroll / dt) * 16 * 0.65;
+      const deltaScroll = -step * 1.3;
+      const actual = scrollClamped(deltaScroll);
+      velocity = clampVel(velocity * 0.4 + (actual / dt) * 16 * 0.6);
       lastTime = now;
     };
 
@@ -130,8 +145,12 @@ export function useMobileHorizontalDrag(enabled = true): void {
           raf = 0;
           return;
         }
-        window.scrollBy(0, velocity);
-        velocity *= 0.92;
+        const actual = scrollClamped(velocity);
+        if (Math.abs(actual) < 0.2) {
+          raf = 0;
+          return;
+        }
+        velocity *= 0.88;
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
@@ -152,13 +171,13 @@ export function useMobileHorizontalDrag(enabled = true): void {
       }
       if (e.cancelable) e.preventDefault();
       const now = performance.now();
-      const dt = Math.max(1, now - lastTime);
+      const dt = Math.max(8, now - lastTime);
       const step = lockedAxis === "x" ? x - lastX : y - startY;
       if (lockedAxis === "y") startY = y;
       else lastX = x;
-      const deltaScroll = -step * 2.1;
-      window.scrollBy(0, deltaScroll);
-      velocity = velocity * 0.35 + (deltaScroll / dt) * 16 * 0.65;
+      const deltaScroll = -step * 1.35;
+      const actual = scrollClamped(deltaScroll);
+      velocity = clampVel(velocity * 0.4 + (actual / dt) * 16 * 0.6);
       lastTime = now;
     };
     const onMouseDown = (e: MouseEvent) => {
@@ -188,5 +207,5 @@ export function useMobileHorizontalDrag(enabled = true): void {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", end);
     };
-  }, [enabled]);
+  }, [enabled, maxStepPx]);
 }

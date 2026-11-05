@@ -1310,7 +1310,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           </IntroPop>
 
           {/* 时段调色层：multiply 压暗/染色背景与建筑，线稿保持黑；进门时褪掉。
-            左右各多出 60%：宽屏两侧的边缘延伸条也要一起染，移动端用 0 顶底裁剪防止溢出遮住顶部星空 */}
+            用 linear-gradient 而非纯色 background-color，防止移动端 Safari 状态栏取色器误抓 multiply 层的紫色 */}
           <motion.div
             className="pointer-events-none absolute"
             style={{
@@ -1318,7 +1318,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               right: "-60%",
               top: cover ? 0 : "-50%",
               bottom: cover ? 0 : "-150%",
-              background: theme.tint,
+              backgroundImage: `linear-gradient(${theme.tint}, ${theme.tint})`,
               mixBlendMode: "multiply",
             }}
             initial={false}

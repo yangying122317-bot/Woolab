@@ -1945,8 +1945,8 @@ export default function LabPage() {
   const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
   const homeGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
-  /* 手机视图下支持左右划动/拖拽推进画廊走廊（电脑端不生效） */
-  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry);
+  /* 手机视图下支持左右/上下划动推进画廊走廊（单次滑动限幅 1350px，约一站距离，防止一滑到底） */
+  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry, 1350);
 
   const enterHomeDoor = (r: DOMRect) => {
     if (open || homeEntry) return;
