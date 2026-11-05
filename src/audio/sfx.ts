@@ -50,29 +50,56 @@ function ensureContext() {
 function unlock() {
   ensureContext();
   if (!ctx) return;
-  const resumed = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
   unlocked = true;
+  // 播放 1 帧静音缓冲：立即唤醒 iOS WebKit 硬件音频线程
+  try {
+    const silent = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = silent;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch {
+    /* ignore */
+  }
+  const resumed = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
+  // 必须在用户手势同步调用栈内直接触发 HTMLAudioElement.play()，否则 iOS Safari 会在 Promise.then 中拒绝播放环境音
+  syncAmbient();
+  ALL_SAMPLES.forEach((id) => void loadSample(id));
+  void decodePhoneHello();
   void resumed.then(() => {
     syncAmbient();
-    // 字节早就拉好了，这里趁着上下文已经 running 一口气全解码
     ALL_SAMPLES.forEach((id) => void loadSample(id));
     void decodePhoneHello();
+    if (
+      ctx?.state === "running" &&
+      (!ambientWanted || muted || (ambientAudio && !ambientAudio.paused))
+    ) {
+      removeUnlockListeners();
+    }
   });
 }
 
+const UNLOCK_EVENTS = ["pointerdown", "touchend", "click", "keydown"] as const;
+function removeUnlockListeners() {
+  if (typeof window === "undefined") return;
+  UNLOCK_EVENTS.forEach((ev) => window.removeEventListener(ev, unlock, true));
+}
+
 if (typeof window !== "undefined") {
-  // 第一次点击/按键/触摸时解锁音频
-  const once = { once: true, capture: true } as const;
-  window.addEventListener("pointerdown", unlock, once);
-  window.addEventListener("keydown", unlock, once);
-  window.addEventListener("touchstart", unlock, once);
+  // 监听点击/触摸抬起/按键以解锁音频（持续监听直到 AudioContext 与背景环境音真正启动，避免首次 touchstart 滑动被 iOS 拒绝后失效）
+  UNLOCK_EVENTS.forEach((ev) =>
+    window.addEventListener(ev, unlock, { capture: true, passive: true }),
+  );
 }
 
 function ready(): boolean {
   if (muted) return false;
   if (!unlocked) return false;
   ensureContext();
-  return !!ctx && ctx.state === "running";
+  if (ctx && ctx.state === "suspended") {
+    void ctx.resume();
+  }
+  return !!ctx;
 }
 
 /* ------------------------------------------------------------------ */
@@ -109,25 +136,53 @@ let ambientFade: ReturnType<typeof setInterval> | undefined;
  * 等用户第一下点击时前几秒已经缓冲好了，能立刻出声。
  */
 const ambientEls = new Map<AmbientId, HTMLAudioElement>();
+const ambientBlobs = new Map<AmbientId, string>();
+const ambientFetching = new Map<AmbientId, Promise<void>>();
+
+function fetchAmbientBlob(id: AmbientId): Promise<void> {
+  if (ambientBlobs.has(id)) return Promise.resolve();
+  const hit = ambientFetching.get(id);
+  if (hit) return hit;
+  const p = fetch(AMBIENTS[id].src)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      ambientBlobs.set(id, url);
+      const el = ambientEls.get(id);
+      if (el && el.paused && el.src !== url) {
+        el.src = url;
+        el.load();
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      ambientFetching.delete(id);
+    });
+  ambientFetching.set(id, p);
+  return p;
+}
 
 function ambientEl(id: AmbientId) {
   let el = ambientEls.get(id);
   if (!el) {
-    el = new Audio(AMBIENTS[id].src);
+    el = new Audio(ambientBlobs.get(id) ?? AMBIENTS[id].src);
     el.loop = true;
     el.preload = "auto";
     el.volume = 0;
-    // Safari 常常无视 preload=auto，显式 load() 才真的开始拉
+    // Safari 常常无视 preload=auto，同时用 fetch 拉取二进制 Blob 进内存，彻底规避移动端浏览器不预加载音频的限制
     el.load();
     ambientEls.set(id, el);
+    void fetchAmbientBlob(id);
   }
   return el;
 }
 
 /** 提前把某条环境音拉起来（不出声）；比如首页换时段前、开门进 Life 前 */
-export function warmAmbient(id: AmbientId) {
-  if (typeof window === "undefined") return;
+export function warmAmbient(id: AmbientId): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
   ambientEl(id);
+  return fetchAmbientBlob(id);
 }
 
 /** 把某条背景音音量渐变到目标值，到 0 时暂停 */
@@ -526,23 +581,48 @@ function loadSample(id: SampleId): Promise<void> {
 }
 
 /** 提前把一批录音拉好（页面挂上来时调；不调也行，第一次播会自己去拉）：解锁前只拉字节，解锁后连解码 */
-export function preloadSamples(ids: readonly SampleId[]) {
-  ids.forEach((id) => void (unlocked ? loadSample(id) : fetchSample(id)));
+export function preloadSamples(ids: readonly SampleId[]): Promise<void> {
+  return Promise.all(
+    ids.map((id) => (unlocked ? loadSample(id) : fetchSample(id).then(() => undefined))),
+  ).then(() => undefined);
 }
 const ALL_SAMPLES = Object.keys(SAMPLES) as SampleId[];
-/* 一进站就在后台把字节拉好，第一下点击就有声 */
-if (typeof window !== "undefined") {
-  window.setTimeout(() => preloadSamples(ALL_SAMPLES), 800);
+
+/** 全站音频预加载：立即拉取全部短音效字节 + 电话录音字节 + 当前环境音 Blob */
+export function preloadAllAudio(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const tasks: Promise<unknown>[] = [
+    preloadSamples(ALL_SAMPLES),
+    fetchPhoneHello(),
+  ];
+  if (ambientWanted) {
+    tasks.push(warmAmbient(ambientWanted));
+  }
+  // 后台顺带把其余环境音也预热进缓存
+  window.setTimeout(() => {
+    (["day", "calm", "night", "rain", "life"] as const).forEach((id) => {
+      void warmAmbient(id);
+    });
+  }, 1200);
+  return Promise.race([
+    Promise.all(tasks).then(() => undefined),
+    new Promise<void>((r) => window.setTimeout(r, 1500)),
+  ]);
 }
 
-/** 播一段录音；还没解码好就先去解，只要 300ms 内到了仍然补播（第一下点击紧跟着解锁，字节早在手里，解码只差几毫秒） */
+/* 一进站立即开始拉取全部音效字节，不延迟等待，保证第一下点击 0 延迟出声 */
+if (typeof window !== "undefined") {
+  void preloadAllAudio();
+}
+
+/** 播一段录音；还没解码好就先去解，只要 1000ms 内到了仍然补播（第一下点击紧跟着解锁，字节早在手里，解码只差几毫秒） */
 function sample(id: SampleId, startAt = 0, gainMul = 1) {
   if (!ready() || !ctx || !master) return;
   const buf = sampleBufs.get(id);
   if (!buf) {
     const t0 = performance.now();
     void loadSample(id).then(() => {
-      if (performance.now() - t0 < 300 && sampleBufs.has(id)) sample(id, startAt, gainMul);
+      if (performance.now() - t0 < 1000 && sampleBufs.has(id)) sample(id, startAt, gainMul);
     });
     return;
   }

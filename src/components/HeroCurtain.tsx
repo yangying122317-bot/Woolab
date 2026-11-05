@@ -11,6 +11,7 @@ import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { useReportNavHidden } from "../state/chrome";
 import { useLanguage } from "../i18n/LanguageContext";
 import { getViewWidth } from "../device";
+import { preloadAllAudio } from "../audio/sfx";
 import { loadImageStrict } from "./life/preload";
 
 /**
@@ -278,6 +279,7 @@ export default function HeroCurtain({
     const fonts = loadFonts().then(() => {
       done += 1;
     });
+    const audio = preloadAllAudio();
     const minShow = new Promise<void>((r) =>
       window.setTimeout(r, MIN_SHOW * 1000),
     );
@@ -295,7 +297,7 @@ export default function HeroCurtain({
     };
     raf = requestAnimationFrame(tick);
 
-    Promise.all([assets, fonts, minShow]).then(() => {
+    Promise.all([assets, fonts, audio, minShow]).then(() => {
       if (!alive) return;
       cancelAnimationFrame(raf);
       target.set(1);
