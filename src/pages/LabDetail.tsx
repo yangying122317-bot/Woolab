@@ -218,11 +218,12 @@ function StoneWall({ u }: { u: number }) {
         src={`${A}/bg-stone-wall.webp`}
         alt=""
         draggable={false}
-        className="absolute left-1/2 max-w-none -translate-x-1/2"
+        className="absolute left-1/2 max-w-none"
         style={{
           top: -195 * u,
           width: w,
           height: h,
+          transform: "translateX(-50%)",
           objectFit: "cover",
           objectPosition: "center top",
           filter: mobile ? undefined : STONE_FILTER,
@@ -269,11 +270,12 @@ function Watermark({ u, cy = FRAME_CY * u }: { u: number; cy?: number }) {
         src={`${A}/bg-stone-mark.webp`}
         alt=""
         draggable={false}
-        className="absolute left-1/2 max-w-none -translate-x-1/2"
+        className="absolute left-1/2 max-w-none"
         style={{
           top,
           width: w,
           height: h,
+          transform: "translateX(-50%)",
           objectFit: "cover",
           objectPosition: "center top",
           filter: mobile ? undefined : STONE_FILTER,
@@ -1153,8 +1155,8 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
 function Board({ u, children, className }: { u: number; children: ReactNode; className?: string }) {
   return (
     <div
-      className={`absolute left-1/2 top-0 h-full -translate-x-1/2 ${className ?? ""}`}
-      style={{ width: BOARD_W * u }}
+      className={`absolute left-1/2 top-0 h-full ${className ?? ""}`}
+      style={{ width: BOARD_W * u, transform: "translateX(-50%)" }}
     >
       {children}
     </div>

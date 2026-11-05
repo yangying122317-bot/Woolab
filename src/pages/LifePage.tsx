@@ -335,8 +335,11 @@ export default function LifePage() {
   useMotionValueEvent(x, "change", (v) => {
     const rawStripW =
       stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
+    const listEdgeX = mobileView
+      ? listLayer.x + listLayer.w * 0.2
+      : listLayer.x + listLayer.w;
     const listRightPx =
-      ((listLayer.x + listLayer.w) / 18 / ROOM_TOTAL_VH) * rawStripW * roomScale;
+      (listEdgeX / 18 / ROOM_TOTAL_VH) * rawStripW * roomScale;
     setMiniList(-v > listRightPx);
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;

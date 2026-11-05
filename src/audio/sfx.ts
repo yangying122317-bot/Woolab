@@ -624,11 +624,6 @@ export function preloadAllAudio(): Promise<void> {
   ]);
 }
 
-/* 一进站立即开始拉取全部音效字节，不延迟等待，保证第一下点击 0 延迟出声 */
-if (typeof window !== "undefined") {
-  void preloadAllAudio();
-}
-
 /** 播一段录音；还没解码好就先去解，只要 1000ms 内到了仍然补播（第一下点击紧跟着解锁，字节早在手里，解码只差几毫秒） */
 function sample(id: SampleId, startAt = 0, gainMul = 1) {
   if (!ready() || !ctx || !master) return;
@@ -842,3 +837,9 @@ export function playPhonePickup() {
   syllable(line, a, 0.2, 200, 178, 560, 1700, 0.5);
   syllable(line, a + 0.24, PHONE.helloEnd - a - 0.24, 172, 262, 480, 1250, 0.45);
 }
+
+/* 一进站立即开始拉取全部音效字节（置于模块末尾，确保所有音频常量与缓存变量已初始化） */
+if (typeof window !== "undefined") {
+  void preloadAllAudio();
+}
+

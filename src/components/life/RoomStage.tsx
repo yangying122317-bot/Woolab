@@ -1387,7 +1387,7 @@ function HangClothes({
         bold
         textSide="left"
         /* 字在左、箭头在右：按右边缘定位，中英文字长不一样箭头也钉在右边那几个挂钩下面 */
-        style={{ left: vh(2020), top: vh(mobile ? 985 : 1000), translate: "-100% 0" }}
+        style={{ left: vh(2020), top: vh(mobile ? 985 : 1000), transform: "translateX(-100%)" }}
       />
       {/* 引导 2：挂满了、还没换装——写在衣架上方的空墙上，箭头斜着指向右下的小羊 */}
       <HandHint
@@ -1400,7 +1400,7 @@ function HangClothes({
         tag
         bold
         textSide="left"
-        style={{ left: vh(2020), top: vh(mobile ? 265 : 300), translate: "-100% 0" }}
+        style={{ left: vh(2020), top: vh(mobile ? 265 : 300), transform: "translateX(-100%)" }}
       />
     </>
   );
@@ -1565,7 +1565,7 @@ const SPOT_HINT: Record<
   /* 桌子左端那三瓶的正上方，箭头指下去，字在箭头上面（字比箭头宽，整体按中线对齐，箭头才不会被字挤偏） */
   drink: {
     rotate: 180,
-    at: { left: `calc(12% + ${SPOT_ARROW} / 2)`, bottom: "100%", marginBottom: "0.5vh", translate: "-50% 0" },
+    at: { left: `calc(12% + ${SPOT_ARROW} / 2)`, bottom: "100%", marginBottom: "0.5vh", transform: "translateX(-50%)" },
     text: "life.guide.drink",
     textSide: "above",
     maxWidth: "28vh",
