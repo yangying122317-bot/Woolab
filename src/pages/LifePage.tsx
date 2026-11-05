@@ -281,11 +281,15 @@ export default function LifePage() {
 
   /** 房间横移到某个横向位置（长卷里的 vh 坐标居中到画面中央），走 Lenis 的缓动 */
   const scrollRoomTo = (centerVh: number) => {
-    const vh = window.innerHeight * roomScale;
+    const rawStripW =
+      stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
+    const stripW = rawStripW * roomScale;
     const vw = stageRef.current?.clientWidth ?? getViewWidth();
     const el = scrollRef.current;
     if (!el) return;
-    const shift = Math.min(Math.max((centerVh / 100) * vh - vw / 2, 0), maxShift);
+    /* 用 stripRef 的实际渲染宽度按比例换算站点像素坐标，解决移动端 CSS 100vh 与 window.innerHeight 不一致导致定位整体偏左 20% 的问题 */
+    const targetX = (centerVh / ROOM_TOTAL_VH) * stripW;
+    const shift = Math.min(Math.max(targetX - vw / 2, 0), maxShift);
     const progress = maxShift > 0 ? (shift / maxShift) * 0.92 : 0;
     const y = progress * (el.offsetHeight - window.innerHeight);
     if (lenis) {
@@ -300,7 +304,11 @@ export default function LifePage() {
     const s = lifeStations.find((st) => st.id === id);
     if (!s) return;
     closeChecklist();
-    scrollRoomTo(s.left + s.width / 2);
+    const centerVh =
+      mobileView && id === "drink"
+        ? s.left + s.width * 0.365
+        : s.left + s.width / 2;
+    scrollRoomTo(centerVh);
   };
   /** 清单底下"带我过去"：面板收回，房间滑到门口 */
   const goDoor = () => {
@@ -325,7 +333,10 @@ export default function LifePage() {
     setGuideReady(true);
   };
   useMotionValueEvent(x, "change", (v) => {
-    const listRightPx = ((listLayer.x + listLayer.w) / 18 / 100) * window.innerHeight * roomScale;
+    const rawStripW =
+      stripRef.current?.offsetWidth ?? (ROOM_TOTAL_VH / 100) * window.innerHeight;
+    const listRightPx =
+      ((listLayer.x + listLayer.w) / 18 / ROOM_TOTAL_VH) * rawStripW * roomScale;
     setMiniList(-v > listRightPx);
     const moved = Math.abs(v - xAtOpen.current) > 8;
     const l = listRef.current;

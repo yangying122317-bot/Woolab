@@ -216,40 +216,71 @@ function EntranceWall({
         onHover={setLampOn}
       />
       {/* 滚动/滑动提示：在画框正下方居中（位于画框底边与墙脚黑线之间的砖红墙面上） */}
-      {(!mobile || !paintingHidden) && (() => {
-        const hintTop = mobile ? paintT + ENT_PAINT_H + 28 : paintT + ENT_PAINT_H + 20;
-        return (
-          <>
-            <motion.img
-              src="/assets/lab/scroll-arrow.svg"
-              alt=""
-              draggable={false}
-              className="absolute select-none"
-              style={{
-                left: px(axisL - 34 - 7),
-                top: px(hintTop + 9 - 9.25),
-                width: px(14),
-                height: px(18.5),
-                rotate: -90,
-              }}
-              animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
-              transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
-            />
-            <span
-              className="font-hand absolute whitespace-nowrap"
-              style={{
-                left: px(axisL - 19),
-                top: px(hintTop),
-                fontSize: px(14),
-                color: "#7E4218",
-                WebkitTextStroke: `${px(1)}px #7E4218`,
-              }}
-            >
-              {t(mobile ? "lab.entry.swipe" : "lab.entry.scroll")}
-            </span>
-          </>
-        );
-      })()}
+      {mobile ? (
+        <div
+          className="pointer-events-none absolute flex items-center justify-center"
+          style={{
+            left: px(axisL),
+            top: px(paintT + ENT_PAINT_H + 28),
+            transform: "translateX(-50%)",
+            gap: px(7),
+          }}
+        >
+          <motion.img
+            src="/assets/lab/scroll-arrow.svg"
+            alt=""
+            draggable={false}
+            className="select-none"
+            style={{
+              width: px(14),
+              height: px(18.5),
+              rotate: -90,
+            }}
+            animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
+            transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+          />
+          <span
+            className="font-hand whitespace-nowrap"
+            style={{
+              fontSize: px(14),
+              color: "#7E4218",
+              WebkitTextStroke: `${px(1)}px #7E4218`,
+            }}
+          >
+            {t("life.entry.swipe")}
+          </span>
+        </div>
+      ) : (
+        <>
+          <motion.img
+            src="/assets/lab/scroll-arrow.svg"
+            alt=""
+            draggable={false}
+            className="absolute select-none"
+            style={{
+              left: px(axisL - 34 - 7),
+              top: px(paintT + ENT_PAINT_H + 20 + 9 - 9.25),
+              width: px(14),
+              height: px(18.5),
+              rotate: -90,
+            }}
+            animate={reduced ? undefined : { x: [0, px(3), 0], opacity: [1, 0.55, 1] }}
+            transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+          />
+          <span
+            className="font-hand absolute whitespace-nowrap"
+            style={{
+              left: px(axisL - 19),
+              top: px(paintT + ENT_PAINT_H + 20),
+              fontSize: px(14),
+              color: "#7E4218",
+              WebkitTextStroke: `${px(1)}px #7E4218`,
+            }}
+          >
+            {t("lab.entry.scroll")}
+          </span>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -1606,6 +1637,7 @@ const LAB_ENTRANCE_FIRST = [
   "/assets/lab/prop-statue.webp",
   "/assets/lab/gallery-lamp-entrance.webp",
   "/assets/lab/gallery-lamp-on.webp",
+  "/assets/lab/scroll-arrow.svg",
 ];
 
 function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; startAtShrink?: boolean }) {

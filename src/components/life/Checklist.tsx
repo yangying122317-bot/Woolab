@@ -6,7 +6,6 @@ import type { RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { getViewWidth } from "../../device";
 import { playStamp, playStrike } from "../../audio/sfx";
-import HandHint from "./HandHint";
 
 interface Props {
   room: RoomState;
@@ -465,27 +464,42 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
               {/* 纸右上角压着的那条胶带 */}
               <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(TAPE_TR)} />
 
-              {/* 纸底下写在牛皮上的一句："往右走，去把它们一件件做完" + 一支指向右边的手绘箭头。
+              {/* 纸底下写在牛皮上的一句："往右走，去把它们一件件做完" + 一支与"向右滑"同款的手绘箭头。
                   全做完那次纸被揭走，这句也不用再说 */}
               {showList && (
                 <motion.div
-                  className="pointer-events-none absolute"
-                  style={{ ...box(SHEET_CX - 160, GO_HINT.y, 320), display: "flex", justifyContent: "center" }}
+                  className="pointer-events-none absolute flex items-center justify-center"
+                  style={{ ...box(SHEET_CX - 160, GO_HINT.y, 320), gap: 7 }}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
                   exit={{ opacity: 0, transition: { duration: 0.2 } }}
                 >
-                  <HandHint
-                    show
-                    text={t("life.guide.scroll")}
-                    rotate={90}
-                    arrowH={`${GO_HINT.arrow}px`}
-                    fontSize={`${hand ? GO_HINT.fontZh : GO_HINT.fontEn}px`}
-                    color={GO_HINT.color}
-                    bold
-                    textSide="left"
-                    /* HandHint 自己是 absolute 的，这里让它在 flex 里居中排 */
-                    style={{ position: "relative", gap: 6 }}
+                  <span
+                    className="font-hand whitespace-nowrap"
+                    style={{
+                      fontSize: `${hand ? GO_HINT.fontZh : GO_HINT.fontEn}px`,
+                      lineHeight: 1.25,
+                      color: GO_HINT.color,
+                      WebkitTextStroke: `0.4px ${GO_HINT.color}`,
+                    }}
+                  >
+                    {t("life.guide.scroll")}
+                  </span>
+                  <motion.div
+                    style={{
+                      width: 12,
+                      height: 16,
+                      rotate: -90,
+                      background: GO_HINT.color,
+                      WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
+                      maskImage: "url(/assets/lab/scroll-arrow.svg)",
+                      WebkitMaskSize: "100% 100%",
+                      maskSize: "100% 100%",
+                      WebkitMaskRepeat: "no-repeat",
+                      maskRepeat: "no-repeat",
+                    }}
+                    animate={{ x: [0, 3, 0], opacity: [1, 0.55, 1] }}
+                    transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
                   />
                 </motion.div>
               )}
