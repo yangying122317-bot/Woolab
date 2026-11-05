@@ -14,7 +14,7 @@ import MarkedText, { CIRCLE_AR, UNDERLINE_AR, decoDelay } from "./MarkedText";
 import { aboutNext, type AboutShot } from "../../data/aboutShots";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { setMobileThemeColor, useReportPlainNav } from "../../state/chrome";
-import { playNavigate } from "../../audio/sfx";
+import { playNavigate, playPaperSnap } from "../../audio/sfx";
 
 /**
  * About 页最后翻过去的那页（Figma Frame 1 / 文案表第 06 条 What's Next）：
@@ -44,11 +44,11 @@ const NOTCH_MARK = { cx: SW / 2, y: 520, w: 58, h: 54 };
 
 /** 5 张相纸落定的位置（中心点）和歪斜；数组顺序就是叠放顺序（后面的压前面的） */
 const CARDS: { shot: number; cx: number; cy: number; rot: number; scale?: number }[] = [
-  { shot: 0, cx: 183.6, cy: 319, rot: -9.5 },
-  { shot: 1, cx: 255, cy: 238, rot: 0 },
-  { shot: 3, cx: 477.6, cy: 224.8, rot: 8.4 },
-  { shot: 4, cx: 587.6, cy: 289.6, rot: 11.3 },
-  { shot: 2, cx: 374, cy: 297, rot: 0 },
+  { shot: 0, cx: 152, cy: 316, rot: -9.5 },
+  { shot: 1, cx: 246, cy: 235, rot: 0 },
+  { shot: 3, cx: 482, cy: 224, rot: 8.4 },
+  { shot: 4, cx: 598, cy: 291, rot: 11.3 },
+  { shot: 2, cx: 368, cy: 297, rot: 0 },
 ];
 const MOBILE_VERTICAL_DX = [0, -2, 3, -2, 0];
 const MOBILE_VERTICAL_ROT = [-7.5, 0, 8.2, -5.5, 0];
@@ -135,6 +135,8 @@ export default function NextPage({
 
   const leaving = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
   /* 相纸全落定之前，动画带着各自的延时；落定后 hover 的进出要即时 */
   const [landed, setLanded] = useState(false);
 
@@ -268,29 +270,31 @@ export default function NextPage({
             {pick(aboutNext.sub)}
           </motion.div>
 
-          {/* 5 张相纸：按拍摄顺序一张张从上面掉下来；hover 的那张浮到最前面 */}
+          {/* 5 张相纸：按拍摄顺序一张张从上面掉下来；hover 或点击选中的那张浮到最前面，点击后在相纸下方白边写上标题 */}
           {activeCards.map((c, i) => {
             const shot = shots[c.shot];
             const order = c.shot;
             const baseScale = c.scale ?? 1;
             const fromRot = c.rot + (c.rot >= 0 ? 16 : -16);
+            const isFocused = hover === i || (hover === null && selected === i);
+            const showTitle = revealed.has(i);
             return (
               <motion.div
                 key={shot.id}
-                className="absolute"
+                className="absolute cursor-pointer"
                 style={{
                   left: c.cx - CARD_W / 2,
                   top: c.cy - CARD_H / 2,
                   width: CARD_W,
                   height: CARD_H,
-                  zIndex: hover === i ? 10 : i + 1,
+                  zIndex: hover === i ? 12 : selected === i ? 11 : i + 1,
                   filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.14))",
                 }}
                 initial={{ y: -(top / s + c.cy + CARD_H), rotate: fromRot, scale: baseScale }}
                 animate={{
-                  y: hover === i ? -6 : 0,
-                  rotate: hover === i ? c.rot * 0.35 : c.rot,
-                  scale: hover === i ? baseScale * 1.06 : baseScale,
+                  y: isFocused ? -6 : 0,
+                  rotate: isFocused ? c.rot * 0.35 : c.rot,
+                  scale: isFocused ? baseScale * 1.06 : baseScale,
                   transition: landed
                     ? { type: "spring", stiffness: 260, damping: 22 }
                     : {
@@ -307,7 +311,17 @@ export default function NextPage({
                 }}
                 onHoverStart={() => landed && setHover(i)}
                 onHoverEnd={() => setHover((h) => (h === i ? null : h))}
-                onClick={() => landed && setHover((h) => (h === i ? null : i))}
+                onClick={() => {
+                  if (!landed) return;
+                  playPaperSnap();
+                  setSelected(i);
+                  setRevealed((prev) => {
+                    if (prev.has(i)) return prev;
+                    const next = new Set(prev);
+                    next.add(i);
+                    return next;
+                  });
+                }}
               >
                 <div className="absolute overflow-hidden" style={{ ...box(WINDOW), background: "#F3F1EA" }}>
                   <img
@@ -329,6 +343,26 @@ export default function NextPage({
                     height: CARD_H + FRAME_PAD * 2,
                   }}
                 />
+                {showTitle && (
+                  <motion.div
+                    key={`title-${lang}`}
+                    className="font-hand pointer-events-none absolute flex items-center justify-center whitespace-nowrap text-center"
+                    style={{
+                      left: WINDOW.x,
+                      width: WINDOW.w,
+                      top: WINDOW.y + WINDOW.h + 2,
+                      height: CARD_H - (WINDOW.y + WINDOW.h) - 4,
+                      fontSize: lang === "zh" ? 15 : 14,
+                      color: "#1A1817",
+                      WebkitTextStroke: "0.35px #1A1817",
+                    }}
+                    initial={{ clipPath: "inset(-10% 100% -10% -10%)", opacity: 0 }}
+                    animate={{ clipPath: "inset(-10% -10% -10% -10%)", opacity: 1 }}
+                    transition={{ duration: 0.42, ease: "easeOut" }}
+                  >
+                    {pick(shot.title)}
+                  </motion.div>
+                )}
               </motion.div>
             );
           })}
