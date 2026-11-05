@@ -366,33 +366,14 @@ export function DetailBackdrop() {
 function LookbookHead({
   u,
   closet,
-  project,
-  hideFrame,
 }: {
   u: number;
   closet: string;
-  project?: LabProject;
-  hideFrame?: boolean;
 }) {
   const mobile = getViewWidth() < 560;
-  if (mobile && project) {
-    const fw = 236 * u;
-    const fh = (fw * FRAME_H) / FRAME_W;
+  if (mobile) {
     return (
       <Board u={u}>
-        {/* 手机竖屏：画框居顶居中随页面自然滚动，标题 + 下划线排在画框下方 */}
-        <div
-          className="absolute"
-          style={{
-            left: (BOARD_W * u - fw) / 2,
-            top: 172 * u,
-            width: fw,
-            height: fh,
-            visibility: hideFrame ? "hidden" : "visible",
-          }}
-        >
-          <FramePiece project={project} width={fw} />
-        </div>
         <Rotated u={u} x={235} y={536} w={250} h={46} iw={250} ih={46} transform="rotate(-2.33deg)">
           <p className="font-hand whitespace-nowrap text-center text-white" style={{ fontSize: 35 * u, lineHeight: 1.2 }}>
             {closet}
@@ -1374,7 +1355,7 @@ function FrameWall({
   const H = (W * FRAME_H) / FRAME_W;
   const mobile = vw < 560;
   const [hover, setHover] = useState<number | null>(null);
-  const canPick = (mobile || landed) && active;
+  const canPick = landed && active;
   const setHovered = (i: number | null) => {
     setHover(i);
     onHover(i);
@@ -1397,7 +1378,7 @@ function FrameWall({
         transition={{ duration: 0.45 }}
       >
       {labProjects.map((p, i) => {
-        const shown = (mobile || landed || i !== index) && i !== hideIndex;
+        const shown = (landed || i !== index) && i !== hideIndex;
         const lit = hover === null ? i === index : hover === i;
         return (
           <div
@@ -1489,8 +1470,6 @@ type LookLayout = {
  */
 function LookSection({
   lb,
-  project,
-  hideTopFrame,
   fallbackLines,
   first,
   closet,
@@ -1508,8 +1487,6 @@ function LookSection({
   fadeIn = false,
 }: {
   lb?: Lookbook;
-  project: LabProject;
-  hideTopFrame?: boolean;
   fallbackLines: string[];
   first: boolean;
   /** 页头标题淡入浮出（首次进来、切项目回顶都走这个），别整块跳出来；翻转卡片里那份不动 */
@@ -1562,12 +1539,7 @@ function LookSection({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: Math.max(0, delay - 0.15), ease: "easeOut" }}
           >
-            <LookbookHead
-              u={u}
-              closet={closet}
-              project={project}
-              hideFrame={hideTopFrame}
-            />
+            <LookbookHead u={u} closet={closet} />
           </motion.div>
         )}
         <Description
@@ -1977,8 +1949,6 @@ export function DetailPage({
             <LookSection
               key={`${project.id}-${j}`}
               lb={lb}
-              project={project}
-              hideTopFrame={flying !== null}
               fallbackLines={[pick(project.description)]}
               first={j === 0}
               fadeIn={interactive}
@@ -2017,8 +1987,8 @@ export function DetailPage({
         </div>
       </div>
 
-      {/* 主角金框：桌面端钉在屏上跟着滚动走；手机端主画框已排在第一屏顶部随页面自然滚动，不会遮挡中间的模特图 */}
-      {!mobile && <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />}
+      {/* 主角金框：钉在屏上跟着滚动走，滑到底部落入画框墙对应槽位 */}
+      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />
 
       {flying !== null && (
         <motion.div
