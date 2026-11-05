@@ -26,6 +26,15 @@ export default function TopNav() {
   const [open, setOpen] = useState(false);
   const { peeling, peelToHome } = usePeelToHome();
   useEffect(() => {
+    /* 手机端在首页小电视播放期间不抢带宽，等小电视结束（或 2.2s 后）再预解码目录吊牌与 Lab 油画；桌面端保持原样 */
+    if (isMobileView() && (pathname === "/" || pathname === INTRO_PREVIEW_PATH) && !sessionStorage.getItem(INTRO_SESSION_KEY)) {
+      const run = () => {
+        void warmMenu();
+        void loadImage("/assets/lab/gallery-painting-big.webp");
+      };
+      const id = window.setTimeout(run, 2400);
+      return () => window.clearTimeout(id);
+    }
     void warmMenu();
     void loadImage("/assets/lab/gallery-painting-big.webp");
     if (pathname !== "/" && pathname !== INTRO_PREVIEW_PATH) {

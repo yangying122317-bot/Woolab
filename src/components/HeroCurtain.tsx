@@ -12,7 +12,7 @@ import { useReportNavHidden } from "../state/chrome";
 import { useLanguage } from "../i18n/LanguageContext";
 import { getViewWidth } from "../device";
 import { preloadAllAudio } from "../audio/sfx";
-import { loadImageStrict } from "./life/preload";
+import { isImageReady, loadImageStrict } from "./life/preload";
 
 /**
  * 首页开场的那块白布：压在首页场景上面，把整个房子盖住。
@@ -248,23 +248,36 @@ export default function HeroCurtain({
     restDelta: 0.001,
   });
 
-  /* 加载判定：真实等待全部首页图片解码 + 两套手写字体就绪 + 最短停留，不设超时跳过 */
+  /* 电视壳与屏幕描边是否已解码就绪：就绪前保持纯白幕布，就绪后电视框与雪花屏同帧显现，绝不出现"只有雪花没有电视框" */
+  const [tvReady, setTvReady] = useState(
+    () => isImageReady(TV.src) && isImageReady(SCREEN_FRAME.src),
+  );
+
+  /* 加载判定：先最高优先级解码电视框本身，再等待首页图片解码 + 两套手写字体就绪 + 最短停留 */
   useEffect(() => {
     let alive = true;
     const t0 = performance.now();
     let done = 0;
-    const allAssets = Array.from(new Set([TV.src, SCREEN_FRAME.src, ...preload]));
-    const total = allAssets.length + 1;
+    const restAssets = Array.from(
+      new Set(preload.filter((u) => u !== TV.src && u !== SCREEN_FRAME.src)),
+    );
+    const total = restAssets.length + 3;
+    const tvTask = Promise.all([loaded(TV.src), loaded(SCREEN_FRAME.src)]).then(() => {
+      done += 2;
+      if (alive) setTvReady(true);
+    });
     let idx = 0;
-    const workerCount = Math.min(10, allAssets.length);
-    const assets = Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (alive && idx < allAssets.length) {
-          const src = allAssets[idx++];
-          await loaded(src);
-          done += 1;
-        }
-      }),
+    const workerCount = Math.min(mobile ? 6 : 10, Math.max(1, restAssets.length));
+    const assets = tvTask.then(() =>
+      Promise.all(
+        Array.from({ length: workerCount }, async () => {
+          while (alive && idx < restAssets.length) {
+            const src = restAssets[idx++];
+            await loaded(src);
+            done += 1;
+          }
+        }),
+      ),
     );
     const loadFonts = (): Promise<void> => {
       if (!document.fonts) return Promise.resolve();
@@ -422,15 +435,19 @@ export default function HeroCurtain({
         willChange: "transform",
       }}
     >
-      {/* 白布：屏幕那块挖空 */}
+      {/* 白布：电视框就绪前整块纯白不挖洞；就绪后屏幕那块挖空 */}
       <div
         className="absolute inset-0 bg-white"
-        style={{
-          WebkitMaskImage: hole.mask,
-          maskImage: hole.mask,
-          WebkitMaskSize: "100% 100%",
-          maskSize: "100% 100%",
-        }}
+        style={
+          tvReady
+            ? {
+                WebkitMaskImage: hole.mask,
+                maskImage: hole.mask,
+                WebkitMaskSize: "100% 100%",
+                maskSize: "100% 100%",
+              }
+            : undefined
+        }
       >
         {/* 画板：签名线 + 电视 + 屏幕描边，一起按 u 缩放、居中 */}
         <div
@@ -440,6 +457,7 @@ export default function HeroCurtain({
             top: boardTop,
             width: BOARD_W * u,
             height: BOARD_H * u,
+            opacity: tvReady ? 1 : 0,
           }}
         >
           {SHOW_SIGN && (
@@ -499,6 +517,7 @@ export default function HeroCurtain({
           top: hole.y - ((SCREEN_FRAME.h - SCREEN.h) / 2) * u,
           width: SCREEN_FRAME.w * u,
           height: SCREEN_FRAME.h * u,
+          opacity: tvReady ? 1 : 0,
           zIndex: 2,
         }}
       />
@@ -519,6 +538,7 @@ export default function HeroCurtain({
           height: hole.h,
           background: SCREEN.off,
           clipPath: `url(#${SCREEN.clipId})`,
+          visibility: tvReady ? "visible" : "hidden",
           zIndex: 1,
         }}
         initial={false}

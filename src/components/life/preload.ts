@@ -18,8 +18,8 @@ const keep: HTMLImageElement[] = [];
 
 function retainImage(im: HTMLImageElement) {
   keep.push(im);
-  /* 手机端 Safari 单页显存预算严苛（~350MB），跨页累计持有过多已解码大图会触发 WebContent 崩溃重载 */
-  if (isMobileView() && keep.length > 45) {
+  /* 手机端 Safari 单页显存预算管理：保留最近 110 张已解码核心图层（足以完整容纳首页 + Life 首屏衣帽区与起居区），超出时释放最早的非活跃图层 */
+  if (isMobileView() && keep.length > 110) {
     const old = keep.shift();
     if (old) old.src = "";
   }
@@ -109,23 +109,52 @@ async function loadAll(urls: readonly string[], limit = 8): Promise<void> {
 export const LIFE_CORE_ASSETS = lifeFirstAssets.filter(
   (u) => !u.includes("/window-anim/") || u.endsWith("/f00.webp"),
 );
+/** 手机竖屏进门第一眼只看到衣帽区（seg01）+ 墙地贴图 + 清单抽屉（共 53 张）；起居区（seg02）紧随其后解码 */
+const MOBILE_LIFE_ENTRY_ASSETS = LIFE_CORE_ASSETS.filter(
+  (u) => !u.includes("/seg02/"),
+);
+const MOBILE_LIFE_SEG02_ASSETS = LIFE_CORE_ASSETS.filter((u) =>
+  u.includes("/seg02/"),
+);
 const LIFE_WINDOW_REST = lifeFirstAssets.filter(
   (u) => u.includes("/window-anim/") && !u.endsWith("/f00.webp"),
 );
 
 let core: Promise<void> | null = null;
 let coreReady = false;
+let mobileEntry: Promise<void> | null = null;
+let mobileEntryReady = false;
 let first: Promise<void> | null = null;
 let interaction: Promise<void> | null = null;
 let rest: Promise<void> | null = null;
 
 /** 第一屏核心静态层是否已全部解码就绪（供 LifePage 首帧同步判断，免去多余等待帧） */
 export function isLifeFirstReady(): boolean {
+  if (isMobileView()) {
+    return (
+      mobileEntryReady ||
+      coreReady ||
+      MOBILE_LIFE_ENTRY_ASSETS.every((u) => readySet.has(u))
+    );
+  }
   return coreReady || LIFE_CORE_ASSETS.every((u) => readySet.has(u));
+}
+
+function preloadMobileLifeEntry(): Promise<void> {
+  if (!mobileEntry) {
+    mobileEntry = loadAll(MOBILE_LIFE_ENTRY_ASSETS, 6).then(() => {
+      mobileEntryReady = true;
+      void loadAll(MOBILE_LIFE_SEG02_ASSETS, 4).then(() => {
+        coreReady = true;
+      });
+    });
+  }
+  return mobileEntry;
 }
 
 /** 第一屏核心层（墙、地、衣帽区全部家具衣物、窗户第 1 帧、清单抽屉）：优先解码，省去 23 帧窗户动画占用的 54MB 显存 */
 export function preloadLifeCore(): Promise<void> {
+  if (isMobileView()) return preloadMobileLifeEntry();
   if (!core) {
     core = loadAll(LIFE_CORE_ASSETS, 8).then(() => {
       coreReady = true;
@@ -180,7 +209,7 @@ export async function warmBytes(urls: readonly string[], limit = 4): Promise<voi
 }
 
 /**
- * 从别的页（目录）提前热身：桌面端直接解码第一屏核心层，手机端只暖 HTTP 缓存以免跨页撑爆显存。
+ * 从别的页（目录）提前热身：桌面端与手机端均提前解码第一屏核心层，点进 Life 页时 0 延迟直接揭开。
  */
 let warmed = false;
 export function warmLife(delayMs = 0): void {
@@ -188,14 +217,14 @@ export function warmLife(delayMs = 0): void {
   warmed = true;
   window.setTimeout(() => {
     if (isMobileView()) {
-      void warmBytes(LIFE_CORE_ASSETS);
+      void preloadMobileLifeEntry();
       return;
     }
     void preloadLifeCore().then(() => warmBytes(LIFE_WINDOW_REST));
   }, delayMs);
 }
 
-/** 首页小电视结束后预热 Life 第一屏；手机端仅暖 HTTP 字节不提前解码进显存 */
+/** 首页小电视结束后预热 Life 第一屏：桌面端与手机端均提前解码首屏核心图层，推门进屋时 0 等待直接呈现 */
 let warmedFirst: Promise<void> | null = null;
 export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   if (warmedFirst || first) {
@@ -205,7 +234,7 @@ export function warmLifeFirst(delayMs = 0, then?: () => void): void {
   warmedFirst = new Promise<void>((resolve) => {
     window.setTimeout(() => {
       const task = isMobileView()
-        ? warmBytes(LIFE_CORE_ASSETS)
+        ? preloadMobileLifeEntry()
         : preloadLifeCore().then(() => warmBytes(LIFE_WINDOW_REST));
       void task.then(resolve);
     }, delayMs);

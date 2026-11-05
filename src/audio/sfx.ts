@@ -153,6 +153,9 @@ function fetchAmbientBlob(id: AmbientId): Promise<void> {
       if (el && el.paused && el.src !== url) {
         el.src = url;
         el.load();
+        if (ambientWanted === id && unlocked && !muted) {
+          syncAmbient();
+        }
       }
     })
     .catch(() => {})
@@ -166,14 +169,19 @@ function fetchAmbientBlob(id: AmbientId): Promise<void> {
 function ambientEl(id: AmbientId) {
   let el = ambientEls.get(id);
   if (!el) {
-    el = new Audio(ambientBlobs.get(id) ?? AMBIENTS[id].src);
+    el = new Audio();
     el.loop = true;
     el.preload = "auto";
     el.volume = 0;
-    // Safari 常常无视 preload=auto，同时用 fetch 拉取二进制 Blob 进内存，彻底规避移动端浏览器不预加载音频的限制
-    el.load();
+    const blobUrl = ambientBlobs.get(id);
+    if (blobUrl) {
+      el.src = blobUrl;
+      el.load();
+    } else {
+      // 只走单通道 fetch 拉取 Blob 进内存，避免 new Audio(url).load() 与 fetch 同时重复下载两遍同一文件
+      void fetchAmbientBlob(id);
+    }
     ambientEls.set(id, el);
-    void fetchAmbientBlob(id);
   }
   return el;
 }
@@ -214,6 +222,10 @@ function syncAmbient() {
   }
 
   const next = ambientEl(ambientWanted!);
+  if (!next.src) {
+    next.src = ambientBlobs.get(ambientWanted!) ?? spec.src;
+    next.load();
+  }
   if (ambientAudio && ambientAudio !== next) {
     // 换场景：上一条直接停（淡出定时器只有一个，留给新的那条淡入）
     ambientAudio.pause();
@@ -598,12 +610,14 @@ export function preloadAllAudio(): Promise<void> {
   if (ambientWanted) {
     tasks.push(warmAmbient(ambientWanted));
   }
-  // 后台顺带把其余环境音也预热进缓存
+  // 等首屏小电视结束后，在后台依次把其余环境音也预热进内存，不抢首屏带宽
   window.setTimeout(() => {
-    (["day", "calm", "night", "rain", "life"] as const).forEach((id) => {
-      void warmAmbient(id);
-    });
-  }, 1200);
+    void (async () => {
+      for (const id of ["life", "day", "calm", "night", "rain"] as const) {
+        await warmAmbient(id);
+      }
+    })();
+  }, 3800);
   return Promise.race([
     Promise.all(tasks).then(() => undefined),
     new Promise<void>((r) => window.setTimeout(r, 1500)),

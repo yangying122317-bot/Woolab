@@ -1254,20 +1254,24 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               className="pointer-events-none absolute inset-0 h-full w-full select-none"
               draggable={false}
             />
-            <img
-              src="/assets/hero-base-edge-l.png"
-              alt=""
-              className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
-              style={{ right: "100%" }}
-              draggable={false}
-            />
-            <img
-              src="/assets/hero-base-edge-r.png"
-              alt=""
-              className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
-              style={{ left: "100%" }}
-              draggable={false}
-            />
+            {cover && (
+              <>
+                <img
+                  src="/assets/hero-base-edge-l.png"
+                  alt=""
+                  className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+                  style={{ right: "100%" }}
+                  draggable={false}
+                />
+                <img
+                  src="/assets/hero-base-edge-r.png"
+                  alt=""
+                  className="pointer-events-none absolute top-0 h-full w-auto max-w-none select-none"
+                  style={{ left: "100%" }}
+                  draggable={false}
+                />
+              </>
+            )}
           </motion.div>
 
           {/* 点击大门后才挂载：门框 + 屋内暖光 + 向两侧滑开的门板 */}
