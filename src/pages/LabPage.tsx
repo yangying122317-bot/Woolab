@@ -403,9 +403,9 @@ const CORRIDOR_Q = 0.13;
 const CAM_X_VALS = [ENT_CAM_X0, 0];
 /** q → 相机深度：平移快结束时起步往前走到第一站，随后平台对应停留、斜坡对应前进 */
 const CAM_Z_KEYS = [0, 0.12, 0.24, 0.32, 0.44, 0.52, 0.64, 0.72, 0.84, 0.91, 1];
-/** 手机端 6 个吸附节点：0 入口油画 → 1 白T恤 → 2 贴纸 → 3 饮料杯 → 4 香薰蜡烛 → 5 尽头墙绿门 */
-const MOBILE_SNAP_Q = [0, 0.28, 0.48, 0.68, 0.88, 1] as const;
-const MOBILE_CAM_Z_KEYS = [0, 0.12, 0.28, 0.48, 0.68, 0.88, 1];
+/** 手机端 7 个吸附节点：0 前厅油画墙 → 1 画廊走廊入口 → 2 白T恤 → 3 贴纸 → 4 饮料杯 → 5 香薰蜡烛 → 6 尽头墙绿门 */
+const MOBILE_SNAP_Q = [0, 0.15, 0.28, 0.48, 0.68, 0.88, 1] as const;
+const MOBILE_CAM_Z_KEYS = [0, 0.15, 0.28, 0.48, 0.68, 0.88, 1];
 const CAM_Z_VALS = [
   0,
   0,
@@ -1982,13 +1982,13 @@ export default function LabPage() {
         return;
       }
       const refFrom = fromIdx !== clamped ? fromIdx : Math.max(0, clamped - 1);
-      const fullSpan = Math.abs(MOBILE_SNAP_Q[clamped] - MOBILE_SNAP_Q[refFrom]) || 0.2;
-      const baseDur = fromIdx === 0 || clamped === 0 ? 0.82 : 0.56;
-      const dur = Math.max(0.24, Math.min(0.85, baseDur * (rem / fullSpan)));
+      const fullSpan = Math.abs(MOBILE_SNAP_Q[clamped] - MOBILE_SNAP_Q[refFrom]) || 0.15;
+      const baseDur = 1.08;
+      const dur = Math.max(0.68, Math.min(1.18, baseDur * (rem / fullSpan)));
       animCtrl?.stop();
       animCtrl = animate(mobileQ, targetQ, {
         duration: dur,
-        ease: [0.22, 1, 0.36, 1],
+        ease: [0.32, 0.94, 0.42, 1],
       });
     };
 
@@ -2027,11 +2027,11 @@ export default function LabPage() {
       const baseQ = MOBILE_SNAP_Q[curIdx];
       if (dragPx >= 0) {
         const nextQ = MOBILE_SNAP_Q[Math.min(MOBILE_SNAP_Q.length - 1, curIdx + 1)];
-        const k = Math.min(1, dragPx / 240);
+        const k = Math.min(0.75, dragPx / 380);
         mobileQ.set(baseQ + (nextQ - baseQ) * k);
       } else {
         const prevQ = MOBILE_SNAP_Q[Math.max(0, curIdx - 1)];
-        const k = Math.min(1, -dragPx / 240);
+        const k = Math.min(0.75, -dragPx / 380);
         mobileQ.set(baseQ - (baseQ - prevQ) * k);
       }
     };
