@@ -90,6 +90,7 @@ export default function LifePage() {
 
   // 末尾留 8% 进度作"到站缓冲"
   const x = useTransform(scrollYProgress, [0, 0.92, 1], [0, -maxShift, -maxShift]);
+  const mobileSwipeOpacity = useTransform(scrollYProgress, [0, 0.04], [1, 0]);
 
   /*
    * 进门先把第一屏核心层的图在幕后解码完（从首页来时已在后台提前解码好，isLifeFirstReady() 直接为 true，首帧立即挂载房间）；
@@ -675,6 +676,41 @@ export default function LifePage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.55, duration: 0.65, ease: "easeIn" }}
           />
+        )}
+
+        {/* 手机端底部向右滑动提示：位于底部进度条正上方，手指往右滑开后自动淡出 */}
+        {mobileView && ready && !checklistOpen && !drawerShown && !focus && !labEntry && (
+          <motion.div
+            className="pointer-events-none absolute inset-x-0 bottom-11 z-20 flex items-center justify-center"
+            style={{ gap: 8, opacity: mobileSwipeOpacity }}
+          >
+            <motion.div
+              style={{
+                width: 15,
+                height: 20,
+                rotate: -90,
+                background: "#1F2428",
+                WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
+                maskImage: "url(/assets/lab/scroll-arrow.svg)",
+                WebkitMaskSize: "100% 100%",
+                maskSize: "100% 100%",
+                WebkitMaskRepeat: "no-repeat",
+                maskRepeat: "no-repeat",
+              }}
+              animate={{ x: [0, 4, 0], opacity: [1, 0.55, 1] }}
+              transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+            />
+            <span
+              className="font-hand whitespace-nowrap"
+              style={{
+                fontSize: 16,
+                color: "#1F2428",
+                WebkitTextStroke: "0.8px #1F2428",
+              }}
+            >
+              {t("lab.entry.swipe")}
+            </span>
+          </motion.div>
         )}
 
         {/* 底部进度条 */}
