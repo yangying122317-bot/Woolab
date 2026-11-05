@@ -1604,14 +1604,14 @@ function LookSection({
           />
         </div>
         {mobile && lb && (backCap || frontCap) && (
-          <div className="relative w-full" style={{ height: 245 * u }}>
+          <div className="relative w-full" style={{ height: 155 * u }}>
             <Board u={u}>
               {backCap && frontCap ? (
                 <>
                   {/* 左列：向上手绘箭头 + 手写标注 */}
                   <div
                     className="pointer-events-none absolute flex flex-col items-center"
-                    style={{ left: 212 * u, top: 30 * u, transform: "translateX(-50%)" }}
+                    style={{ left: 212 * u, top: 22 * u, transform: "translateX(-50%)" }}
                   >
                     <img
                       src={`${A}/arrow-down.svg`}
@@ -1626,7 +1626,7 @@ function LookSection({
                     <p
                       className="font-hand text-center whitespace-pre-line text-white"
                       style={{
-                        marginTop: 26 * u,
+                        marginTop: 22 * u,
                         fontSize: 25 * u,
                         lineHeight: 1.25,
                         transform: "rotate(-2deg)",
@@ -1638,7 +1638,7 @@ function LookSection({
                   {/* 右列：向上手绘箭头 + 手写标注 */}
                   <div
                     className="pointer-events-none absolute flex flex-col items-center"
-                    style={{ left: 508 * u, top: 24 * u, transform: "translateX(-50%)" }}
+                    style={{ left: 508 * u, top: 18 * u, transform: "translateX(-50%)" }}
                   >
                     <img
                       src={`${A}/arrow-down.svg`}
@@ -1653,7 +1653,7 @@ function LookSection({
                     <p
                       className="font-hand text-center whitespace-pre-line text-white"
                       style={{
-                        marginTop: 32 * u,
+                        marginTop: 26 * u,
                         fontSize: 25 * u,
                         lineHeight: 1.25,
                         transform: "rotate(-2deg)",
@@ -1666,7 +1666,7 @@ function LookSection({
               ) : (
                 <div
                   className="pointer-events-none absolute flex flex-col items-center"
-                  style={{ left: 360 * u, top: 26 * u, transform: "translateX(-50%)" }}
+                  style={{ left: 360 * u, top: 20 * u, transform: "translateX(-50%)" }}
                 >
                   <img
                     src={`${A}/arrow-down.svg`}
@@ -1681,7 +1681,7 @@ function LookSection({
                   <p
                     className="font-hand text-center whitespace-pre-line text-white"
                     style={{
-                      marginTop: 26 * u,
+                      marginTop: 22 * u,
                       fontSize: 25 * u,
                       lineHeight: 1.25,
                       transform: "rotate(-2deg)",
@@ -1776,13 +1776,13 @@ export function DetailPage({
     const start = j === 0 ? 0 : layouts[j - 1].start + layouts[j - 1].blockH + layouts[j - 1].stripH;
     if (mobile) {
       const mLines = lb ? lb.mobileLines?.[lang] ?? lb.lines[lang] : [pick(project.description)];
-      const textStart = j === 0 ? 676 * u : 90 * u;
+      const textStart = j === 0 ? 676 * u : 32 * u;
       const descTop = textStart - (DESC_TEXT_Y - DESC_Y0) * u;
       const arrowBottom = textStart + (mLines.length * 42 + 24 + 48) * u;
-      const collageTop = arrowBottom + 68 * u;
+      const collageTop = arrowBottom + 62 * u;
       const blockH = collageTop + 365 * uc + 125 * u;
       const hasCaps = lb && (lb.captions?.back !== false || lb.captions?.front !== false);
-      const mStripH = (vw * 413) / 720 + (hasCaps ? 210 * u : 40 * u);
+      const mStripH = (vw * 413) / 720 + (hasCaps ? 155 * u : 35 * u);
       layouts.push({ start, descTop, collageTop, blockH, stripH: mStripH });
       return;
     }

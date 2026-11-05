@@ -360,7 +360,8 @@ export default function AboutPage() {
                   const topText = pick(shot.note.left);
                   const botText = pick(shot.note.right);
                   const topLines = topText.split("\n").length;
-                  const topY = 5 - topLines * (12.5 * 1.35);
+                  const noteFontSize = 14.5;
+                  const topY = 6 - topLines * (noteFontSize * 1.36);
                   const topArrowDelay = decoDelay(topText, 0) + 0.15;
                   const botArrowDelay = decoDelay(botText, 0.35) + 0.15;
                   return (
@@ -369,19 +370,19 @@ export default function AboutPage() {
                         text={topText}
                         cx={360}
                         y={topY}
-                        w={300}
-                        fontSize={12.5}
+                        w={320}
+                        fontSize={noteFontSize}
                         hand="font-hand"
                         delay={0}
                       />
                       <VerticalArrow x={360} y={13} dir="down" delay={topArrowDelay} />
-                      <VerticalArrow x={360} y={398} dir="up" delay={botArrowDelay} />
+                      <VerticalArrow x={360} y={396} dir="up" delay={botArrowDelay} />
                       <Note
                         text={botText}
                         cx={360}
-                        y={440}
-                        w={300}
-                        fontSize={12.5}
+                        y={435}
+                        w={320}
+                        fontSize={noteFontSize}
                         hand="font-hand"
                         delay={0.35}
                       />

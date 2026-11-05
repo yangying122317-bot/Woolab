@@ -91,19 +91,19 @@ export default function NextPage({
   /* 页脚链接和顶栏 logo / 喇叭同一条边距 */
   const inset = mobile ? 18 : Math.min(vp.w / 720, vp.h / 450) * 25;
 
-  /* 手机竖屏下：标题移到顶栏下方（留足安全距离避免与顶栏重叠），5 张大相纸沿中轴紧密层叠竖排（下一张盖住上一张的白边下巴） */
+  /* 手机竖屏下：标题移到顶栏下方，5 张大相纸沿中轴紧密层叠竖排（与上方副标题保持舒适呼吸间距，不顶到文字上） */
   const yScreenTop = -top / s;
-  const titleY = mobile ? yScreenTop + 56 / s + 12 : TITLE.y;
-  const subY = mobile ? titleY + 23 : SUB.y;
-  const lineY = mobile ? 436 : LINE.y;
+  const titleY = mobile ? yScreenTop + 52 / s + 8 : TITLE.y;
+  const subY = mobile ? titleY + 22 : SUB.y;
+  const lineY = mobile ? 444 : LINE.y;
   const activeCards = mobile
     ? (() => {
-        const topBound = subY + 20;
-        const botBound = lineY - 18;
+        const topBound = subY + 34;
+        const botBound = lineY - 14;
         const centerY = (topBound + botBound) / 2;
         const availH = botBound - topBound;
-        const step = Math.min(78, availH * 0.162);
-        const cardScale = Math.min(0.88, Math.max(0.66, (availH - step * 4) / 186));
+        const step = Math.min(72, availH * 0.156);
+        const cardScale = Math.min(0.84, Math.max(0.65, (availH - step * 4) / 186));
         return [0, 1, 2, 3, 4].map((i) => ({
           shot: i,
           cx: 360 + MOBILE_VERTICAL_DX[i],
