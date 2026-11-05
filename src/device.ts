@@ -49,9 +49,9 @@ export function isPhone(): boolean {
 /**
  * 手机竖屏视图下支持手指/鼠标左右或上下划动直接推进横向长卷（Life 房间 / Lab 画廊）：
  * 电脑正常大屏（!isMobileView()）直接跳过，100% 不影响桌面端滚轮手感。
- * maxStepPx 限制单次滑动手势（含松手惯性）的最大推进距离，防止快速一划直接滑到底。
+ * 采用与刷新率无关（60Hz/120Hz 自适应）的指数衰减惯性与速度上限，既保证丝滑跟手与自然滑行，又避免单次快划直接冲到底。
  */
-export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
+export function useMobileHorizontalDrag(enabled = true, maxVel = 36): void {
   useEffect(() => {
     if (!enabled || !isMobileView()) return;
 
@@ -60,22 +60,12 @@ export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
     let startX = 0;
     let startY = 0;
     let lastX = 0;
+    let lastY = 0;
     let lastTime = 0;
     let velocity = 0;
-    let startScrollY = 0;
     let raf = 0;
 
-    const clampVel = (v: number) => Math.max(-22, Math.min(22, v));
-    const scrollClamped = (delta: number) => {
-      const cur = window.scrollY;
-      const target = Math.max(
-        startScrollY - maxStepPx,
-        Math.min(startScrollY + maxStepPx, cur + delta),
-      );
-      const actual = target - cur;
-      if (Math.abs(actual) > 0.2) window.scrollBy(0, actual);
-      return actual;
-    };
+    const clampVel = (v: number) => Math.max(-maxVel, Math.min(maxVel, v));
 
     const isInteractiveTarget = (target: EventTarget | null): boolean => {
       let el = target instanceof Element ? target : (target as Node | null)?.parentElement ?? null;
@@ -110,47 +100,59 @@ export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
       active = true;
       lockedAxis = null;
       startX = lastX = x;
-      startY = y;
-      startScrollY = window.scrollY;
+      startY = lastY = y;
       lastTime = performance.now();
       velocity = 0;
     };
 
-    const move = (x: number, y: number, prevent?: () => void) => {
+    const move = (x: number, y: number, mult: number, prevent?: () => void) => {
       if (!active) return;
       const dx = x - startX;
       const dy = y - startY;
       if (!lockedAxis) {
-        if (Math.hypot(dx, dy) < 7) return;
+        if (Math.hypot(dx, dy) < 6) return;
         lockedAxis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+        lastX = x;
+        lastY = y;
+        lastTime = performance.now();
+        prevent?.();
+        return;
       }
       prevent?.();
       const now = performance.now();
       const dt = Math.max(8, now - lastTime);
-      const step = lockedAxis === "x" ? x - lastX : y - startY;
-      if (lockedAxis === "y") startY = y;
-      else lastX = x;
-      const deltaScroll = -step * 1.3;
-      const actual = scrollClamped(deltaScroll);
-      velocity = clampVel(velocity * 0.4 + (actual / dt) * 16 * 0.6);
+      const step = lockedAxis === "x" ? x - lastX : y - lastY;
+      lastX = x;
+      lastY = y;
+      const deltaScroll = -step * mult;
+      if (Math.abs(deltaScroll) > 0.1) {
+        window.scrollBy(0, deltaScroll);
+      }
+      const instVel = (deltaScroll / dt) * 16.67;
+      velocity = clampVel(velocity * 0.45 + instVel * 0.55);
       lastTime = now;
     };
 
     const end = () => {
       if (!active) return;
       active = false;
-      if (!lockedAxis || Math.abs(velocity) < 0.8) return;
-      const tick = () => {
-        if (Math.abs(velocity) < 0.4) {
+      // 如果手指停住超过 65ms 再松手，不触发余速惯性
+      if (!lockedAxis || performance.now() - lastTime > 65 || Math.abs(velocity) < 0.6) {
+        velocity = 0;
+        return;
+      }
+      let prevTime = performance.now();
+      const tick = (now: number) => {
+        const dt = Math.min(34, Math.max(1, now - prevTime));
+        prevTime = now;
+        if (Math.abs(velocity) < 0.35) {
           raf = 0;
           return;
         }
-        const actual = scrollClamped(velocity);
-        if (Math.abs(actual) < 0.2) {
-          raf = 0;
-          return;
-        }
-        velocity *= 0.88;
+        const frameStep = velocity * (dt / 16.67);
+        window.scrollBy(0, frameStep);
+        // 0.94^(dt/16.67) 丝滑指数衰减：滑行约 0.65s 平滑停稳，不会突兀急刹
+        velocity *= Math.pow(0.94, dt / 16.67);
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
@@ -161,30 +163,15 @@ export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
     };
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length !== 1 || !active) return;
-      const x = e.touches[0].clientX;
-      const y = e.touches[0].clientY;
-      const dx = x - startX;
-      const dy = y - startY;
-      if (!lockedAxis) {
-        if (Math.hypot(dx, dy) < 7) return;
-        lockedAxis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
-      }
-      if (e.cancelable) e.preventDefault();
-      const now = performance.now();
-      const dt = Math.max(8, now - lastTime);
-      const step = lockedAxis === "x" ? x - lastX : y - startY;
-      if (lockedAxis === "y") startY = y;
-      else lastX = x;
-      const deltaScroll = -step * 1.35;
-      const actual = scrollClamped(deltaScroll);
-      velocity = clampVel(velocity * 0.4 + (actual / dt) * 16 * 0.6);
-      lastTime = now;
+      move(e.touches[0].clientX, e.touches[0].clientY, 1.85, () => {
+        if (e.cancelable) e.preventDefault();
+      });
     };
     const onMouseDown = (e: MouseEvent) => {
       if (e.button === 0) start(e.clientX, e.clientY, e.target);
     };
     const onMouseMove = (e: MouseEvent) => {
-      if (active) move(e.clientX, e.clientY, () => e.preventDefault());
+      if (active) move(e.clientX, e.clientY, 1.45, () => e.preventDefault());
     };
 
     const prevTouchAction = document.documentElement.style.touchAction;
@@ -207,5 +194,5 @@ export function useMobileHorizontalDrag(enabled = true, maxStepPx = 950): void {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", end);
     };
-  }, [enabled, maxStepPx]);
+  }, [enabled, maxVel]);
 }

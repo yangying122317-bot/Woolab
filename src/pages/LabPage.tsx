@@ -403,6 +403,7 @@ const CORRIDOR_Q = 0.13;
 const CAM_X_VALS = [ENT_CAM_X0, 0];
 /** q → 相机深度：平移快结束时起步往前走到第一站，随后平台对应停留、斜坡对应前进 */
 const CAM_Z_KEYS = [0, 0.12, 0.24, 0.32, 0.44, 0.52, 0.64, 0.72, 0.84, 0.91, 1];
+const MOBILE_CAM_Z_KEYS = [0, 0.10, 0.26, 0.30, 0.46, 0.50, 0.66, 0.70, 0.86, 0.90, 1];
 const CAM_Z_VALS = [
   0,
   0,
@@ -1261,9 +1262,13 @@ function FakeCorridor({
   /* 相机深度 = 滚动节拍深度（过阻尼弹簧：滚轮只推目标值，相机带惯性地追——
      推一下滑一段、稳稳停在节拍点；手机端提高弹簧刚度让手指滑动跟手不拖泥带水）+ 进场时的一小段迈步 */
   const camSpring = mobile
-    ? { stiffness: 130, damping: 26, mass: 0.55 }
+    ? { stiffness: 180, damping: 28, mass: 0.45 }
     : { stiffness: 60, damping: 20, mass: 0.9 };
-  const qDepth = useTransform(q, CAM_Z_KEYS, mobile ? MOBILE_CAM_Z_VALS : CAM_Z_VALS);
+  const qDepth = useTransform(
+    q,
+    mobile ? MOBILE_CAM_Z_KEYS : CAM_Z_KEYS,
+    mobile ? MOBILE_CAM_Z_VALS : CAM_Z_VALS,
+  );
   const qDepthSoft = useSpring(qDepth, camSpring);
   const camDepth = useTransform([qDepthSoft, introZ], (v: number[]) => v[0] + v[1]);
   /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
@@ -1945,8 +1950,8 @@ export default function LabPage() {
   const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
   const homeGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
-  /* 手机视图下支持左右/上下划动推进画廊走廊（单次滑动限幅 1350px，约一站距离，防止一滑到底） */
-  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry, 1350);
+  /* 手机视图下支持左右/上下划动推进画廊走廊（限制最大松手初速度为 32px/帧，丝滑减速且不会一滑到底） */
+  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry, 32);
 
   const enterHomeDoor = (r: DOMRect) => {
     if (open || homeEntry) return;
