@@ -17,7 +17,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { playNavigate } from "../audio/sfx";
 import { DetailBackdrop, DetailPage } from "./LabDetail";
 import { usePageShift } from "../components/PageShift";
-import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
+import { getViewWidth, isMobileView } from "../device";
 import { setMobileThemeColor, useReportDarkNav } from "../state/chrome";
 import { INTRO_SESSION_KEY } from "../state/intro";
 import { isImageReady, loadImage, loadImages, warmBytes } from "../components/life/preload";
@@ -403,7 +403,9 @@ const CORRIDOR_Q = 0.13;
 const CAM_X_VALS = [ENT_CAM_X0, 0];
 /** q → 相机深度：平移快结束时起步往前走到第一站，随后平台对应停留、斜坡对应前进 */
 const CAM_Z_KEYS = [0, 0.12, 0.24, 0.32, 0.44, 0.52, 0.64, 0.72, 0.84, 0.91, 1];
-const MOBILE_CAM_Z_KEYS = [0, 0.10, 0.26, 0.30, 0.46, 0.50, 0.66, 0.70, 0.86, 0.90, 1];
+/** 手机端 6 个吸附节点：0 入口油画 → 1 白T恤 → 2 贴纸 → 3 饮料杯 → 4 香薰蜡烛 → 5 尽头墙绿门 */
+const MOBILE_SNAP_Q = [0, 0.28, 0.48, 0.68, 0.88, 1] as const;
+const MOBILE_CAM_Z_KEYS = [0, 0.12, 0.28, 0.48, 0.68, 0.88, 1];
 const CAM_Z_VALS = [
   0,
   0,
@@ -421,12 +423,8 @@ const MOBILE_CAM_Z_VALS = [
   0,
   0,
   MOBILE_VIEW_Z[0],
-  MOBILE_VIEW_Z[0],
-  MOBILE_VIEW_Z[1],
   MOBILE_VIEW_Z[1],
   MOBILE_VIEW_Z[2],
-  MOBILE_VIEW_Z[2],
-  MOBILE_VIEW_Z[3],
   MOBILE_VIEW_Z[3],
   CAM_END,
 ];
@@ -1259,21 +1257,19 @@ function FakeCorridor({
   /* 板内坐标 PANEL_PW 宽 → 世界里的 PANEL_W（设计稿 px） */
   const sizeK = (PANEL_W * frame.g) / PANEL_PW;
 
-  /* 相机深度 = 滚动节拍深度（过阻尼弹簧：滚轮只推目标值，相机带惯性地追——
-     推一下滑一段、稳稳停在节拍点；手机端提高弹簧刚度让手指滑动跟手不拖泥带水）+ 进场时的一小段迈步 */
-  const camSpring = mobile
-    ? { stiffness: 180, damping: 28, mass: 0.45 }
-    : { stiffness: 60, damping: 20, mass: 0.9 };
-  const qDepth = useTransform(
+  /* 相机深度 = 滚动节拍深度（桌面端用过阻尼弹簧平滑滚轮；手机端按节点吸附直接由缓动曲线驱动，无二次弹簧延迟）+ 进场迈步 */
+  const qDepthRaw = useTransform(
     q,
     mobile ? MOBILE_CAM_Z_KEYS : CAM_Z_KEYS,
     mobile ? MOBILE_CAM_Z_VALS : CAM_Z_VALS,
   );
-  const qDepthSoft = useSpring(qDepth, camSpring);
+  const qDepthSpring = useSpring(qDepthRaw, { stiffness: 60, damping: 20, mass: 0.9 });
+  const qDepthSoft = mobile ? qDepthRaw : qDepthSpring;
   const camDepth = useTransform([qDepthSoft, introZ], (v: number[]) => v[0] + v[1]);
-  /* 相机横向：开头沿墙向右平移到走廊中轴（与深度同参数的弹簧，两者步调一致） */
-  const qX = useTransform(q, CAM_X_KEYS, CAM_X_VALS);
-  const camX = useSpring(qX, camSpring);
+  /* 相机横向：开头沿墙向右平移到走廊中轴 */
+  const qXRaw = useTransform(q, CAM_X_KEYS, CAM_X_VALS);
+  const qXSpring = useSpring(qXRaw, { stiffness: 60, damping: 20, mass: 0.9 });
+  const camX = mobile ? qXRaw : qXSpring;
 
   /* 到站转头：整幅走廊（角线、尽头墙、柱、灯、展板一起）平移 */
   const turnX = useTransform(camDepth, (cz) => camTurnOf(cz, mobile) * frame.g);
@@ -1836,6 +1832,15 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
 export default function LabPage() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({ target: scrollRef });
+  const [mobileView, setMobileView] = useState(() => isMobileView());
+  useEffect(() => {
+    const onResize = () => setMobileView(isMobileView());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const mobileQ = useMotionValue(0);
+  const mobileStepRef = useRef(0);
+  const activeProgress = mobileView ? mobileQ : scrollYProgress;
 
   /* 画廊是整页滚动，原生滚动条会露在右边；和 Life 一样把它藏掉（Lenis 照常工作） */
   useEffect(() => {
@@ -1915,7 +1920,7 @@ export default function LabPage() {
     }, 400);
   };
 
-  useMotionValueEvent(scrollYProgress, "change", (p) => {
+  useMotionValueEvent(activeProgress, "change", (p) => {
     /* 按"停留位附近"判定当前站 */
     let idx = 0;
     BEATS.forEach((b, i) => {
@@ -1929,7 +1934,7 @@ export default function LabPage() {
   const [inCorridor, setInCorridor] = useState(false);
   useReportDarkNav(!introPlaying && inCorridor);
   useEffect(() => {
-    if (!isMobileView()) return;
+    if (!mobileView) return;
     if (open) {
       setMobileThemeColor("#262422", "#262422");
     } else if (introPlaying) {
@@ -1939,7 +1944,7 @@ export default function LabPage() {
     } else {
       setMobileThemeColor("#FEF0C1", "#FEF0C1");
     }
-  }, [introPlaying, inCorridor, open]);
+  }, [mobileView, introPlaying, inCorridor, open]);
 
   /* 走进走廊尽头的门回首页：复刻 Life 页进 Lab 门的同款镜头推进 + 暖光漫满过渡 */
   const navigate = useNavigate();
@@ -1950,8 +1955,141 @@ export default function LabPage() {
   const [homeEntry, setHomeEntry] = useState<{ cx: number; cy: number } | null>(null);
   const homeGoTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(homeGoTimer.current), []);
-  /* 手机视图下支持左右/上下划动推进画廊走廊（限制最大松手初速度为 32px/帧，丝滑减速且不会一滑到底） */
-  useMobileHorizontalDrag(!introPlaying && !open && !homeEntry, 32);
+
+  /* 手机端按节点吸附步进：每次左右或上下滑动平稳推进 1 个展位节点（共 6 个节点：0 入口 → 1~4 展位 → 5 尽头门） */
+  useEffect(() => {
+    if (!mobileView || introPlaying || open || homeEntry) return;
+
+    let activeDrag = false;
+    let lockedAxis: "x" | "y" | null = null;
+    let startX = 0;
+    let startY = 0;
+    let lastPos = 0;
+    let lastTime = 0;
+    let instVel = 0;
+    let dragPx = 0;
+    let animCtrl: ReturnType<typeof animate> | null = null;
+
+    const snapTo = (targetIdx: number) => {
+      const clamped = Math.max(0, Math.min(MOBILE_SNAP_Q.length - 1, targetIdx));
+      const fromIdx = mobileStepRef.current;
+      mobileStepRef.current = clamped;
+      const targetQ = MOBILE_SNAP_Q[clamped];
+      const curQ = mobileQ.get();
+      const rem = Math.abs(targetQ - curQ);
+      if (rem < 0.001) {
+        mobileQ.set(targetQ);
+        return;
+      }
+      const refFrom = fromIdx !== clamped ? fromIdx : Math.max(0, clamped - 1);
+      const fullSpan = Math.abs(MOBILE_SNAP_Q[clamped] - MOBILE_SNAP_Q[refFrom]) || 0.2;
+      const baseDur = fromIdx === 0 || clamped === 0 ? 0.82 : 0.56;
+      const dur = Math.max(0.24, Math.min(0.85, baseDur * (rem / fullSpan)));
+      animCtrl?.stop();
+      animCtrl = animate(mobileQ, targetQ, {
+        duration: dur,
+        ease: [0.22, 1, 0.36, 1],
+      });
+    };
+
+    const start = (x: number, y: number) => {
+      activeDrag = true;
+      lockedAxis = null;
+      startX = x;
+      startY = y;
+      lastPos = 0;
+      lastTime = performance.now();
+      instVel = 0;
+      dragPx = 0;
+    };
+
+    const move = (x: number, y: number, prevent?: () => void) => {
+      if (!activeDrag) return;
+      const dx = x - startX;
+      const dy = y - startY;
+      if (!lockedAxis) {
+        if (Math.hypot(dx, dy) < 7) return;
+        lockedAxis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+        lastPos = lockedAxis === "x" ? -dx : -dy;
+        lastTime = performance.now();
+        animCtrl?.stop();
+      }
+      prevent?.();
+      const curPos = lockedAxis === "x" ? -dx : -dy;
+      const now = performance.now();
+      const dt = Math.max(8, now - lastTime);
+      instVel = (curPos - lastPos) / dt;
+      lastPos = curPos;
+      lastTime = now;
+      dragPx = curPos;
+
+      const curIdx = mobileStepRef.current;
+      const baseQ = MOBILE_SNAP_Q[curIdx];
+      if (dragPx >= 0) {
+        const nextQ = MOBILE_SNAP_Q[Math.min(MOBILE_SNAP_Q.length - 1, curIdx + 1)];
+        const k = Math.min(1, dragPx / 240);
+        mobileQ.set(baseQ + (nextQ - baseQ) * k);
+      } else {
+        const prevQ = MOBILE_SNAP_Q[Math.max(0, curIdx - 1)];
+        const k = Math.min(1, -dragPx / 240);
+        mobileQ.set(baseQ - (baseQ - prevQ) * k);
+      }
+    };
+
+    const end = () => {
+      if (!activeDrag) return;
+      activeDrag = false;
+      if (!lockedAxis) return;
+      const curIdx = mobileStepRef.current;
+      const stale = performance.now() - lastTime > 80;
+      const v = stale ? 0 : instVel;
+      let targetIdx = curIdx;
+      if (dragPx > 32 || (dragPx > 10 && v > 0.22)) {
+        targetIdx = Math.min(MOBILE_SNAP_Q.length - 1, curIdx + 1);
+      } else if (dragPx < -32 || (dragPx < -10 && v < -0.22)) {
+        targetIdx = Math.max(0, curIdx - 1);
+      }
+      snapTo(targetIdx);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        move(e.touches[0].clientX, e.touches[0].clientY, () => {
+          if (e.cancelable) e.preventDefault();
+        });
+      }
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) start(e.clientX, e.clientY);
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (activeDrag) move(e.clientX, e.clientY, () => e.preventDefault());
+    };
+
+    const prevTouchAction = document.documentElement.style.touchAction;
+    document.documentElement.style.touchAction = "none";
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", end, { passive: true });
+    window.addEventListener("touchcancel", end, { passive: true });
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", end);
+    return () => {
+      animCtrl?.stop();
+      document.documentElement.style.touchAction = prevTouchAction;
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", end);
+      window.removeEventListener("touchcancel", end);
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", end);
+    };
+  }, [mobileView, introPlaying, open, homeEntry, mobileQ]);
 
   const enterHomeDoor = (r: DOMRect) => {
     if (open || homeEntry) return;
@@ -1988,16 +2126,16 @@ export default function LabPage() {
       ref={scrollRef}
       className="relative"
       data-lab-open={open ? open.project.id : ""}
-      style={{ height: `calc(${SCROLL_LEN}px + 100vh)` }}
+      style={{ height: mobileView ? "100dvh" : `calc(${SCROLL_LEN}px + 100vh)` }}
     >
       <div
         className="sticky top-0 h-screen overflow-hidden"
         style={{
-          height: isMobileView() ? "100dvh" : undefined,
+          height: mobileView ? "100dvh" : undefined,
           background: "#FEF0C1",
         }}
         onPointerMove={(e) => {
-          if (!homeEntry && !isMobileView()) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
+          if (!homeEntry && !mobileView) parallaxX.set((e.clientX / window.innerWidth - 0.5) * -14);
         }}
         onPointerLeave={() => parallaxX.set(0)}
       >
@@ -2010,7 +2148,7 @@ export default function LabPage() {
           {/* 假透视走廊（含入口墙）；外层套呼吸/视差偏移 */}
           <motion.div className="absolute inset-0" style={{ x: headX, y: headY }}>
             <FakeCorridor
-              q={scrollYProgress}
+              q={activeProgress}
               introZ={introZ}
               active={active}
               paintingHidden={introPlaying}
