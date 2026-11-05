@@ -1358,7 +1358,7 @@ function FrameWall({
   }, [canPick]);
 
   return (
-    <div className="sticky top-0 h-screen overflow-hidden">
+    <div className="sticky top-0 overflow-hidden" style={{ height: vh }}>
       {/* 背景和页顶那屏一模一样（同一套缩放、手机端对准 335*markU、桌面端对准屏中）：有一只飞回去时只淡画框，墙和水印不动 */}
       <Watermark u={markU} cy={mobile ? 335 * markU : vh / 2} />
 
@@ -1804,8 +1804,10 @@ export function DetailPage({
     asideY: mobile ? vh * 0.19 : vh * 0.25,
     photoAt,
     wallTop,
-    landStart: Math.max(photoAt + 1, wallTop - vh * 0.6),
-    landEnd: wallTop + vh * WALL_LAND * 0.7,
+    landStart: mobile
+      ? Math.max(asideEnd + 1, wallTop - vh * 0.75)
+      : Math.max(photoAt + 1, wallTop - vh * 0.6),
+    landEnd: mobile ? Math.max(asideEnd + 2, wallTop - 2) : wallTop + vh * WALL_LAND * 0.7,
     heroW: hero.w,
     wallW: wall.wallW,
     slotX: wall.slotX(index),
@@ -1954,8 +1956,8 @@ export function DetailPage({
             />
           ))}
 
-          {/* 底部画框墙（桌面端四框横排，手机端四框垂直单列排布；顶部主角画框随滚动落入空位，点击任一框其余隐藏、该框飞回顶部 WOOLAB 标志位） */}
-          <section className="relative" style={{ height: vh * (1 + WALL_LAND) }}>
+          {/* 底部画框墙（桌面端四框横排，手机端四框垂直单列排布且高度正好一屏，滑到底即固定停住不再下滚） */}
+          <section className="relative" style={{ height: mobile ? vh : vh * (1 + WALL_LAND) }}>
             <FrameWall
               u={uc}
               markU={u}
