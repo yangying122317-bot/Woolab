@@ -1217,11 +1217,11 @@ const WALL_GAP_MIN = 1.15;
 function wallLayout(vw: number, vh: number) {
   const n = labProjects.length;
   if (vw < 560) {
-    const wallW = Math.min(vw * 0.23, (vh * 0.145 * FRAME_W) / FRAME_H);
+    const wallW = Math.min(vw * 0.32, ((vh - 76) / 4.16) * (FRAME_W / FRAME_H));
     const wallH = (wallW * FRAME_H) / FRAME_W;
-    const stepY = Math.max(wallH + 46, vh * 0.215);
+    const stepY = wallH + Math.max(10, (vh - 74 - wallH * 4) / 3.2);
     const totalSpan = (n - 1) * stepY;
-    const startY = (vh - totalSpan) / 2 + 18;
+    const startY = 30 + (vh - 30 - totalSpan) / 2;
     const slotX = () => vw / 2;
     const slotY = (i: number) => startY + i * stepY;
     return { wallW, gap: stepY, slotX, slotY };
@@ -1377,31 +1377,96 @@ function FrameWall({
             className="absolute"
             style={{ left: slotX(i) - W / 2, top: slotY(i) - H / 2, width: W, height: H }}
           >
-            {/* 手写名字 + 小箭头：hover 的那只亮（没 hover 时当前这只亮），其它暗 */}
-            <motion.div
-              className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
-              style={{ top: mobile ? -38 : -78 * u }}
-              animate={{ opacity: lit ? 1 : 0.45 }}
-              transition={{ duration: 0.25 }}
-            >
-              <p
-                className="font-hand whitespace-nowrap text-white"
-                style={{ fontSize: mobile ? 13 : 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
+            {/* 手写名字 + 小箭头：桌面端在画框正上方；手机端第 1、3 个在画框左侧，第 2、4 个在画框右侧 */}
+            {mobile ? (
+              <motion.div
+                className="pointer-events-none absolute top-1/2 flex items-center"
+                style={
+                  i % 2 === 0
+                    ? { right: "calc(100% + 8px)", transform: "translateY(-50%)", gap: 5 }
+                    : { left: "calc(100% + 8px)", transform: "translateY(-50%)", gap: 5 }
+                }
+                animate={{ opacity: lit ? 1 : 0.45 }}
+                transition={{ duration: 0.25 }}
               >
-                {pick(p.wall?.label ?? p.title)}
-              </p>
-              <img
-                src={`${A}/arrow-down.svg`}
-                alt=""
-                draggable={false}
-                style={{
-                  width: mobile ? 8 : 11 * u,
-                  height: mobile ? 17 : 25 * u,
-                  marginTop: mobile ? 3 : 10 * u,
-                  transform: "rotate(14deg)",
-                }}
-              />
-            </motion.div>
+                {i % 2 === 0 ? (
+                  <>
+                    <p
+                      className="font-hand whitespace-nowrap text-white"
+                      style={{ fontSize: 14.5, lineHeight: 1.2, transform: "rotate(-2.5deg)" }}
+                    >
+                      {pick(p.wall?.label ?? p.title)}
+                    </p>
+                    <div
+                      className="flex shrink-0 items-center justify-center"
+                      style={{ width: 18, height: 12 }}
+                    >
+                      <img
+                        src={`${A}/arrow-down.svg`}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          width: 8.5,
+                          height: 19,
+                          maxWidth: "none",
+                          transform: "rotate(-90deg)",
+                        }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="flex shrink-0 items-center justify-center"
+                      style={{ width: 18, height: 12 }}
+                    >
+                      <img
+                        src={`${A}/arrow-down.svg`}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          width: 8.5,
+                          height: 19,
+                          maxWidth: "none",
+                          transform: "scaleX(-1) rotate(-90deg)",
+                        }}
+                      />
+                    </div>
+                    <p
+                      className="font-hand whitespace-nowrap text-white"
+                      style={{ fontSize: 14.5, lineHeight: 1.2, transform: "rotate(-2.5deg)" }}
+                    >
+                      {pick(p.wall?.label ?? p.title)}
+                    </p>
+                  </>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
+                style={{ top: -78 * u }}
+                animate={{ opacity: lit ? 1 : 0.45 }}
+                transition={{ duration: 0.25 }}
+              >
+                <p
+                  className="font-hand whitespace-nowrap text-white"
+                  style={{ fontSize: 16 * u, lineHeight: 1.2, transform: "rotate(-3deg)" }}
+                >
+                  {pick(p.wall?.label ?? p.title)}
+                </p>
+                <img
+                  src={`${A}/arrow-down.svg`}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: 11 * u,
+                    height: 25 * u,
+                    marginTop: 10 * u,
+                    transform: "rotate(14deg)",
+                  }}
+                />
+              </motion.div>
+            )}
 
             {/* 显示 / 隐藏不带过渡：主角落到这格的那一帧直接换手，两边位置重合，不能有淡入 */}
             <div className="absolute inset-0" style={{ visibility: shown ? "visible" : "hidden" }}>
@@ -1908,7 +1973,7 @@ export function DetailPage({
             left: mobile ? `calc(${MU} * 16)` : 25 * u,
             top: `calc(${MU} * 26)`,
             transform: "translateY(-50%)",
-            fontSize: mobile ? `calc(${MU} * 12)` : 12 * u,
+            fontSize: mobile ? `calc(${MU} * ${lang === "en" ? 10 : 12})` : 12 * u,
             padding: mobile ? "8px 8px 8px 0" : undefined,
             touchAction: "manipulation",
             WebkitTapHighlightColor: "transparent",
