@@ -689,7 +689,7 @@ export default function LifePage() {
                 width: 15,
                 height: 20,
                 rotate: -90,
-                background: "#1F2428",
+                background: "#FFFFFF",
                 WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
                 maskImage: "url(/assets/lab/scroll-arrow.svg)",
                 WebkitMaskSize: "100% 100%",
@@ -704,8 +704,8 @@ export default function LifePage() {
               className="font-hand whitespace-nowrap"
               style={{
                 fontSize: 16,
-                color: "#1F2428",
-                WebkitTextStroke: "0.8px #1F2428",
+                color: "#FFFFFF",
+                WebkitTextStroke: "0.8px #FFFFFF",
               }}
             >
               {t("life.entry.swipe")}
