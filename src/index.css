@@ -44,7 +44,7 @@
 /** 喜脉喜欢体的字形只占 em 的八成、笔画又细，放大 130% 才和 Nothing You Could Do 同样大小 */
 @font-face {
   font-family: "HandZh";
-  src: url("/assets/fonts/hand-zh.woff2?v=20261103a") format("woff2");
+  src: url("/assets/fonts/hand-zh.woff2?v=20261105a") format("woff2");
   size-adjust: 130%;
   font-display: swap;
 }

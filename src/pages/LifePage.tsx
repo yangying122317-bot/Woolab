@@ -678,10 +678,10 @@ export default function LifePage() {
           />
         )}
 
-        {/* 手机端底部向右滑动提示：位于底部进度条正上方，手指往右滑开后自动淡出 */}
+        {/* 手机端底部向右滑动提示：位于底部居中，手指往右滑开后自动淡出 */}
         {mobileView && ready && !checklistOpen && !drawerShown && !focus && !labEntry && (
           <motion.div
-            className="pointer-events-none absolute inset-x-0 bottom-11 z-20 flex items-center justify-center"
+            className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex items-center justify-center"
             style={{ gap: 8, opacity: mobileSwipeOpacity }}
           >
             <motion.div
@@ -708,18 +708,20 @@ export default function LifePage() {
                 WebkitTextStroke: "0.8px #1F2428",
               }}
             >
-              {t("lab.entry.swipe")}
+              {t("life.entry.swipe")}
             </span>
           </motion.div>
         )}
 
-        {/* 底部进度条 */}
-        <div className="absolute inset-x-0 bottom-5 z-20 mx-auto w-40 rounded-full bg-black/10">
-          <motion.div
-            className="h-1.5 rounded-full bg-neutral-700/70"
-            style={{ scaleX: scrollYProgress, transformOrigin: "0 50%" }}
-          />
-        </div>
+        {/* 底部进度条（仅桌面端显示） */}
+        {!mobileView && (
+          <div className="absolute inset-x-0 bottom-5 z-20 mx-auto w-40 rounded-full bg-black/10">
+            <motion.div
+              className="h-1.5 rounded-full bg-neutral-700/70"
+              style={{ scaleX: scrollYProgress, transformOrigin: "0 50%" }}
+            />
+          </div>
+        )}
 
         {/* 墙上的清单不在画面里时，右下角浮出它的小缩影当入口 */}
         <AnimatePresence>
