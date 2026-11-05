@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  AnimatePresence,
   animate,
   motion,
   useMotionValue,
@@ -14,7 +15,7 @@ import MarkedText, { CIRCLE_AR, UNDERLINE_AR, decoDelay } from "./MarkedText";
 import { aboutNext, type AboutShot } from "../../data/aboutShots";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { setMobileThemeColor, useReportPlainNav } from "../../state/chrome";
-import { playNavigate, playPaperSnap } from "../../audio/sfx";
+import { playNavigate } from "../../audio/sfx";
 
 /**
  * About 页最后翻过去的那页（Figma Frame 1 / 文案表第 06 条 What's Next）：
@@ -135,8 +136,6 @@ export default function NextPage({
 
   const leaving = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
   /* 相纸全落定之前，动画带着各自的延时；落定后 hover 的进出要即时 */
   const [landed, setLanded] = useState(false);
 
@@ -157,18 +156,26 @@ export default function NextPage({
     window.setTimeout(onBack, LEAVE_T * 1000 + 40);
   };
 
-  /* 往上滚 / 往上划 / 方向键 → 退回相机页 */
+  /* 往上滚 / 手机端上下划动 / 方向键 → 退回相机页 */
   useEffect(() => {
+    const enterAt = performance.now();
+    const canLeave = () => performance.now() - enterAt > 450;
     const onWheel = (e: WheelEvent) => {
-      if (e.deltaY < -24) leave();
+      if (canLeave() && e.deltaY < -8) leave();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowUp" || e.key === "PageUp") leave();
     };
     let ty = 0;
-    const onTs = (e: TouchEvent) => (ty = e.touches[0].clientY);
+    let tx = 0;
+    const onTs = (e: TouchEvent) => {
+      ty = e.touches[0].clientY;
+      tx = e.touches[0].clientX;
+    };
     const onTe = (e: TouchEvent) => {
-      if (e.changedTouches[0].clientY - ty > 40) leave();
+      const dy = e.changedTouches[0].clientY - ty;
+      const dx = e.changedTouches[0].clientX - tx;
+      if (canLeave() && Math.abs(dy) > 36 && Math.abs(dy) > Math.abs(dx)) leave();
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKey);
@@ -270,14 +277,13 @@ export default function NextPage({
             {pick(aboutNext.sub)}
           </motion.div>
 
-          {/* 5 张相纸：按拍摄顺序一张张从上面掉下来；hover 或点击选中的那张浮到最前面，点击后在相纸下方白边写上标题 */}
+          {/* 5 张相纸：按拍摄顺序一张张从上面掉下来；hover 的那张浮到最前面并在下方白边浮现标题，移开即收起 */}
           {activeCards.map((c, i) => {
             const shot = shots[c.shot];
             const order = c.shot;
             const baseScale = c.scale ?? 1;
             const fromRot = c.rot + (c.rot >= 0 ? 16 : -16);
-            const isFocused = hover === i || (hover === null && selected === i);
-            const showTitle = revealed.has(i);
+            const isHovered = hover === i;
             return (
               <motion.div
                 key={shot.id}
@@ -287,14 +293,14 @@ export default function NextPage({
                   top: c.cy - CARD_H / 2,
                   width: CARD_W,
                   height: CARD_H,
-                  zIndex: hover === i ? 12 : selected === i ? 11 : i + 1,
+                  zIndex: isHovered ? 10 : i + 1,
                   filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.14))",
                 }}
                 initial={{ y: -(top / s + c.cy + CARD_H), rotate: fromRot, scale: baseScale }}
                 animate={{
-                  y: isFocused ? -6 : 0,
-                  rotate: isFocused ? c.rot * 0.35 : c.rot,
-                  scale: isFocused ? baseScale * 1.06 : baseScale,
+                  y: isHovered ? -6 : 0,
+                  rotate: isHovered ? c.rot * 0.35 : c.rot,
+                  scale: isHovered ? baseScale * 1.06 : baseScale,
                   transition: landed
                     ? { type: "spring", stiffness: 260, damping: 22 }
                     : {
@@ -311,17 +317,7 @@ export default function NextPage({
                 }}
                 onHoverStart={() => landed && setHover(i)}
                 onHoverEnd={() => setHover((h) => (h === i ? null : h))}
-                onClick={() => {
-                  if (!landed) return;
-                  playPaperSnap();
-                  setSelected(i);
-                  setRevealed((prev) => {
-                    if (prev.has(i)) return prev;
-                    const next = new Set(prev);
-                    next.add(i);
-                    return next;
-                  });
-                }}
+                onClick={() => landed && setHover((h) => (h === i ? null : i))}
               >
                 <div className="absolute overflow-hidden" style={{ ...box(WINDOW), background: "#F3F1EA" }}>
                   <img
@@ -343,26 +339,29 @@ export default function NextPage({
                     height: CARD_H + FRAME_PAD * 2,
                   }}
                 />
-                {showTitle && (
-                  <motion.div
-                    key={`title-${lang}`}
-                    className="font-hand pointer-events-none absolute flex items-center justify-center whitespace-nowrap text-center"
-                    style={{
-                      left: WINDOW.x,
-                      width: WINDOW.w,
-                      top: WINDOW.y + WINDOW.h + 2,
-                      height: CARD_H - (WINDOW.y + WINDOW.h) - 4,
-                      fontSize: lang === "zh" ? 15 : 14,
-                      color: "#1A1817",
-                      WebkitTextStroke: "0.35px #1A1817",
-                    }}
-                    initial={{ clipPath: "inset(-10% 100% -10% -10%)", opacity: 0 }}
-                    animate={{ clipPath: "inset(-10% -10% -10% -10%)", opacity: 1 }}
-                    transition={{ duration: 0.42, ease: "easeOut" }}
-                  >
-                    {pick(shot.title)}
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {isHovered && (
+                    <motion.div
+                      key={`title-${lang}`}
+                      className="font-hand pointer-events-none absolute flex items-center justify-center whitespace-nowrap text-center"
+                      style={{
+                        left: WINDOW.x,
+                        width: WINDOW.w,
+                        top: WINDOW.y + WINDOW.h + 2,
+                        height: CARD_H - (WINDOW.y + WINDOW.h) - 4,
+                        fontSize: lang === "zh" ? 15 : 14,
+                        color: "#1A1817",
+                        WebkitTextStroke: "0.35px #1A1817",
+                      }}
+                      initial={{ clipPath: "inset(-10% 100% -10% -10%)", opacity: 0 }}
+                      animate={{ clipPath: "inset(-10% -10% -10% -10%)", opacity: 1 }}
+                      exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                      transition={{ duration: 0.36, ease: "easeOut" }}
+                    >
+                      {pick(shot.title)}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             );
           })}

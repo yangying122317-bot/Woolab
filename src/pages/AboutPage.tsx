@@ -495,17 +495,15 @@ export default function AboutPage() {
         )}
       </AnimatePresence>
 
-      {/* 翻过去的 What's Next：蓝页盖在相机页上；退回去之后卸掉，手机端自动恢复第 5 张相纸 */}
+      {/* 翻过去的 What's Next：蓝页盖在相机页上；退回去之后卸掉并恢复第 5 张相纸 */}
       {flipped && (
         <NextPage
           vp={vp}
           shots={aboutShots}
           onBack={() => {
             setFlipped(false);
-            if (mobile) {
-              setPhase("eject");
-              playEject(EJECT_T);
-            }
+            setPhase("eject");
+            playEject(EJECT_T);
           }}
         />
       )}

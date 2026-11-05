@@ -49,7 +49,7 @@ export const aboutShots: AboutShot[] = [
   {
     id: "meelo",
     photo: "/assets/about/photo-window.webp",
-    title: { zh: "Meelo", en: "Meet Meelo" },
+    title: { zh: "认识 Meelo", en: "Meet Meelo" },
     note: {
       left: {
         zh: "现在，*Meelo* 住在这里。",
