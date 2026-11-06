@@ -128,9 +128,9 @@ export default function HandHint({
                 y: ["0vh", "-0.7vh", "0vh"],
               }}
               transition={{
-                clipPath: { duration: 0.5, ease: "easeOut" },
+                clipPath: { duration: 0.25, ease: "easeOut" },
                 y: {
-                  delay: draw ? 0.7 : 0.2,
+                  delay: draw ? 0.35 : 0.15,
                   duration: 1.5,
                   repeat: Infinity,
                   ease: "easeInOut",
@@ -156,7 +156,7 @@ export default function HandHint({
               }}
               initial={{ clipPath: draw ? "inset(-10% 100% -10% -10%)" : "inset(-10% -10% -10% -10%)" }}
               animate={{ clipPath: "inset(-10% -10% -10% -10%)" }}
-              transition={{ delay: 0.3, duration: 0.5, ease: "easeInOut" }}
+              transition={{ delay: 0.08, duration: 0.35, ease: "easeInOut" }}
             >
               {text}
             </motion.div>

@@ -55,9 +55,13 @@ export const ABOUT_FIRST = [
   `${A}/frame.webp`,
   `${A}/mark.webp`,
   `${A}/noise-cream.png`,
+  `${A}/arrow-l.png`,
+  `${A}/arrow-r.png`,
+  "/assets/lab/scroll-arrow.svg",
+  "/assets/lab/detail/arrow-down.svg",
   aboutShots[0].photo,
 ];
-export const ABOUT_REST = [...aboutShots.slice(1).map((s) => s.photo), `${A}/noise-blue.png`, `${A}/arrow-l.png`, `${A}/arrow-r.png`];
+export const ABOUT_REST = [...aboutShots.slice(1).map((s) => s.photo), `${A}/noise-blue.png`];
 
 let contact: Promise<void> | null = null;
 let about: Promise<void> | null = null;
@@ -86,6 +90,9 @@ export const LAB_INTRO = [
   "/assets/lab/entrance-wall.webp",
   "/assets/lab/prop-statue.webp",
   "/assets/lab/gallery-lamp-entrance.webp",
+  "/assets/lab/scroll-arrow.svg",
+  "/assets/lab/detail/arrow-front.svg",
+  "/assets/lab/detail/arrow-down.svg",
 ];
 
 /** 从别的页静默预热：等首页与 Life 首屏就位后按顺序排队预加载 Lab、About、Contact 首屏 */

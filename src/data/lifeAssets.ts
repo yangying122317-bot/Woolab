@@ -123,6 +123,9 @@ export const lifeFirstAssets: readonly string[] = [
   "/assets/life/list/tape-br.png",
   "/assets/life/list/tape-sheet.png",
   "/assets/life/list/tape-tr.png",
+  "/assets/lab/scroll-arrow.svg",
+  "/assets/lab/detail/arrow-front.svg",
+  "/assets/lab/detail/arrow-down.svg",
 ];
 
 /** 首屏交互：36 个文件 */

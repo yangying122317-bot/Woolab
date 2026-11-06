@@ -19,9 +19,17 @@ def files(sub, skip=()):
     return out
 
 
-first = ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"] + files(
-    "seg01", skip=("dress-anim", "record-anim")
-) + files("seg02", skip=("paint-anim",)) + files("list")
+first = (
+    ["/assets/life/room-bg-tile.webp", "/assets/life/room-floor-tile.webp"]
+    + files("seg01", skip=("dress-anim", "record-anim"))
+    + files("seg02", skip=("paint-anim",))
+    + files("list")
+    + [
+        "/assets/lab/scroll-arrow.svg",
+        "/assets/lab/detail/arrow-front.svg",
+        "/assets/lab/detail/arrow-down.svg",
+    ]
+)
 interaction = files("seg01/record-anim")
 rest = files("seg03")
 

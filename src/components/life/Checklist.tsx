@@ -190,9 +190,10 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
 
   /* 面板一挂上就把图取回来解码好，第一次推出来不闪 */
   useEffect(() => {
-    const imgs = PRELOAD.map((n) => {
+    const urls = [...PRELOAD.map((n) => `${A}/${n}`), "/assets/lab/scroll-arrow.svg"];
+    const imgs = urls.map((u) => {
       const im = new Image();
-      im.src = `${A}/${n}`;
+      im.src = u;
       im.decode().catch(() => {});
       return im;
     });

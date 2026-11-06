@@ -7,7 +7,7 @@ import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../components/IntroLoa
 import { config } from "../config";
 import { getViewWidth } from "../device";
 import { A, CARD_H, CARD_W, FRAME_PAD, WINDOW, box, noiseBg, type Box } from "../components/about/geom";
-import MarkedText, { decoDelay } from "../components/about/MarkedText";
+import MarkedText from "../components/about/MarkedText";
 import NextPage from "../components/about/NextPage";
 import { setMobileThemeColor } from "../state/chrome";
 import { whenAboutReady } from "../data/pageAssets";
@@ -380,8 +380,6 @@ export default function AboutPage() {
                   const topLines = topText.split("\n").length;
                   const noteFontSize = 14.5;
                   const topY = 6 - topLines * (noteFontSize * 1.36);
-                  const topArrowDelay = decoDelay(topText, 0) + 0.15;
-                  const botArrowDelay = decoDelay(botText, 0.35) + 0.15;
                   return (
                     <>
                       <Note
@@ -393,8 +391,8 @@ export default function AboutPage() {
                         hand="font-hand"
                         delay={0}
                       />
-                      <VerticalArrow x={360} y={13} dir="down" delay={topArrowDelay} />
-                      <VerticalArrow x={360} y={396} dir="up" delay={botArrowDelay} />
+                      <VerticalArrow x={360} y={13} dir="down" delay={0.12} />
+                      <VerticalArrow x={360} y={396} dir="up" delay={0.47} />
                       <Note
                         text={botText}
                         cx={360}
@@ -635,7 +633,6 @@ function Note({
   arrow?: { src: string; box: Box; from: "left" | "right" };
   delay: number;
 }) {
-  const decoAt = decoDelay(text, delay);
   const arrowWipe = arrow
     ? {
         hidden: {
@@ -664,7 +661,7 @@ function Note({
           style={box(arrow.box)}
           initial={arrowWipe.hidden}
           animate={arrowWipe.shown}
-          transition={{ duration: 0.45, delay: decoAt + 0.2, ease: "easeOut" }}
+          transition={{ duration: 0.35, delay: delay + 0.12, ease: "easeOut" }}
         >
           <img src={arrow.src} alt="" draggable={false} className="block h-full w-full max-w-none" />
         </motion.div>
