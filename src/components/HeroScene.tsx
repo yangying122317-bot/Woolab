@@ -226,14 +226,14 @@ const MOBILE_SPRITES = {
   sheep: {
     src: "/assets/hero-sheep-still.webp",
     anim: "/assets/hero-sheep-idle.webp",
-    x: 688,
-    y: 683,
+    x: 696,
+    y: 692,
     w: 204,
   },
   sheepShadow: {
     src: "/assets/hero-sheep-shadow.png",
-    x: 691,
-    y: 684,
+    x: 699,
+    y: 693,
     w: 197,
   },
   mailbox: {
@@ -343,6 +343,7 @@ export const MOBILE_HERO_PRELOAD: string[] = [
   SPRITES.woolab.off.src,
   SPRITES.woolab.on.src,
   SPRITES.doorLit.src,
+  ...DOOR_OPEN_ASSETS,
   SPRITES.board.src,
   SPRITES.bush.src,
   SPRITES.bushLeft.src,
@@ -555,8 +556,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     };
 
     const hotspots: HeroHotspot[] = [
-      { id: "life", path: "/life", labelKey: "nav.life", ...mRect(595, 515, 215, 255) },
-      { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(688, sheepY, 204, 315) },
+      { id: "life", path: "/life", labelKey: "nav.life", ...mRect(592, 515, 224, 172) },
+      { id: "sheep", path: "", labelKey: "nav.characters", ...mRect(708, sheepY + 30, 184, 285) },
       { id: "about", path: "/about", labelKey: "nav.about", ...mRect(605, 345, 230, 165) },
       { id: "lab", path: "/lab", labelKey: "nav.lab", ...mRect(sprites.board.x - 4, 700, 172, 140) },
       { id: "contact", path: "/contact", labelKey: "nav.contact", ...mRect(sprites.mailbox.headX - 5, 610, 120, 230) },
@@ -956,8 +957,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
 
     // 推门的同时确保 Life 第一屏全部图层解码完毕
     void preloadLifeFirst();
-    // 万一开门图还没到（没预热成功），最多等 600ms 让门框和门板一起出现，别让门板先滑、露出底图的闭门
-    await Promise.race([loadImages(DOOR_OPEN_ASSETS), sleep(600)]);
+    // 确保开门三件套（门框暖光底图 + 左右门板）全部解码就绪再挂载开门动画，杜绝首次开门露出底下静态关门导致门板重叠
+    await Promise.race([loadImages(DOOR_OPEN_ASSETS), sleep(1200)]);
     setEntering(true);
     setHovered(null);
     // 收回热区上的焦点，避免浏览器在缩放时自动滚动容器去追焦点元素
@@ -1277,8 +1278,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
           {/* 点击大门后才挂载：门框 + 屋内暖光 + 向两侧滑开的门板 */}
           {entering && <DoorOpenSprite />}
 
-          {/* 大门：悬停时屋内亮灯（在 OPEN 吊牌下层） */}
-          <DoorGlowSprite lit={hovered === "life" && !entering} />
+          {/* 大门：悬停时屋内亮灯（在 OPEN 吊牌下层；开门瞬间立即隐藏，由滑动门板接管） */}
+          <DoorGlowSprite lit={hovered === "life" && !entering} hidden={entering} />
 
           {/* OPEN 吊牌：以挂点为轴摆动；开门过场时隐藏，由门板裁剪容器里的副本接替。
             出场时以挂点为原点弹出 */}
@@ -1338,6 +1339,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
           <NightLights
             on={(theme.lights || rain) && !entering && !(intro && !introGo)}
+            hideDoor={entering}
             delay={intro ? INTRO_AT.openSign + 0.6 : 0}
             signControls={signControls}
           />
@@ -1598,7 +1600,9 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             >
               {/* 名称标签：悬停或移动端巡演/点击时淡入带轻弹；小羊显示打招呼而不是栏目名 */}
               <span
-                className={`font-hand absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-neutral-800 shadow-md transition-all duration-300 ${
+                className={`font-hand absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-neutral-800 shadow-md transition-all duration-300 ${
+                  !cover && h.id === "sheep" ? "-top-9" : "-top-2"
+                } ${
                   cover ? "text-lg" : "text-base"
                 } ${
                   hovered === h.id
@@ -1791,10 +1795,12 @@ function ShootingStar({ shot }: { shot: Shot }) {
  */
 function NightLights({
   on,
+  hideDoor = false,
   delay,
   signControls,
 }: {
   on: boolean;
+  hideDoor?: boolean;
   delay: number;
   signControls: ReturnType<typeof useAnimationControls>;
 }) {
@@ -1817,7 +1823,12 @@ function NightLights({
         alt=""
         draggable={false}
         className="absolute select-none"
-        style={{ left: px(lit.x), top: py(lit.y), width: px(lit.w) }}
+        style={{
+          left: px(lit.x),
+          top: py(lit.y),
+          width: px(lit.w),
+          visibility: hideDoor ? "hidden" : "visible",
+        }}
       />
       <motion.img
         src={sign.src}
@@ -1829,6 +1840,7 @@ function NightLights({
           top: py(sign.y),
           width: px(sign.w),
           transformOrigin: "50% 8%",
+          visibility: hideDoor ? "hidden" : "visible",
         }}
         animate={signControls}
       />
@@ -2396,7 +2408,7 @@ function HotspotSprite({
  * 大门玻璃亮灯：悬停玻璃门时，屋内的灯"啪嗒"亮起——
  * 暖黄玻璃帧带一点闪烁地淡入；移开时灯光快速熄灭。
  */
-function DoorGlowSprite({ lit }: { lit: boolean }) {
+function DoorGlowSprite({ lit, hidden = false }: { lit: boolean; hidden?: boolean }) {
   const d = SPRITES.doorLit;
 
   return (
@@ -2409,6 +2421,7 @@ function DoorGlowSprite({ lit }: { lit: boolean }) {
         left: px(d.x),
         top: py(d.y),
         width: px(d.w),
+        visibility: hidden ? "hidden" : "visible",
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: lit ? [0, 0.55, 0.35, 1] : 0 }}
