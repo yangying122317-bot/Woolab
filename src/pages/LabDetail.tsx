@@ -1221,19 +1221,24 @@ const WALL_GAP_MIN = 1.15;
 /**
  * 墙上那排：
  * - 桌面端：四只框排成一行水平居中；
- * - 手机竖屏（< 560px）：改为单列 4 个垂直居中排布，每只框上方配手写标题与小箭头。
+ * - 手机竖屏（< 560px）：上方保留 WOOLAB GOODS 石刻背景（cy=335u），下方排成 2×2 两行两列网格。
  */
 function wallLayout(vw: number, vh: number) {
   const n = labProjects.length;
   if (vw < 560) {
-    const wallW = Math.min(vw * 0.32, ((vh - 76) / 4.16) * (FRAME_W / FRAME_H));
-    const wallH = (wallW * FRAME_H) / FRAME_W;
-    const stepY = wallH + Math.max(10, (vh - 74 - wallH * 4) / 3.2);
-    const totalSpan = (n - 1) * stepY;
-    const startY = 30 + (vh - 30 - totalSpan) / 2;
-    const slotX = () => vw / 2;
-    const slotY = (i: number) => startY + i * stepY;
-    return { wallW, gap: stepY, slotX, slotY };
+    const u = vw / 720;
+    const topBound = Math.max(435 * u, vh * 0.35);
+    const botBound = vh - 28;
+    const availH = Math.max(200, botBound - topBound);
+    const wallH = Math.min((vw * 0.35 * FRAME_H) / FRAME_W, availH * 0.44);
+    const wallW = (wallH * FRAME_W) / FRAME_H;
+    const remH = Math.max(16, availH - wallH * 2);
+    const cy0 = topBound + remH * 0.22 + wallH / 2;
+    const cy1 = cy0 + wallH + remH * 0.52;
+    const colGap = Math.max(wallW * 1.32, vw * 0.44);
+    const slotX = (i: number) => vw / 2 + ((i % 2) - 0.5) * colGap;
+    const slotY = (i: number) => (Math.floor(i / 2) === 0 ? cy0 : cy1);
+    return { wallW, gap: colGap, slotX, slotY };
   }
   const avail = vw - 2 * WALL_SIDE * boardUnits().u;
   let wallW = heroSize(vw, vh).w * WALL_K;
