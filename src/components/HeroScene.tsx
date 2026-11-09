@@ -1315,58 +1315,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             <WoolabSprite lit={hovered === "about"} />
           </IntroPop>
 
-          {/* 时段调色层：multiply 压暗/染色背景与建筑，线稿保持黑；进门时褪掉。
-            用 linear-gradient 而非纯色 background-color，防止移动端 Safari 状态栏取色器误抓 multiply 层的紫色 */}
-          <motion.div
-            className="pointer-events-none absolute"
-            style={{
-              left: "-60%",
-              right: "-60%",
-              top: cover ? 0 : "-50%",
-              bottom: cover ? 0 : "-150%",
-              backgroundImage: `linear-gradient(${theme.tint}, ${theme.tint})`,
-              mixBlendMode: "multiply",
-            }}
-            initial={false}
-            animate={{ opacity: entering ? 0 : theme.tintAlpha }}
-            transition={{
-              duration: entering ? 0.5 : TIME_FADE,
-              ease: "easeInOut",
-            }}
-          />
-
-          {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在建筑调色层上面、院子前景物件下面。
-            首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
-          <NightLights
-            on={(theme.lights || rain) && !entering && !(intro && !introGo)}
-            hideDoor={entering}
-            delay={intro ? INTRO_AT.openSign + 0.6 : 0}
-            signControls={signControls}
-          />
-
-          {/* 下雨天屋里的窗也亮着（三扇窗的玻璃染成暖黄，叠在底图上、位于邮筒等院子前景物件下层） */}
-          <WindowLights on={rain && !entering && !(intro && !introGo)} delay={intro ? INTRO_AT.openSign + 0.6 : 0} />
-
-          {/* 前景物件与落叶/萤火虫共用的等价调色滤镜（与 multiply 调色层逐像素等价，且让院子前景物件遮住后方窗户灯光） */}
-          {!entering && theme.tintAlpha > 0 && (
-            <svg width="0" height="0" className="absolute" aria-hidden>
-              <filter
-                id={tintFilterId}
-                x="-20%"
-                y="-20%"
-                width="140%"
-                height="140%"
-                colorInterpolationFilters="sRGB"
-              >
-                <feColorMatrix
-                  type="matrix"
-                  values={tintMatrix(theme.tint, theme.tintAlpha)}
-                />
-              </filter>
-            </svg>
-          )}
-
-          {/* 院子前景物件（树丛、小黑板、邮筒、小羊、小鸟）：位于窗户/大门亮光上层，避免后方窗户黄光压住前方邮筒或小羊 */}
+          {/* 院子前景物件（树丛、小黑板、小鸟等不与窗户灯光重叠的动态元素）：放在 multiply 调色层下方，由硬件混合层统一染色，免去 Safari 每帧重算多路 SVG 滤镜 */}
           <IntroPop
             play={intro}
             go={introGo}
@@ -1382,7 +1331,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                 top: py(sp.bushLeft.y),
                 width: px(sp.bushLeft.w),
                 transformOrigin: "50% 100%",
-                filter: tintFilter,
               }}
               animate={bushSway(1, 4.6, 0)}
               draggable={false}
@@ -1404,7 +1352,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                   top: py(sp.bushRight.y),
                   width: px(sp.bushRight.w),
                   transformOrigin: "50% 100%",
-                  filter: tintFilter,
                 }}
                 animate={bushSway(0.8, 5.4, 1.2)}
                 draggable={false}
@@ -1423,76 +1370,77 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               active={hovered === "lab"}
               motionSpec={HOVER_MOTION.lab}
               origin="50% 100%"
-              tintFilter={tintFilter}
-            />
-          </IntroPop>
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.mailbox}
-            origin={cover ? "84.4% 91%" : "65.1% 93%"}
-          >
-            <MailboxSprite
-              open={hovered === "contact"}
-              mailbox={sp.mailbox}
-              tintFilter={tintFilter}
             />
           </IntroPop>
 
-          {/* 邮箱前的灌木（盖在邮箱杆前面、小羊后面），跟着右边树丛一起摇 */}
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.bush}
-            origin={cover ? "80.9% 91%" : "61.9% 93%"}
-          >
-            <motion.img
-              src={sp.bush.src}
-              alt=""
-              className="pointer-events-none absolute select-none"
-              style={{
-                left: px(sp.bush.x),
-                top: py(sp.bush.y),
-                width: px(sp.bush.w),
-                transformOrigin: "50% 100%",
-                filter: tintFilter,
-              }}
-              animate={bushSway(0.8, 5.4, 1.2)}
-              draggable={false}
-            />
-          </IntroPop>
+          {cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.mailbox}
+              origin="84.4% 91%"
+            >
+              <MailboxSprite
+                open={hovered === "contact"}
+                mailbox={sp.mailbox}
+              />
+            </IntroPop>
+          )}
 
-          <IntroPop
-            play={intro}
-            go={introGo}
-            delay={INTRO_AT.sheep}
-            origin={cover ? "63.4% 91%" : "54.9% 110%"}
-          >
-            <img
-              src={sp.sheepShadow.src}
-              alt=""
-              className="pointer-events-none absolute select-none"
-              style={{
-                left: px(sp.sheepShadow.x),
-                top: py(sp.sheepShadow.y),
-                width: px(sp.sheepShadow.w),
-                filter: tintFilter,
-              }}
-              draggable={false}
-            />
-            <img
-              src={sheepAnim ? sp.sheep.anim : sp.sheep.src}
-              alt=""
-              className="pointer-events-none absolute select-none"
-              style={{
-                left: px(sp.sheep.x),
-                top: py(sp.sheep.y),
-                width: px(sp.sheep.w),
-                filter: tintFilter,
-              }}
-              draggable={false}
-            />
-          </IntroPop>
+          {cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.bush}
+              origin="80.9% 91%"
+            >
+              <motion.img
+                src={sp.bush.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.bush.x),
+                  top: py(sp.bush.y),
+                  width: px(sp.bush.w),
+                  transformOrigin: "50% 100%",
+                }}
+                animate={bushSway(0.8, 5.4, 1.2)}
+                draggable={false}
+              />
+            </IntroPop>
+          )}
+
+          {!cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.sheep}
+              origin="54.9% 110%"
+            >
+              <img
+                src={sp.sheepShadow.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.sheepShadow.x),
+                  top: py(sp.sheepShadow.y),
+                  width: px(sp.sheepShadow.w),
+                }}
+                draggable={false}
+              />
+              <img
+                src={sheepAnim ? sp.sheep.anim : sp.sheep.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.sheep.x),
+                  top: py(sp.sheep.y),
+                  width: px(sp.sheep.w),
+                }}
+                draggable={false}
+              />
+            </IntroPop>
+          )}
 
           {!cover && (
             <IntroPop
@@ -1510,7 +1458,6 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                   top: py(sp.bushRight.y),
                   width: px(sp.bushRight.w),
                   transformOrigin: "50% 100%",
-                  filter: tintFilter,
                 }}
                 animate={bushSway(0.8, 5.4, 1.2)}
                 draggable={false}
@@ -1531,7 +1478,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               if (!cover && birdStandingRef.current) birdStartledRef.current = true;
             }}
           >
-            <div className="absolute inset-0" style={{ filter: tintFilter }}>
+            <div className="absolute inset-0">
               {BIRD_FLAP_FRAMES.map((src, i) => (
                 <img
                   key={src}
@@ -1558,6 +1505,130 @@ function SceneCanvas({ cover }: { cover: boolean }) {
               />
             </div>
           </motion.div>
+
+          {/* 时段调色层：multiply 压暗/染色背景、建筑与摇摆前景，线稿保持黑；进门时褪掉。
+            用 linear-gradient 而非纯色 background-color，防止移动端 Safari 状态栏取色器误抓 multiply 层的紫色 */}
+          <motion.div
+            className="pointer-events-none absolute"
+            style={{
+              left: "-60%",
+              right: "-60%",
+              top: cover ? 0 : "-50%",
+              bottom: cover ? 0 : "-150%",
+              backgroundImage: `linear-gradient(${theme.tint}, ${theme.tint})`,
+              mixBlendMode: "multiply",
+            }}
+            initial={false}
+            animate={{ opacity: entering ? 0 : theme.tintAlpha }}
+            transition={{
+              duration: entering ? 0.5 : TIME_FADE,
+              ease: "easeInOut",
+            }}
+          />
+
+          {/* 黄昏/夜晚：吊灯和门玻璃默认亮着，叠在建筑调色层上面。
+            首次进场时等物件都弹出来了再亮，像有人把灯打开 */}
+          <NightLights
+            on={(theme.lights || rain) && !entering && !(intro && !introGo)}
+            hideDoor={entering}
+            delay={intro ? INTRO_AT.openSign + 0.6 : 0}
+            signControls={signControls}
+          />
+
+          {/* 下雨天屋里的窗也亮着（三扇窗的玻璃染成暖黄） */}
+          <WindowLights on={rain && !entering && !(intro && !introGo)} delay={intro ? INTRO_AT.openSign + 0.6 : 0} />
+
+          {/* 落叶与跨窗户亮光层的前景物件共用的等价调色滤镜 */}
+          {!entering && theme.tintAlpha > 0 && (
+            <svg width="0" height="0" className="absolute" aria-hidden>
+              <filter
+                id={tintFilterId}
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="140%"
+                colorInterpolationFilters="sRGB"
+              >
+                <feColorMatrix
+                  type="matrix"
+                  values={tintMatrix(theme.tint, theme.tintAlpha)}
+                />
+              </filter>
+            </svg>
+          )}
+
+          {/* 仅将与右侧窗户黄光有交集的静态物件（桌面端小羊、移动端邮筒+门前小灌木）放在 WindowLights 上层 */}
+          {!cover && (
+            <>
+              <IntroPop
+                play={intro}
+                go={introGo}
+                delay={INTRO_AT.mailbox}
+                origin="65.1% 93%"
+              >
+                <MailboxSprite
+                  open={hovered === "contact"}
+                  mailbox={sp.mailbox}
+                  tintFilter={tintFilter}
+                />
+              </IntroPop>
+              <IntroPop
+                play={intro}
+                go={introGo}
+                delay={INTRO_AT.bush}
+                origin="61.9% 93%"
+              >
+                <motion.img
+                  src={sp.bush.src}
+                  alt=""
+                  className="pointer-events-none absolute select-none"
+                  style={{
+                    left: px(sp.bush.x),
+                    top: py(sp.bush.y),
+                    width: px(sp.bush.w),
+                    transformOrigin: "50% 100%",
+                    filter: tintFilter,
+                  }}
+                  animate={bushSway(0.8, 5.4, 1.2)}
+                  draggable={false}
+                />
+              </IntroPop>
+            </>
+          )}
+
+          {cover && (
+            <IntroPop
+              play={intro}
+              go={introGo}
+              delay={INTRO_AT.sheep}
+              origin="63.4% 91%"
+            >
+              <img
+                src={sp.sheepShadow.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.sheepShadow.x),
+                  top: py(sp.sheepShadow.y),
+                  width: px(sp.sheepShadow.w),
+                  filter: tintFilter,
+                }}
+                draggable={false}
+              />
+              <img
+                src={sheepAnim ? sp.sheep.anim : sp.sheep.src}
+                alt=""
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: px(sp.sheep.x),
+                  top: py(sp.sheep.y),
+                  width: px(sp.sheep.w),
+                  filter: tintFilter,
+                }}
+                draggable={false}
+              />
+            </IntroPop>
+          )}
 
           {/* 随风飘过的叶子：放在夜灯上面，不然晚上会飘到亮着的 WOOLAB 招牌后面去；
             自己带一份和调色层等价的染色，颜色和夜里的场景一致。进门时调色层褪掉，叶子也跟着不染 */}

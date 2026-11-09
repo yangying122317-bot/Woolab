@@ -346,7 +346,7 @@ export default function LifePage() {
     if (l.open && (l.reason === "guide" || l.reason === "stamp") && moved) hideList();
     if (Math.abs(v) > 8) {
       markGuideDone();
-      if (mobileView && Math.abs(v) > 18) {
+      if (Math.abs(v) > 18) {
         window.clearTimeout(hintTimer.current);
         setEntryHint(false);
       }
@@ -413,14 +413,14 @@ export default function LifePage() {
 
   useEffect(() => {
     if (!ready || doorFadeDone) return;
-    const t = window.setTimeout(() => setDoorFadeDone(true), mobileView ? 320 : 700);
+    const t = window.setTimeout(() => setDoorFadeDone(true), 320);
     return () => window.clearTimeout(t);
-  }, [ready, doorFadeDone, mobileView]);
+  }, [ready, doorFadeDone]);
 
   const pageRevealed = ready && introDone && menuLanded && doorFadeDone;
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
   const guideIdle = useIdle(
-    mobileView ? 380 : 1500,
+    mobileView ? 380 : 650,
     pageRevealed && noProgress && !guideDone.current && !focus && !list.open,
   );
   useEffect(() => {
@@ -432,12 +432,12 @@ export default function LifePage() {
   }, [guideIdle]);
   useEffect(() => {
     if (!pageRevealed || noProgress || isAllDone(room)) return;
+    markGuideDone();
     const t = window.setTimeout(() => {
-      markGuideDone();
       setListKick((n) => n + 1);
       setEntryHint(true);
       hintTimer.current = window.setTimeout(() => setEntryHint(false), LIST_HINT_STAY);
-    }, mobileView ? 350 : 900);
+    }, 350);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageRevealed]);
@@ -668,10 +668,9 @@ export default function LifePage() {
                 guide={{
                   entry: entryHint && !checklistOpen,
                   hints:
-                    (guideReady || isAllDone(room)) &&
+                    (pageRevealed || guideReady || isAllDone(room)) &&
                     !checklistOpen &&
                     !drawerShown &&
-                    (mobileView || !entryHint) &&
                     !labEntry,
                 }}
                 onOpen={openStation}

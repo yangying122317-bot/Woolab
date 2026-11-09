@@ -41,9 +41,9 @@ const CUP = { w: 101, h: 121 };
 const CUP_REST = { x: 8848, y: 1428 };
 /** 手绘成品杯（drink-final-a/b/c，含柠檬片和冰块）：杯底对齐纸杯杯底 */
 const FINAL = { x: 8843, y: 1374, w: 148, h: 175 };
-/** 选中的瓶子站到杯子左边（瓶底与杯底对齐） */
-const BESIDE_X = 8726;
-const BESIDE_BOTTOM = CUP_REST.y + CUP.h;
+/** 选中的瓶子站到杯子左前方黄桌布空位（避开后排左瓶瓶底，贴近纸杯左侧） */
+const BESIDE_X = 8750;
+const BESIDE_BOTTOM = CUP_REST.y + CUP.h + 44;
 
 /** 案板（含柠檬和刀的两状态素材：整颗 → 切开） */
 const BOARD = { x: 8978, y: 1408, w: 546, h: 227 };
@@ -540,9 +540,8 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
               top: 0,
               // 倒酒绕瓶颈转，hover 摇晃以瓶底为轴
               transformOrigin: pouring ? "50% 20%" : "50% 92%",
-              // 选中的瓶子压在其他瓶子和杯子之上（倒酒时也在中途杯前面）
-              // hover 时整瓶提到引导纸签上面，让饮料名称始终完整可读。
-              zIndex: hovered === d.id ? 35 : pouring ? 12 : isChosen && !done && step !== "pick" ? 13 : 9,
+              // 前排选中的瓶子（13）始终压在后排未选中的瓶子（9）之上，避免 hover 后排瓶子时穿模盖住前排瓶颈
+              zIndex: pouring ? 12 : isChosen && !done && step !== "pick" ? 13 : 9,
               opacity: dragging ? 0 : 1,
               // label 阶段瓶子正从杯口弹回原位，指针事件先关掉，
               // 免得它路过静止的鼠标时误触发 hover 气泡
@@ -590,28 +589,43 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
               draggable={false}
               className="h-full w-full max-w-none"
             />
-            {/* hover 名字气泡（推近期间任何时候都有）：
-                外层 div 做 CSS 居中，framer 不碰水平位移 */}
-            <div
-              className="pointer-events-none absolute left-1/2"
-              style={{ bottom: "104%", transform: "translateX(-50%)" }}
-            >
-              <AnimatePresence>
-                {active && hovered === d.id && !drag && !pouring && (
-                  <motion.span
-                    key="name"
-                    className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 ${mobile ? "text-xl" : "text-base"} text-neutral-800 shadow-md`}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {pick(d.name)}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </div>
           </motion.div>
+        );
+      })}
+
+      {/* 瓶子 hover 名字气泡：独立挂在顶层（z=35），既保证名称不被纸签或前排瓶子挡住，又不改变瓶身自身的前后排遮挡关系 */}
+      {DRINKS.map((d) => {
+        const spec = BOTTLE_POS[d.bottle];
+        const rest = bottleRest(d.id);
+        const isChosen = choice === d.id;
+        const pouring = isChosen && !done && step === "pouring";
+        const showBubble = active && hovered === d.id && !drag && !pouring;
+        return (
+          <div
+            key={`bubble-${d.id}`}
+            className="pointer-events-none absolute"
+            style={{
+              left: vh(rest.x + spec.w / 2),
+              top: vh(rest.y - 8),
+              transform: "translate(-50%, -100%)",
+              zIndex: 35,
+            }}
+          >
+            <AnimatePresence>
+              {showBubble && (
+                <motion.span
+                  key="name"
+                  className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 ${mobile ? "text-xl" : "text-base"} text-neutral-800 shadow-md`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {pick(d.name)}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
         );
       })}
 

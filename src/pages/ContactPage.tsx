@@ -224,8 +224,8 @@ export default function ContactPage() {
    * 听筒的下落量 y（稿单位）：一开始整只藏在屏幕上面；线顶钉在视口顶边不动，
    * 听筒掉多深线就放多长（scaleY 跟着 y），落地回弹时线也跟着长短一下。
    */
-  const y = useMotionValue(-(hangH + 20));
-  const cordScale = useTransform(y, (v) => Math.max(0, (cordH + v) / cordH));
+  const y = useMotionValue(-(hangH + 20) * s);
+  const cordScale = useTransform(y, (v) => Math.max(0, (cordH * s + v) / (cordH * s)));
   /*
    * 摆动：线绕顶端转的角度 rot，不写关键帧，落地那一下给个角速度让弹簧自己晃出来。
    * 听筒再用一个更软的弹簧跟着线（follow），两者的差就是听筒绕线头"慢半拍"的那点角度。
@@ -358,7 +358,7 @@ export default function ContactPage() {
     swing(-KICK * 0.6);
     const r = -PICKED_ROT;
     void handset.start({
-      y: -2,
+      y: -2 * s,
       rotate: [r + 1, r - 1, r + 2, r - 1, r + 1, r, r + 1],
       transition: {
         y: { duration: 0.28, ease: "easeOut" },
@@ -397,7 +397,7 @@ export default function ContactPage() {
       >
       <div
         className="absolute"
-        style={{ left: ox, top: oy, width: FW, height: FH, transform: `scale(${s})`, transformOrigin: "0 0" }}
+        style={{ left: ox, top: oy, width: FW * s, height: FH * s }}
       >
         {/* 信封后片 */}
         <img
@@ -405,17 +405,17 @@ export default function ContactPage() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={art(ART.envBack)}
+          style={art(ART.envBack, s)}
         />
 
         {/* 信纸：字都写在它上面；进场时连字一起从信封里往上弹出来。
             外面套一层裁切到信封前片底边，弹出前塞在下面那截不会从信封底下漏出来 */}
-        <div className="pointer-events-none absolute overflow-hidden" style={{ left: 0, top: 0, width: FW, height: PAPER_CLIP_H }}>
+        <div className="pointer-events-none absolute overflow-hidden" style={{ left: 0, top: 0, width: FW * s, height: PAPER_CLIP_H * s }}>
           <motion.div
             className="pointer-events-auto absolute"
-            style={art(ART.paper)}
-            initial={{ y: PAPER_TUCK }}
-            animate={{ y: shown ? 0 : PAPER_TUCK }}
+            style={art(ART.paper, s)}
+            initial={{ y: PAPER_TUCK * s }}
+            animate={{ y: shown ? 0 : PAPER_TUCK * s }}
             transition={{ type: "spring", stiffness: 90, damping: 14, mass: 1, delay: PAPER_POP_DELAY }}
           >
             <img
@@ -425,17 +425,17 @@ export default function ContactPage() {
               className="pointer-events-none absolute inset-0 h-full w-full max-w-none"
             />
             {/* 下面的坐标都换成相对信纸框 */}
-            <div className="absolute" style={{ left: -ART.paper.x, top: -ART.paper.y, width: FW, height: FH }}>
+            <div className="absolute" style={{ left: -ART.paper.x * s, top: -ART.paper.y * s, width: FW * s, height: FH * s }}>
               {/* Say Hi to WOOLAB（WOOLAB 直接排文字，不再用那枚手写 logo 图） */}
               <div
                 className={`${headFont} absolute flex items-start justify-center whitespace-nowrap text-black`}
                 style={{
                   left: 0,
-                  width: FW,
-                  top: TITLE.y,
-                  fontSize: TITLE.size,
+                  width: FW * s,
+                  top: TITLE.y * s,
+                  fontSize: TITLE.size * s,
                   lineHeight: 1.3,
-                  gap: 5,
+                  gap: 5 * s,
                   fontWeight: headWeight,
                 }}
               >
@@ -446,10 +446,10 @@ export default function ContactPage() {
               <p
                 className={`${handFont} absolute text-center text-black`}
                 style={{
-                  left: CX - subW / 2,
-                  width: subW,
-                  top: SUB.y,
-                  fontSize: SUB.size,
+                  left: (CX - subW / 2) * s,
+                  width: subW * s,
+                  top: SUB.y * s,
+                  fontSize: SUB.size * s,
                   /* 中文手写体字面大（size-adjust 130%），行距要松一些 */
                   lineHeight: zh ? 1.55 : 1.2,
                   whiteSpace: "pre-line",
@@ -458,12 +458,12 @@ export default function ContactPage() {
                 {t("contact.sub")}
               </p>
 
-              <Head font={headFont} weight={headWeight} y={WRITE.y}>
+              <Head s={s} font={headFont} weight={headWeight} y={WRITE.y}>
                 {t("contact.write")}
               </Head>
               <div
                 className={`${bodyFont} absolute text-center text-black`}
-                style={{ left: 0, width: FW, top: EMAIL.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
+                style={{ left: 0, width: FW * s, top: EMAIL.y * s, fontSize: LINK_SIZE * s, lineHeight: 1.25 }}
               >
                 <Circled disabled={copied}>
                   <button
@@ -478,12 +478,12 @@ export default function ContactPage() {
                 </Circled>
               </div>
 
-              <Head font={headFont} weight={headWeight} y={FIND.y}>
+              <Head s={s} font={headFont} weight={headWeight} y={FIND.y}>
                 {t("contact.find")}
               </Head>
               <div
                 className={`${bodyFont} absolute text-center text-black`}
-                style={{ left: 0, width: FW, top: LINKS.y, fontSize: LINK_SIZE, lineHeight: 1.25 }}
+                style={{ left: 0, width: FW * s, top: LINKS.y * s, fontSize: LINK_SIZE * s, lineHeight: 1.25 }}
               >
                 {socialLinks.map((l, i) => (
                   <span key={l.id}>
@@ -506,14 +506,14 @@ export default function ContactPage() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={art(ART.envFront)}
+          style={art(ART.envFront, s)}
         />
         <img
           src={`${C}/fold.webp`}
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={art(ART.fold)}
+          style={art(ART.fold, s)}
         />
 
         {/* 小羊：抱着腿坐在信封边上，慢慢呼吸 */}
@@ -522,7 +522,7 @@ export default function ContactPage() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={{ ...art(sheepBox), transformOrigin: "50% 100%" }}
+          style={{ ...art(sheepBox, s), transformOrigin: "50% 100%" }}
           animate={{ scaleY: [1, 1.012, 1] }}
           transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -532,11 +532,11 @@ export default function ContactPage() {
         <motion.div
           className="pointer-events-none absolute"
           style={{
-            left: hangX,
-            top: hangTop,
-            width: FW,
-            height: hangH,
-            transformOrigin: `${cordX + ART.cord.w / 2}px 0px`,
+            left: hangX * s,
+            top: hangTop * s,
+            width: FW * s,
+            height: hangH * s,
+            transformOrigin: `${(cordX + ART.cord.w / 2) * s}px 0px`,
             rotate: rot,
           }}
         >
@@ -546,10 +546,10 @@ export default function ContactPage() {
             draggable={false}
             className="pointer-events-none absolute max-w-none"
             style={{
-              left: cordX,
+              left: cordX * s,
               top: 0,
-              width: ART.cord.w,
-              height: cordH,
+              width: ART.cord.w * s,
+              height: cordH * s,
               scaleY: cordScale,
               transformOrigin: "50% 0%",
             }}
@@ -558,10 +558,10 @@ export default function ContactPage() {
           <motion.div
             className="absolute"
             style={{
-              left: handsetBox.x,
-              top: handsetBox.y - hangTop,
-              width: handsetBox.w,
-              height: handsetBox.h,
+              left: handsetBox.x * s,
+              top: (handsetBox.y - hangTop) * s,
+              width: handsetBox.w * s,
+              height: handsetBox.h * s,
               y,
               rotate: bodyRot,
               transformOrigin: "50% 4%",
@@ -585,10 +585,10 @@ export default function ContactPage() {
         <div
           className={`${handFont} pointer-events-none absolute text-center text-black`}
           style={{
-            left: bubblePos.cx - bubblePos.w / 2,
-            top: bubblePos.y,
-            width: bubblePos.w,
-            fontSize: bubblePos.size,
+            left: (bubblePos.cx - bubblePos.w / 2) * s,
+            top: bubblePos.y * s,
+            width: bubblePos.w * s,
+            fontSize: bubblePos.size * s,
             lineHeight: 1.35,
             whiteSpace: "nowrap",
           }}
@@ -597,7 +597,7 @@ export default function ContactPage() {
             {call === "hello" && (
               <motion.p
                 key="hello"
-                initial={{ opacity: 0, y: 4 }}
+                initial={{ opacity: 0, y: 4 * s }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: 0.4 } }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
@@ -613,14 +613,14 @@ export default function ContactPage() {
   );
 }
 
-const art = (b: Box) => ({ left: b.x, top: b.y, width: b.w, height: b.h });
+const art = (b: Box, s = 1) => ({ left: b.x * s, top: b.y * s, width: b.w * s, height: b.h * s });
 
 /** 信纸上的小标题：Write a Note / Find Us Here Too */
-function Head({ font, weight, y, children }: { font: string; weight: number; y: number; children: string }) {
+function Head({ s, font, weight, y, children }: { s: number; font: string; weight: number; y: number; children: string }) {
   return (
     <p
       className={`${font} absolute text-center whitespace-nowrap text-black`}
-      style={{ left: 0, width: FW, top: y, fontSize: HEAD_SIZE, lineHeight: 1.25, fontWeight: weight }}
+      style={{ left: 0, width: FW * s, top: y * s, fontSize: HEAD_SIZE * s, lineHeight: 1.25, fontWeight: weight }}
     >
       {children}
     </p>

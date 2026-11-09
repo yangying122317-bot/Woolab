@@ -5,12 +5,12 @@ export const A = "/assets/about";
 
 export type Box = { x: number; y: number; w: number; h: number };
 
-export const box = (b: Box): CSSProperties => ({
+export const box = (b: Box, s = 1): CSSProperties => ({
   position: "absolute",
-  left: b.x,
-  top: b.y,
-  width: b.w,
-  height: b.h,
+  left: b.x * s,
+  top: b.y * s,
+  width: b.w * s,
+  height: b.h * s,
 });
 
 /**

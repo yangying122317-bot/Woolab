@@ -301,41 +301,25 @@ function Watermark({
  */
 const BEAMS =
   "linear-gradient(125deg," +
-  /* 1：最亮的一条，边也最硬——离窗最近的那道 */
-  " transparent 0vw, transparent 9vw, rgba(255,244,222,0.36) 12vw, rgba(255,244,222,0.36) 17vw, transparent 21vw," +
+  /* 1：最亮的一条（预柔化渐变过渡，免去全屏 blur(28px) + mix-blend-mode: screen 在 Safari 下的合成掉帧与翻转遮罩溢出） */
+  " transparent 0vw, rgba(255,244,222,0.03) 7vw, rgba(255,244,222,0.22) 11.5vw, rgba(255,244,222,0.26) 14.5vw, rgba(255,244,222,0.20) 17.5vw, rgba(255,244,222,0.03) 22vw, transparent 25vw," +
   /* 2：很淡很散的一条，只是一点余光 */
-  " transparent 34vw, rgba(255,244,222,0.09) 42vw, rgba(255,244,222,0.09) 46vw, transparent 55vw," +
-  /* 画框附近不放光，主角那块留干净（原来 80–86vw 有一条细亮线正好横过屏幕中间，去掉了） */
+  " transparent 32vw, rgba(255,244,222,0.065) 41vw, rgba(255,244,222,0.065) 47vw, transparent 57vw," +
   /* 5：最边上一条宽而暗的 */
-  " transparent 98vw, rgba(255,244,222,0.12) 104vw, rgba(255,244,222,0.12) 110vw, transparent 116vw)";
+  " transparent 95vw, rgba(255,244,222,0.085) 103vw, rgba(255,244,222,0.085) 111vw, transparent 118vw)";
 
 const BEAMS_MOBILE =
   "linear-gradient(125deg," +
   " transparent 0%, rgba(255,244,222,0.22) 14%, rgba(255,244,222,0.22) 20%, transparent 32%," +
   " transparent 42%, rgba(255,244,222,0.07) 52%, transparent 65%)";
 
-function LightBeams({ animate = true }: { animate?: boolean }) {
+function LightBeams() {
   const mobile = getViewWidth() < 560;
-  if (mobile) {
-    /* 手机端直接用预柔化的渐变，省去全屏 mix-blend-mode + blur(28px) 实时高斯模糊合成开销 */
-    return (
-      <div
-        className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
-        style={{ background: BEAMS_MOBILE }}
-      />
-    );
-  }
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" style={{ mixBlendMode: "screen" }}>
-      <motion.div
-        className="absolute inset-0"
-        animate={animate ? { x: ["-2vw", "2vw", "-2vw"] } : undefined}
-        transition={{ duration: 70, repeat: Infinity, ease: "easeInOut" }}
-      >
-        {/* 贯穿整屏的几条；四边各多出一截，blur 和位移时边上不露底 */}
-        <div className="absolute" style={{ inset: "-20%", background: BEAMS, filter: "blur(28px)" }} />
-      </motion.div>
-    </div>
+    <div
+      className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+      style={{ background: mobile ? BEAMS_MOBILE : BEAMS }}
+    />
   );
 }
 
@@ -453,7 +437,7 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
 function LabelRow({ u, left, right }: { u: number; left: string; right: string }) {
   const mobile = getViewWidth() < 560;
   const s: CSSProperties = {
-    fontSize: mobile ? Math.max(13, 12 * u) : 12 * u,
+    fontSize: mobile ? Math.max(13, 12 * u) : 16.5 * u,
     lineHeight: 1.2,
     top: mobile ? "91%" : "50%",
     transform: "translateY(-50%)",
@@ -962,99 +946,103 @@ function Collage({ u, lb, play, delay }: { u: number; lb: Lookbook; play: boolea
       initial="hidden"
       animate={play ? "show" : "hidden"}
     >
-      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（手机竖屏下由于右侧拍立得伸出，整体左移 25u 让组合居中） */}
-      <div
-        className="absolute inset-0"
-        style={{
-          left: mobile ? -25 * u : 0,
-          transform: `scale(${PAPER_K})`,
-          transformOrigin: `${360 * u}px 0`,
-        }}
-      >
-        {/* 撕纸 + 上面的产品表文字，一起擦出来。纸 416×309 @ (152,814)，投影 0/4/4 → 导出框左右各多 4、下面多 8 */}
-        <motion.div className="absolute inset-0" variants={wipeIn} custom={at(0)}>
-          <div style={box(u, 148, Y(814), 424, 317)}>
-            <Img src={`${A}/paper-sheet.webp`} fit="fill" />
-          </div>
-          <p
-            className="font-sheet absolute whitespace-nowrap font-medium text-black"
+      {/* 撕纸这一组整体放大 PAPER_K，锚在纸顶边中心（直接乘 up = u * PAPER_K，避免 Safari 在外层 scale 下将文字按 1x 栅格化拉伸发糊） */}
+      {(() => {
+        const up = u * PAPER_K;
+        const paperLeft = (mobile ? -25 : 0) * u + 360 * u * (1 - PAPER_K);
+        return (
+          <div
+            className="absolute inset-0"
             style={{
-              left: 206 * u,
-              top: Y(853) * u,
-              fontSize: 12 * u,
-              lineHeight: 1.2,
+              left: paperLeft,
             }}
           >
-            {t("lab.detail.sheet")}
-          </p>
-          <img src={`${A}/sheet-lines.svg`} alt="" draggable={false} style={box(u, 206, Y(914.5), 288, 149)} />
-          {rows.map(([k, v], i) => (
-            <div key={k}>
+            {/* 撕纸 + 上面的产品表文字，一起擦出来。纸 416×309 @ (152,814)，投影 0/4/4 → 导出框左右各多 4、下面多 8 */}
+            <motion.div className="absolute inset-0" variants={wipeIn} custom={at(0)}>
+              <div style={box(up, 148, Y(814), 424, 317)}>
+                <Img src={`${A}/paper-sheet.webp`} fit="fill" />
+              </div>
               <p
                 className="font-sheet absolute whitespace-nowrap font-medium text-black"
                 style={{
-                  left: 206 * u,
-                  top: Y(894 + i * 37) * u,
-                  fontSize: 10 * u,
+                  left: 206 * up,
+                  top: Y(853) * up,
+                  fontSize: 12 * up,
                   lineHeight: 1.2,
                 }}
               >
-                {k}
+                {t("lab.detail.sheet")}
               </p>
-              <p
-                className="font-hand absolute whitespace-nowrap text-black"
-                style={{
-                  left: 262 * u,
-                  top: Y(891 + i * 37) * u,
-                  fontSize: 16 * u,
-                  lineHeight: 1.2,
-                }}
+              <img src={`${A}/sheet-lines.svg`} alt="" draggable={false} style={box(up, 206, Y(914.5), 288, 149)} />
+              {rows.map(([k, v], i) => (
+                <div key={k}>
+                  <p
+                    className="font-sheet absolute whitespace-nowrap font-medium text-black"
+                    style={{
+                      left: 206 * up,
+                      top: Y(894 + i * 37) * up,
+                      fontSize: 10 * up,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {k}
+                  </p>
+                  <p
+                    className="font-hand absolute whitespace-nowrap text-black"
+                    style={{
+                      left: 262 * up,
+                      top: Y(891 + i * 37) * up,
+                      fontSize: 16 * up,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {v}
+                  </p>
+                </div>
+              ))}
+            </motion.div>
+
+            {/* 拍立得（相纸 + 照片 + 胶带）：稿子里 154.17×188.85 @ (425.8,890)；桌面端放大 PHOTO_K，手机端按原稿比例与位置摆放 */}
+            <motion.div
+              variants={stickOn}
+              custom={at(1)}
+              style={box(
+                up,
+                mobile ? 448 : 425.8,
+                Y(mobile ? 872 : 890),
+                154.17 * (mobile ? 1.05 : PHOTO_K),
+                188.85 * (mobile ? 1.05 : PHOTO_K),
+              )}
+            >
+              <Img src={lb.polaroid} fit="fill" />
+            </motion.div>
+
+            {/* 邮票：67×90 @ (461,851)，投影 0.5/1 → 右多 0.5、下多 1。贴在拍立得上面 */}
+            {lb.postage && (
+              <motion.div variants={stickOn} custom={at(2)} style={box(up, 461, Y(851), 67.5, 91)}>
+                <Img src={lb.postage} fit="fill" />
+              </motion.div>
+            )}
+
+            {/* 印章：正片叠底 30% */}
+            <motion.div className="absolute inset-0" variants={fadeIn} custom={at(3)}>
+              <Rotated
+                u={up}
+                x={mobile ? 344 : 352.44}
+                y={Y(mobile ? 964 : 957.76)}
+                w={mobile ? 152 : 165.44}
+                h={mobile ? 150 : 163.07}
+                iw={mobile ? 118 : 128.8}
+                ih={mobile ? 114 : 124.6}
+                transform="rotate(21.45deg)"
+                style={{ mixBlendMode: "multiply", opacity: 0.3 }}
               >
-                {v}
-              </p>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* 拍立得（相纸 + 照片 + 胶带）：稿子里 154.17×188.85 @ (425.8,890)；桌面端放大 PHOTO_K，手机端按原稿比例与位置摆放 */}
-        <motion.div
-          variants={stickOn}
-          custom={at(1)}
-          style={box(
-            u,
-            mobile ? 448 : 425.8,
-            Y(mobile ? 872 : 890),
-            154.17 * (mobile ? 1.05 : PHOTO_K),
-            188.85 * (mobile ? 1.05 : PHOTO_K),
-          )}
-        >
-          <Img src={lb.polaroid} fit="fill" />
-        </motion.div>
-
-        {/* 邮票：67×90 @ (461,851)，投影 0.5/1 → 右多 0.5、下多 1。贴在拍立得上面 */}
-        {lb.postage && (
-          <motion.div variants={stickOn} custom={at(2)} style={box(u, 461, Y(851), 67.5, 91)}>
-            <Img src={lb.postage} fit="fill" />
-          </motion.div>
-        )}
-
-        {/* 印章：正片叠底 30% */}
-        <motion.div className="absolute inset-0" variants={fadeIn} custom={at(3)}>
-          <Rotated
-            u={u}
-            x={mobile ? 344 : 352.44}
-            y={Y(mobile ? 964 : 957.76)}
-            w={mobile ? 152 : 165.44}
-            h={mobile ? 150 : 163.07}
-            iw={mobile ? 118 : 128.8}
-            ih={mobile ? 114 : 124.6}
-            transform="rotate(21.45deg)"
-            style={{ mixBlendMode: "multiply", opacity: 0.3 }}
-          >
-            <Img src={`${A}/stamp.webp`} fit="fill" />
-          </Rotated>
-        </motion.div>
-      </div>
+                <Img src={`${A}/stamp.webp`} fit="fill" />
+              </Rotated>
+            </motion.div>
+          </div>
+        );
+      })()}
 
       {SHOW_CROPS && (
         <>
@@ -1924,7 +1912,7 @@ export function DetailPage({
             left: mobile ? `calc(${MU} * 16)` : 25 * u,
             top: `calc(${MU} * 26)`,
             transform: "translateY(-50%)",
-            fontSize: mobile ? `calc(${MU} * ${lang === "en" ? 10 : 12})` : 12 * u,
+            fontSize: mobile ? `calc(${MU} * ${lang === "en" ? 11 : 12.5})` : `calc(${MU} * 12)`,
             padding: mobile ? "8px 8px 8px 0" : undefined,
             touchAction: "manipulation",
             WebkitTapHighlightColor: "transparent",

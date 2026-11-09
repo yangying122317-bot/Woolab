@@ -264,10 +264,10 @@ export default function NextPage({
           }}
         />
 
-        {/* 稿坐标系 */}
+        {/* 稿坐标系（直接乘 s，避免 Safari 在外层 scale 下将旋转/动画文字按 1x 位图拉伸发糊） */}
         <div
           className="absolute"
-          style={{ left, top, width: SW, height: SH, transform: `scale(${s})`, transformOrigin: "0 0" }}
+          style={{ left, top, width: SW * s, height: SH * s }}
         >
           {/* 缺口里的小羊水印 */}
           <img
@@ -276,18 +276,18 @@ export default function NextPage({
             draggable={false}
             className="pointer-events-none absolute max-w-none"
             style={{
-              left: NOTCH_MARK.cx - NOTCH_MARK.w / 2,
-              top: NOTCH_MARK.y,
-              width: NOTCH_MARK.w,
-              height: NOTCH_MARK.h,
+              left: (NOTCH_MARK.cx - NOTCH_MARK.w / 2) * s,
+              top: NOTCH_MARK.y * s,
+              width: NOTCH_MARK.w * s,
+              height: NOTCH_MARK.h * s,
             }}
           />
 
           {/* 标题 / 副标：铺满稿宽居中（motion 会接管 transform，不能靠 translateX(-50%)） */}
           <motion.div
             className="font-nav absolute whitespace-nowrap text-center font-black text-white"
-            style={{ left: 0, width: SW, top: titleY, fontSize: 20, lineHeight: 1.3 }}
-            initial={{ opacity: 0, y: 10 }}
+            style={{ left: 0, width: SW * s, top: titleY * s, fontSize: 20 * s, lineHeight: 1.3 }}
+            initial={{ opacity: 0, y: 10 * s }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.55, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -295,8 +295,8 @@ export default function NextPage({
           </motion.div>
           <motion.div
             className="font-look absolute whitespace-nowrap text-center text-white"
-            style={{ left: 0, width: SW, top: subY, fontSize: 14, lineHeight: 1.3 }}
-            initial={{ opacity: 0, y: 10 }}
+            style={{ left: 0, width: SW * s, top: subY * s, fontSize: 14 * s, lineHeight: 1.3 }}
+            initial={{ opacity: 0, y: 10 * s }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -315,16 +315,16 @@ export default function NextPage({
                 key={shot.id}
                 className="absolute cursor-pointer"
                 style={{
-                  left: c.cx - CARD_W / 2,
-                  top: c.cy - CARD_H / 2,
-                  width: CARD_W,
-                  height: CARD_H,
+                  left: (c.cx - CARD_W / 2) * s,
+                  top: (c.cy - CARD_H / 2) * s,
+                  width: CARD_W * s,
+                  height: CARD_H * s,
                   zIndex: isHovered ? 10 : i + 1,
                   filter: "drop-shadow(0 5px 8px rgba(0,0,0,0.14))",
                 }}
-                initial={{ y: -(top / s + c.cy + CARD_H), rotate: fromRot, scale: baseScale }}
+                initial={{ y: -(top + (c.cy + CARD_H) * s), rotate: fromRot, scale: baseScale }}
                 animate={{
-                  y: isHovered ? -6 : 0,
+                  y: isHovered ? -6 * s : 0,
                   rotate: isHovered ? c.rot * 0.35 : c.rot,
                   scale: isHovered ? baseScale * 1.06 : baseScale,
                   transition: landed
@@ -345,7 +345,7 @@ export default function NextPage({
                 onHoverEnd={() => setHover((h) => (h === i ? null : h))}
                 onClick={() => landed && setHover((h) => (h === i ? null : i))}
               >
-                <div className="absolute overflow-hidden" style={{ ...box(WINDOW), background: "#F3F1EA" }}>
+                <div className="absolute overflow-hidden" style={{ ...box(WINDOW, s), background: "#F3F1EA" }}>
                   <img
                     src={shot.photo}
                     alt=""
@@ -359,10 +359,10 @@ export default function NextPage({
                   draggable={false}
                   className="pointer-events-none absolute max-w-none"
                   style={{
-                    left: -FRAME_PAD,
-                    top: -FRAME_PAD,
-                    width: CARD_W + FRAME_PAD * 2,
-                    height: CARD_H + FRAME_PAD * 2,
+                    left: -FRAME_PAD * s,
+                    top: -FRAME_PAD * s,
+                    width: (CARD_W + FRAME_PAD * 2) * s,
+                    height: (CARD_H + FRAME_PAD * 2) * s,
                   }}
                 />
                 <AnimatePresence>
@@ -371,13 +371,13 @@ export default function NextPage({
                       key={`title-${lang}`}
                       className="font-hand pointer-events-none absolute flex items-center justify-center whitespace-nowrap text-center"
                       style={{
-                        left: WINDOW.x,
-                        width: WINDOW.w,
-                        top: WINDOW.y + WINDOW.h + 2,
-                        height: CARD_H - (WINDOW.y + WINDOW.h) - 4,
-                        fontSize: lang === "zh" ? 15 : 14,
+                        left: WINDOW.x * s,
+                        width: WINDOW.w * s,
+                        top: (WINDOW.y + WINDOW.h + 2) * s,
+                        height: (CARD_H - (WINDOW.y + WINDOW.h) - 4) * s,
+                        fontSize: (lang === "zh" ? 15 : 14) * s,
                         color: "#1A1817",
-                        WebkitTextStroke: "0.35px #1A1817",
+                        WebkitTextStroke: `${0.35 * s}px #1A1817`,
                       }}
                       initial={{ clipPath: "inset(-10% 100% -10% -10%)", opacity: 0 }}
                       animate={{ clipPath: "inset(-10% -10% -10% -10%)", opacity: 1 }}
@@ -396,11 +396,11 @@ export default function NextPage({
           <MarkedText
             key={lang}
             text={line}
-            cx={LINE.cx}
-            y={lineY}
-            w={mobile ? 336 : LINE.w}
+            cx={LINE.cx * s}
+            y={lineY * s}
+            w={(mobile ? 336 : LINE.w) * s}
             className="font-hand"
-            fontSize={mobile ? 13.5 : 16}
+            fontSize={(mobile ? 13.5 : 16) * s}
             lineHeight={1.4}
             color="#FFFFFF"
             tone="light"

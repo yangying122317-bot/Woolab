@@ -1002,7 +1002,7 @@ function HangClothes({
   const mobile = isMobileView();
   /* 衣帽区在不在画面里（滚走了就别出引导） */
   const anchorRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(anchorRef, { amount: mobile ? 0.15 : 0.5 });
+  const inView = useInView(anchorRef, { amount: 0.12 });
   /** 初始态：紫裤子默认挂在最右槽位，其余五件待挂 */
   const INIT: (number | null)[] = [null, null, null, null, null, 5];
   /** 每个槽位挂的是哪件（衣服下标）；已完成时按示意图排布 */
@@ -1600,7 +1600,7 @@ function StationSpot({
   const mobile = isMobileView();
   const ref = useRef<HTMLDivElement>(null);
   /* 滚到画面里就出箭头（不等人停下来）；鼠标已经放上去了就不用指了 */
-  const inView = useInView(ref, { amount: mobile ? 0.25 : 0.6 });
+  const inView = useInView(ref, { amount: 0.2 });
   const [hovered, setHovered] = useState(false);
   const spot = SPOT_HINT[s.id] ?? SPOT_HINT.candle;
   return (
@@ -1702,17 +1702,6 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
 
   return (
     <>
-      {/* 墙面 + 地板：无缝平铺，长卷多长它就铺多长；右边多铺一截，长卷尽头就算和视口边差一点也不露底 */}
-      <div
-        className="absolute inset-y-0 left-0"
-        style={{
-          right: "-10vw",
-          backgroundImage: "url(/assets/life/room-bg-tile.webp)",
-          backgroundSize: "auto 100%",
-          backgroundRepeat: "repeat-x",
-        }}
-      />
-
       {/* 窗户：帧序列动画（窗景 + 小鸟） */}
       <WindowAnim />
 

@@ -94,10 +94,11 @@ function EntrancePainting({
   mobile: boolean;
   onHover: (h: boolean) => void;
 }) {
-  const spring = { stiffness: 160, damping: 19 };
-  const rotateX = useSpring(0, spring);
-  const rotateY = useSpring(0, spring);
-  const scale = useSpring(1, { stiffness: 180, damping: 20 });
+  const spring = { stiffness: 180, damping: 20 };
+  const x = useSpring(0, spring);
+  const y = useSpring(0, spring);
+  const rotate = useSpring(0, spring);
+  const scale = useSpring(1, spring);
 
   return (
     <motion.img
@@ -110,25 +111,27 @@ function EntrancePainting({
         ...rect,
         opacity: hidden ? 0 : 1,
         pointerEvents: pe,
-        rotateX: mobile ? undefined : rotateX,
-        rotateY: mobile ? undefined : rotateY,
+        x: mobile ? undefined : x,
+        y: mobile ? undefined : y,
+        rotate: mobile ? undefined : rotate,
         scale: mobile ? undefined : scale,
-        transformPerspective: mobile ? undefined : 900,
       }}
       onPointerMove={(e) => {
         if (mobile) return;
         const r = e.currentTarget.getBoundingClientRect();
         const dx = (e.clientX - r.left) / r.width - 0.5;
         const dy = (e.clientY - r.top) / r.height - 0.5;
-        rotateX.set(-dy * 3.6);
-        rotateY.set(dx * 3.6);
+        x.set(dx * 4.5);
+        y.set(dy * 4.5);
+        rotate.set(dx * 1.1);
         scale.set(1.02);
         onHover(true);
       }}
       onPointerLeave={() => {
         if (mobile) return;
-        rotateX.set(0);
-        rotateY.set(0);
+        x.set(0);
+        y.set(0);
+        rotate.set(0);
         scale.set(1);
         onHover(false);
       }}
@@ -599,12 +602,13 @@ function CorridorStation({
      深度触到钳位后直接隐藏并 display: none，释放超大 GPU 合成纹理 */
   const visible = useTransform(camDepth, (cz) => (z - cz > minD ? 1 : 0));
   const display = useTransform(visible, (v) => (v > 0 ? "block" : "none"));
-  const transform = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${feetOffset}px, 0) scale(${scale})`;
-  /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微 3D 倾斜 */
-  const tiltSpring = { stiffness: 160, damping: 19 };
-  const artRX = useSpring(0, tiltSpring);
-  const artRY = useSpring(0, tiltSpring);
-  const artScale = useSpring(1, { stiffness: 180, damping: 20 });
+  const transform = useMotionTemplate`translate(-50%, -100%) translate(${x}px, ${feetOffset}px) scale(${scale})`;
+  /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微浮动（纯 2D 变换，避免 Safari 3D 深度缓冲斜切） */
+  const tiltSpring = { stiffness: 180, damping: 20 };
+  const artX = useSpring(0, tiltSpring);
+  const artY = useSpring(0, tiltSpring);
+  const artRot = useSpring(0, tiltSpring);
+  const artScale = useSpring(1, tiltSpring);
 
   /* 板内排版：画框水平居中、顶在 21.5%；壁灯灯具顶贴板顶、灯具高 16%；
      号码牌在画框下方居中 */
@@ -692,14 +696,16 @@ function CorridorStation({
           const r = ev.currentTarget.getBoundingClientRect();
           const dx = (ev.clientX - r.left) / r.width - 0.5;
           const dy = (ev.clientY - r.top) / r.height - 0.5;
-          artRX.set(-dy * 3.6);
-          artRY.set(dx * 3.6);
+          artX.set(dx * 4.5);
+          artY.set(dy * 4.5);
+          artRot.set(dx * 1.1);
           artScale.set(1.02);
         }}
         onPointerLeave={() => {
           if (mobile) return;
-          artRX.set(0);
-          artRY.set(0);
+          artX.set(0);
+          artY.set(0);
+          artRot.set(0);
           artScale.set(1);
         }}
         aria-label={`${project.title.zh} / ${project.title.en}`}
@@ -734,10 +740,10 @@ function CorridorStation({
             top: artTop - lampTop,
             width: aw,
             height: ah,
-            rotateX: mobile ? undefined : artRX,
-            rotateY: mobile ? undefined : artRY,
+            x: mobile ? undefined : artX,
+            y: mobile ? undefined : artY,
+            rotate: mobile ? undefined : artRot,
             scale: mobile ? undefined : artScale,
-            transformPerspective: mobile ? undefined : 900,
             opacity: artHidden ? 0 : 1,
             filter: hover ? "brightness(1.08)" : "brightness(1)",
             transition: "filter 0.35s ease",
@@ -1570,12 +1576,15 @@ function FlipDetail({ index, rect, onClosed }: { index: number; rect: DOMRect; o
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg)",
+              isolation: "isolate",
             }}
           >
             <motion.div
-              className="absolute inset-0 bg-black"
-              style={{ ...maskStyle, y: 16, filter: "blur(14px)", opacity: shadowA }}
-            />
+              className="pointer-events-none absolute inset-0"
+              style={{ y: 16, filter: "blur(12px)", opacity: shadowA }}
+            >
+              <div className="h-full w-full bg-black" style={maskStyle} />
+            </motion.div>
             <div className="absolute inset-0 overflow-hidden" style={maskStyle}>
               {/* 遮罩里：详情页的空墙按全屏铺、按卡片位置反向偏移，露出正好在画框后面的那块 */}
               <motion.div
@@ -1646,7 +1655,6 @@ const INTRO_TEXT_SHADOW = "0 2px 26px rgba(0,0,0,0.55)";
 
 const INTRO_FILTER_DARK = "brightness(0.45) blur(16px)";
 const INTRO_FILTER_DARK_MOBILE = "brightness(0.45) blur(10px)";
-const INTRO_FILTER_LIT = "brightness(1) blur(0px)";
 
 /**
  * 进入 Lab 页的开场（每次进入都播放），复刻参考站的节奏：
@@ -1819,31 +1827,50 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
         transition={{ duration: 0.9, delay: phase === "shrink" ? 0.15 : 0, ease: "easeInOut" }}
       />
 
-      {/* 高清大油画：1147×1249 原图，解码就绪后直接显现，文字退场后亮起并缩小归位 */}
-      <motion.img
-        src={INTRO_PAINTING}
-        alt=""
-        draggable={false}
-        className="absolute max-w-none select-none"
-        style={{ opacity: hiResReady || startAtShrink ? 1 : 0 }}
-        initial={{ ...big, filter: startAtShrink ? INTRO_FILTER_LIT : darkFilter }}
+      {/* 高清大油画：固定在 big 尺寸，靠 GPU transform (x/y/scale) 缩小归位，并用独立模糊层淡出代替每帧重算 16px 高斯模糊，使 Safari 全程满 60fps */}
+      <motion.div
+        className="absolute select-none"
+        style={{
+          left: big.left,
+          top: big.top,
+          width: big.width,
+          height: big.height,
+          transformOrigin: "0 0",
+          opacity: hiResReady || startAtShrink ? 1 : 0,
+          willChange: "transform, opacity",
+        }}
+        initial={{ x: 0, y: 0, scaleX: 1, scaleY: 1 }}
         animate={
           phase === "shrink" && target
             ? {
-                left: target.left,
-                top: target.top,
-                width: target.width,
-                height: target.height,
-                filter: INTRO_FILTER_LIT,
+                x: target.left - big.left,
+                y: target.top - big.top,
+                scaleX: target.width / big.width,
+                scaleY: target.height / big.height,
               }
-            : { ...big, filter: lit ? INTRO_FILTER_LIT : darkFilter }
+            : { x: 0, y: 0, scaleX: 1, scaleY: 1 }
         }
-        transition={
-          phase === "shrink"
-            ? { duration: 1.1, ease: [0.65, 0, 0.35, 1] }
-            : { filter: { duration: 1.4, ease: "easeInOut" } }
-        }
-      />
+        transition={{ duration: 1.1, ease: [0.65, 0, 0.35, 1] }}
+      >
+        <img
+          src={INTRO_PAINTING}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full max-w-none select-none"
+        />
+        {!startAtShrink && (
+          <motion.img
+            src={INTRO_PAINTING}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full max-w-none select-none"
+            style={{ filter: darkFilter }}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: lit ? 0 : 1 }}
+            transition={{ duration: 1.4, ease: "easeInOut" }}
+          />
+        )}
+      </motion.div>
 
       {/* 开场文字：主组作为一个居中排版块，手机竖屏下放大字号保证清晰可读 */}
       {!startAtShrink && (

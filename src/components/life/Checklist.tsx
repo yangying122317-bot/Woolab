@@ -122,12 +122,18 @@ const STAMP = { w: 50.156, h: 41.175, boxW: 61.738, boxH: 56.663, rotate: 21.45,
 /** 上面那张纸的范围（含胶带）：整行的点击热区 / 揭走动画都以它为单位 */
 const ROW_HIT_TOP = [150, 206, 252, 296];
 
-/** 稿子坐标 → 绝对定位 */
-function box(x: number, y: number, w?: number, h?: number): CSSProperties {
-  return { position: "absolute", left: x, top: y, width: w, height: h };
+/** 稿子坐标 → 绝对定位（直接乘缩放系数 k，避免 Safari 在外层 transform: scale 下先按 6.5px/10px 栅格化再拉伸导致文字模糊） */
+function box(k: number, x: number, y: number, w?: number, h?: number): CSSProperties {
+  return {
+    position: "absolute",
+    left: x * k,
+    top: y * k,
+    width: w === undefined ? undefined : w * k,
+    height: h === undefined ? undefined : h * k,
+  };
 }
-function at(p: Pic, ox = 0, oy = 0): CSSProperties {
-  return { ...box(p.x - PAD - ox, p.y - PAD - oy, p.w + PAD * 2, p.h + PAD * 2), maxWidth: "none" };
+function at(k: number, p: Pic, ox = 0, oy = 0): CSSProperties {
+  return { ...box(k, p.x - PAD - ox, p.y - PAD - oy, p.w + PAD * 2, p.h + PAD * 2), maxWidth: "none" };
 }
 
 /** 两张纸合起来的中心（稿子坐标）：抽屉里的东西都围着它居中 */
@@ -308,12 +314,13 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
 
             <div
               className="absolute"
-              style={{ left: sheetLeft, top: sheetTop, width: W, height: H, transform: `scale(${k})`, transformOrigin: "0 0" }}
+              style={{ left: sheetLeft, top: sheetTop, width: W * k, height: H * k }}
             >
               {/* 底下那张纸：All done */}
-              <img src={`${A}/${SHEET_DONE.src}`} alt="" draggable={false} style={at(SHEET_DONE)} />
+              <img src={`${A}/${SHEET_DONE.src}`} alt="" draggable={false} style={at(k, SHEET_DONE)} />
               {allDone && (
                 <DoneNote
+                  k={k}
                   play={playDone}
                   hand={hand}
                   line={t("life.done.line")}
@@ -331,19 +338,19 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                   style={{ transformOrigin: "45% 20%", pointerEvents: playDone ? "none" : undefined }}
                   animate={
                     playDone
-                      ? { x: -70, y: -90, rotate: -12, opacity: 0, transition: { delay: 1.7, duration: 0.85, ease: [0.4, 0, 0.3, 1] } }
+                      ? { x: -70 * k, y: -90 * k, rotate: -12, opacity: 0, transition: { delay: 1.7, duration: 0.85, ease: [0.4, 0, 0.3, 1] } }
                       : undefined
                   }
                 >
-                  <img src={`${A}/${SHEET_LIST.src}`} alt="" draggable={false} style={at(SHEET_LIST)} />
+                  <img src={`${A}/${SHEET_LIST.src}`} alt="" draggable={false} style={at(k, SHEET_LIST)} />
 
                   <span
                     className="font-look absolute whitespace-nowrap font-bold uppercase"
                     style={{
-                      left: 188,
-                      top: 137.5,
+                      left: 188 * k,
+                      top: 137.5 * k,
                       transform: "translateX(-50%)",
-                      fontSize: hand ? 13 : 11.5,
+                      fontSize: (hand ? 13 : 11.5) * k,
                       lineHeight: 1.2,
                       color: "#94541C",
                     }}
@@ -363,21 +370,22 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                           type="button"
                           onClick={() => onGoStation(s.id)}
                           className="group absolute cursor-pointer"
-                          style={{ ...box(ROW_X - 6, ROW_HIT_TOP[i], ROW_W + 12, row.dotY + 7 - ROW_HIT_TOP[i]), background: "transparent" }}
+                          style={{ ...box(k, ROW_X - 6, ROW_HIT_TOP[i], ROW_W + 12, row.dotY + 7 - ROW_HIT_TOP[i]), background: "transparent" }}
                         >
                           <span
                             className="absolute flex items-center justify-center"
-                            style={{
-                              left: ROW_CX - 80 - (ROW_X - 6),
+                            style={box(
+                              k,
+                              ROW_CX - 80 - (ROW_X - 6),
                               /* 两行的（英文第一条）按稿子的位置；单行的统一贴在虚线上方 */
-                              top: (lines.length > 1 ? row.textCy : row.dotY - 13) - 16 - ROW_HIT_TOP[i],
-                              width: 160,
-                              height: 32,
-                            }}
+                              (lines.length > 1 ? row.textCy : row.dotY - 13) - 16 - ROW_HIT_TOP[i],
+                              160,
+                              32,
+                            )}
                           >
                             <span
                               className="font-hand relative whitespace-nowrap text-center capitalize"
-                              style={{ fontSize: 10, lineHeight: 1.4, transform: `rotate(${row.rotate}deg)` }}
+                              style={{ fontSize: 10 * k, lineHeight: 1.4, transform: `rotate(${row.rotate}deg)` }}
                             >
                               {lines.map((l, j) => (
                                 <span key={j} className="block">
@@ -391,20 +399,20 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                                 alt=""
                                 draggable={false}
                                 className="pointer-events-none absolute transition-[clip-path] duration-300 ease-out [clip-path:inset(-10%_100%_-10%_0)] group-hover:[clip-path:inset(-10%_0_-10%_0)]"
-                                style={{ left: "-2%", width: "104%", maxWidth: "none", bottom: -9, height: "auto" }}
+                                style={{ left: "-2%", width: "104%", maxWidth: "none", bottom: -9 * k, height: "auto" }}
                               />
                             </span>
                           </span>
                         </button>
                         <span
                           className="font-look pointer-events-none absolute whitespace-nowrap font-medium"
-                          style={{ left: ROW_X, top: row.numY, fontSize: 6.5, lineHeight: 1.2 }}
+                          style={{ left: ROW_X * k, top: row.numY * k, fontSize: 6.5 * k, lineHeight: 1.2 }}
                         >
                           {`0${i + 1}:`}
                         </span>
                         <svg
                           className="pointer-events-none"
-                          style={box(ROW_X, row.dotY - 0.5, ROW_W, 1)}
+                          style={box(k, ROW_X, row.dotY - 0.5, ROW_W, 1)}
                           viewBox={`0 0 ${ROW_W} 1`}
                           preserveAspectRatio="none"
                           aria-hidden
@@ -416,7 +424,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                         {s.id === "tee" && room.tee && !room.dressed && (
                           <span
                             className="font-hand pointer-events-none absolute whitespace-nowrap"
-                            style={{ left: ROW_X + 4, top: row.dotY + 3, fontSize: 7, lineHeight: 1.3, color: "#94541C" }}
+                            style={{ left: (ROW_X + 4) * k, top: (row.dotY + 3) * k, fontSize: 7 * k, lineHeight: 1.3, color: "#94541C" }}
                           >
                             {t("life.checklist.teeHalf")}
                           </span>
@@ -430,7 +438,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                               alt=""
                               draggable={false}
                               className="pointer-events-none"
-                              style={at(row.mark)}
+                              style={at(k, row.mark)}
                               initial={play ? { clipPath: "inset(-10% 100% -10% 0)" } : false}
                               animate={{ clipPath: "inset(-10% 0% -10% 0)" }}
                               transition={{ duration: 0.45, ease: "easeInOut", delay: 0.4 }}
@@ -440,6 +448,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                             <motion.div
                               className="pointer-events-none mix-blend-multiply"
                               style={box(
+                                k,
                                 row.stamp.x + (STAMP.boxW - STAMP.w) / 2,
                                 row.stamp.y + (STAMP.boxH - STAMP.h) / 2,
                                 STAMP.w,
@@ -458,38 +467,38 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                     );
                   })}
 
-                  <img src={`${A}/${TAPE_SHEET.src}`} alt="" draggable={false} className="pointer-events-none" style={at(TAPE_SHEET)} />
+                  <img src={`${A}/${TAPE_SHEET.src}`} alt="" draggable={false} className="pointer-events-none" style={at(k, TAPE_SHEET)} />
                 </motion.div>
               )}
 
               {/* 纸右上角压着的那条胶带 */}
-              <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(TAPE_TR)} />
+              <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(k, TAPE_TR)} />
 
               {/* 纸底下写在牛皮上的一句："往右走，去把它们一件件做完" + 一支与"向右滑"同款的手绘箭头。
                   全做完那次纸被揭走，这句也不用再说 */}
               {showList && (
                 <motion.div
                   className="pointer-events-none absolute flex items-center justify-center"
-                  style={{ ...box(SHEET_CX - 160, GO_HINT.y, 320), gap: 7 }}
-                  initial={{ opacity: 0, y: 6 }}
+                  style={{ ...box(k, SHEET_CX - 160, GO_HINT.y, 320), gap: 7 * k }}
+                  initial={{ opacity: 0, y: 6 * k }}
                   animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
                   exit={{ opacity: 0, transition: { duration: 0.2 } }}
                 >
                   <span
                     className="font-hand whitespace-nowrap"
                     style={{
-                      fontSize: `${hand ? GO_HINT.fontZh : GO_HINT.fontEn}px`,
+                      fontSize: `${(hand ? GO_HINT.fontZh : GO_HINT.fontEn) * k}px`,
                       lineHeight: 1.25,
                       color: GO_HINT.color,
-                      WebkitTextStroke: `0.4px ${GO_HINT.color}`,
+                      WebkitTextStroke: `${0.4 * k}px ${GO_HINT.color}`,
                     }}
                   >
                     {t("life.guide.scroll")}
                   </span>
                   <motion.div
                     style={{
-                      width: 12,
-                      height: 16,
+                      width: 12 * k,
+                      height: 16 * k,
                       rotate: -90,
                       background: GO_HINT.color,
                       WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
@@ -499,7 +508,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                       WebkitMaskRepeat: "no-repeat",
                       maskRepeat: "no-repeat",
                     }}
-                    animate={{ x: [0, 3, 0], opacity: [1, 0.55, 1] }}
+                    animate={{ x: [0, 3 * k, 0], opacity: [1, 0.55, 1] }}
                     transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
                   />
                 </motion.div>
@@ -524,6 +533,7 @@ function splitTask(text: string, lang: string): string[] {
  * play：刚划完最后一行、上面那张纸被揭走的那次——等纸走开再一句句擦出来、按钮最后弹上去；否则直接静态。
  */
 function DoneNote({
+  k,
   play,
   hand,
   line,
@@ -531,6 +541,7 @@ function DoneNote({
   cta,
   onGoDoor,
 }: {
+  k: number;
   play: boolean;
   hand: boolean;
   line: string;
@@ -547,7 +558,7 @@ function DoneNote({
     <>
       <motion.div
         className="font-hand absolute text-center"
-        style={{ ...box(197.5 - 98, 178.5, 196), fontSize: hand ? 13.5 : 15, lineHeight: hand ? 1.6 : 1.45 }}
+        style={{ ...box(k, 197.5 - 98, 178.5, 196), fontSize: (hand ? 13.5 : 15) * k, lineHeight: hand ? 1.6 : 1.45 }}
         {...wipe(2.45)}
       >
         <p>{line}</p>
@@ -558,29 +569,29 @@ function DoneNote({
         type="button"
         onClick={onGoDoor}
         className="absolute cursor-pointer"
-        style={{ ...box(CTA_ORIGIN.x, CTA_ORIGIN.y, CTA_ORIGIN.w, CTA_ORIGIN.h), transformOrigin: "50% 60%" }}
-        initial={play ? { opacity: 0, scale: 1.7, rotate: -12, y: 10 } : { opacity: 1, scale: 1, rotate: 0, y: 0 }}
+        style={{ ...box(k, CTA_ORIGIN.x, CTA_ORIGIN.y, CTA_ORIGIN.w, CTA_ORIGIN.h), transformOrigin: "50% 60%" }}
+        initial={play ? { opacity: 0, scale: 1.7, rotate: -12, y: 10 * k } : { opacity: 1, scale: 1, rotate: 0, y: 0 }}
         animate={{ opacity: 1, scale: 1, rotate: 0, y: 0, transition: { type: "spring", stiffness: 420, damping: 22, delay: play ? 3.15 : 0 } }}
         whileHover={{ scale: 1.06, rotate: 1.5 }}
         whileTap={{ scale: 0.96 }}
         transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
-        <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(CTA_BOX, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
+        <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(k, CTA_BOX, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
         <span
           className="font-look absolute whitespace-nowrap font-bold uppercase"
           style={{
-            left: 189.84 - CTA_ORIGIN.x,
-            top: 305.98 - CTA_ORIGIN.y,
+            left: (189.84 - CTA_ORIGIN.x) * k,
+            top: (305.98 - CTA_ORIGIN.y) * k,
             transform: "translate(-50%, -50%) rotate(-3.44deg)",
-            fontSize: hand ? 12 : 11.5,
+            fontSize: (hand ? 12 : 11.5) * k,
             lineHeight: 1.2,
             color: "#94541C",
           }}
         >
           {cta}
         </span>
-        <img src={`${A}/${CTA_ARROW.src}`} alt="" draggable={false} style={at(CTA_ARROW, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
-        <img src={`${A}/${CTA_TAPE.src}`} alt="" draggable={false} style={at(CTA_TAPE, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
+        <img src={`${A}/${CTA_ARROW.src}`} alt="" draggable={false} style={at(k, CTA_ARROW, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
+        <img src={`${A}/${CTA_TAPE.src}`} alt="" draggable={false} style={at(k, CTA_TAPE, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
       </motion.button>
     </>
   );

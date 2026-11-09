@@ -164,7 +164,7 @@ export default function AboutPage() {
     setPressed(true);
     at(140, () => setPressed(false));
     void shake.start({
-      y: [0, 1.8, -1.2, 0.4, 0],
+      y: [0, 1.8 * s, -1.2 * s, 0.4 * s, 0],
       transition: { duration: 0.26, ease: "easeOut" },
     });
   };
@@ -287,10 +287,8 @@ export default function AboutPage() {
         style={{
           left: ox,
           top: oy,
-          width: FW,
-          height: FH,
-          transform: `scale(${s})`,
-          transformOrigin: "0 0",
+          width: FW * s,
+          height: FH * s,
         }}
       >
         {/* 小羊水印：一直待在相机正下方，相纸出来时压在它上面 */}
@@ -299,15 +297,16 @@ export default function AboutPage() {
           alt=""
           draggable={false}
           className="pointer-events-none absolute max-w-none"
-          style={{ left: MARK.cx - MARK.w / 2, top: MARK.y, width: MARK.w, height: MARK.h }}
+          style={{ left: (MARK.cx - MARK.w / 2) * s, top: MARK.y * s, width: MARK.w * s, height: MARK.h * s }}
         />
 
         {/* 相纸层：机身底边以下才看得见；往下不封口，让它掉出屏幕 */}
-        <div className="absolute overflow-hidden" style={{ left: 0, top: MOUTH_Y, width: FW, height: 4000 }}>
+        <div className="absolute overflow-hidden" style={{ left: 0, top: MOUTH_Y * s, width: FW * s, height: 4000 * s }}>
           <AnimatePresence>
             {(phase === "eject" || phase === "develop" || phase === "ready") && (
               <Polaroid
                 key={shot.id}
+                s={s}
                 photo={shot.photo}
                 developed={phase === "develop" || phase === "ready"}
                 dropTo={dropTo}
@@ -319,14 +318,14 @@ export default function AboutPage() {
 
         {/* 相机：机身 + 快门 + 铭牌 */}
         <motion.div className="absolute inset-0 pointer-events-none" animate={shake}>
-          <img src={`${A}/camera.webp`} alt="" draggable={false} className="max-w-none" style={box(CAMERA)} />
+          <img src={`${A}/camera.webp`} alt="" draggable={false} className="max-w-none" style={box(CAMERA, s)} />
           <span
             className="font-nav absolute whitespace-nowrap font-extrabold"
             style={{
-              left: LABEL.cx,
-              top: LABEL.y,
+              left: LABEL.cx * s,
+              top: LABEL.y * s,
               transform: "translateX(-50%)",
-              fontSize: 16,
+              fontSize: 16 * s,
               lineHeight: 1.2,
               color: "#56504D",
               textTransform: "none",
@@ -339,8 +338,8 @@ export default function AboutPage() {
             aria-label="shutter"
             onClick={press}
             className={`pointer-events-auto absolute block p-0 ${canPress ? "cursor-pointer" : "cursor-default"}`}
-            style={{ ...box(BUTTON), background: "transparent", border: 0 }}
-            animate={{ y: pressed ? 2.2 : 0, scale: pressed ? 0.95 : 1 }}
+            style={{ ...box(BUTTON, s), background: "transparent", border: 0 }}
+            animate={{ y: pressed ? 2.2 * s : 0, scale: pressed ? 0.95 : 1 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
           >
             {/* 提示按快门：第一张自己出完、标注也出完之后整颗键一亮一暗，按过一次就不再闪 */}
@@ -383,6 +382,7 @@ export default function AboutPage() {
                   return (
                     <>
                       <Note
+                        s={s}
                         text={topText}
                         cx={360}
                         y={topY}
@@ -391,9 +391,10 @@ export default function AboutPage() {
                         hand="font-hand"
                         delay={0}
                       />
-                      <VerticalArrow x={360} y={13} dir="down" delay={0.12} />
-                      <VerticalArrow x={360} y={396} dir="up" delay={0.47} />
+                      <VerticalArrow s={s} x={360} y={13} dir="down" delay={0.12} />
+                      <VerticalArrow s={s} x={360} y={396} dir="up" delay={0.47} />
                       <Note
+                        s={s}
                         text={botText}
                         cx={360}
                         y={435}
@@ -408,6 +409,7 @@ export default function AboutPage() {
               ) : (
                 <>
                   <Note
+                    s={s}
                     text={pick(shot.note.left)}
                     cx={NOTE_L.cx}
                     y={NOTE_L.y}
@@ -418,6 +420,7 @@ export default function AboutPage() {
                   />
                   {/* 右边标注下面压着箭头：稿是 3 行，多出来的行往上长，别盖到箭头 */}
                   <Note
+                    s={s}
                     text={pick(shot.note.right)}
                     cx={NOTE_R.cx}
                     y={NOTE_R.y - Math.max(0, pick(shot.note.right).split("\n").length - 3) * NOTE_LH}
@@ -438,15 +441,15 @@ export default function AboutPage() {
             key={`n-${idx}`}
             className="font-look absolute whitespace-nowrap"
             style={{
-              left: footInset - ox / s,
-              top: footY,
-              fontSize: 12,
+              left: footInset * s - ox,
+              top: footY * s,
+              fontSize: 12 * s,
               lineHeight: 1.2,
               color: "#111",
             }}
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 6 * s }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            exit={{ opacity: 0, y: -6 * s }}
             transition={{ duration: 0.3 }}
           >
             {String(idx + 1).padStart(2, "0")}
@@ -457,15 +460,15 @@ export default function AboutPage() {
             key={`t-${idx}-${lang}`}
             className="font-look absolute whitespace-nowrap"
             style={{
-              right: footInset - ox / s,
-              top: footY,
-              fontSize: 12,
+              right: footInset * s - ox,
+              top: footY * s,
+              fontSize: 12 * s,
               lineHeight: 1.2,
               color: "#111",
             }}
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 6 * s }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            exit={{ opacity: 0, y: -6 * s }}
             transition={{ duration: 0.3 }}
           >
             {pick(shot.title)}
@@ -534,11 +537,13 @@ const FILTER_BLANK = "brightness(2.1) contrast(0.45) saturate(0) blur(3px)";
 const FILTER_CLEAR = "brightness(1) contrast(1) saturate(1) blur(0px)";
 
 function Polaroid({
+  s,
   photo,
   developed,
   dropTo,
   onEjected,
 }: {
+  s: number;
   photo: string;
   /** 开始显影 */
   developed: boolean;
@@ -547,17 +552,17 @@ function Polaroid({
   onEjected: () => void;
 }) {
   /* 相纸层的原点在 MOUTH_Y，这里的 top 要减掉 */
-  const restTop = PHOTO.y - MOUTH_Y;
+  const restTop = (PHOTO.y - MOUTH_Y) * s;
   /* 起点：整张藏在机身后（底边贴着出片口） */
-  const hidden = -PHOTO.h - 2 - restTop;
+  const hidden = (-PHOTO.h - 2) * s - restTop;
   return (
     <motion.div
       className="absolute"
       style={{
-        left: PHOTO.x,
+        left: PHOTO.x * s,
         top: restTop,
-        width: PHOTO.w,
-        height: PHOTO.h,
+        width: PHOTO.w * s,
+        height: PHOTO.h * s,
         transformOrigin: "50% 0%",
       }}
       initial={{ y: hidden, x: 0, rotate: 0 }}
@@ -566,8 +571,8 @@ function Polaroid({
         transition: { duration: EJECT_T, ease: [0.35, 0, 0.2, 1] },
       }}
       exit={{
-        y: dropTo,
-        x: 22,
+        y: dropTo * s,
+        x: 22 * s,
         rotate: 9,
         transition: { duration: DROP_T, ease: [0.5, 0, 0.85, 0.55] },
       }}
@@ -576,7 +581,7 @@ function Polaroid({
       }}
     >
       {/* 照片窗口：空白相纸 → 慢慢显出来 */}
-      <div className="absolute overflow-hidden" style={{ ...box(WINDOW), background: "#F3F1EA" }}>
+      <div className="absolute overflow-hidden" style={{ ...box(WINDOW, s), background: "#F3F1EA" }}>
         <motion.img
           src={photo}
           alt=""
@@ -601,10 +606,10 @@ function Polaroid({
         draggable={false}
         className="pointer-events-none absolute max-w-none"
         style={{
-          left: -FRAME_PAD,
-          top: -FRAME_PAD,
-          width: PHOTO.w + FRAME_PAD * 2,
-          height: PHOTO.h + FRAME_PAD * 2,
+          left: -FRAME_PAD * s,
+          top: -FRAME_PAD * s,
+          width: (PHOTO.w + FRAME_PAD * 2) * s,
+          height: (PHOTO.h + FRAME_PAD * 2) * s,
         }}
       />
     </motion.div>
@@ -615,6 +620,7 @@ function Polaroid({
 
 /** 一条标注 = 手写字（MarkedText）+ 一支指向相纸的手绘箭头；箭头等字和圈都出完再擦出来，出来后不动 */
 function Note({
+  s,
   text,
   cx,
   y,
@@ -624,6 +630,7 @@ function Note({
   arrow,
   delay,
 }: {
+  s: number;
   text: string;
   cx: number;
   y: number;
@@ -646,11 +653,11 @@ function Note({
     <>
       <MarkedText
         text={text}
-        cx={cx}
-        y={y}
-        w={w}
+        cx={cx * s}
+        y={y * s}
+        w={w * s}
         className={hand}
-        fontSize={fontSize}
+        fontSize={fontSize * s}
         color="#111"
         tone="dark"
         delay={delay}
@@ -658,7 +665,7 @@ function Note({
       {arrow && arrowWipe && (
         <motion.div
           className="absolute"
-          style={box(arrow.box)}
+          style={box(arrow.box, s)}
           initial={arrowWipe.hidden}
           animate={arrowWipe.shown}
           transition={{ duration: 0.35, delay: delay + 0.12, ease: "easeOut" }}
@@ -672,24 +679,26 @@ function Note({
 
 /** 手机竖屏上下两支竖向手绘小箭头（上方朝下指相机，下方朝上指相纸） */
 function VerticalArrow({
+  s,
   x,
   y,
   dir,
   delay,
 }: {
+  s: number;
   x: number;
   y: number;
   dir: "down" | "up";
   delay: number;
 }) {
-  const w = 13.5;
-  const h = 31;
+  const w = 13.5 * s;
+  const h = 31 * s;
   return (
     <div
       className="absolute"
       style={{
-        left: x - w / 2,
-        top: y,
+        left: x * s - w / 2,
+        top: y * s,
         width: w,
         height: h,
         transform: dir === "up" ? "rotate(180deg)" : undefined,
