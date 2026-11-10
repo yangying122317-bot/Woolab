@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import {
-  AnimatePresence,
   motion,
   useInView,
   useMotionValueEvent,
@@ -453,27 +452,13 @@ function LabelRow({ u, left, right }: { u: number; left: string; right: string }
     top: mobile ? "91%" : "50%",
     transform: "translateY(-50%)",
   };
-  const fade = {
-    initial: { opacity: 0, y: 4 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -4 },
-    transition: { duration: 0.18 },
-  };
   return (
     <>
       <div className="font-look absolute z-30 whitespace-nowrap text-white" style={{ ...s, left: mobile ? 18 : 25 * u }}>
-        <AnimatePresence mode="wait">
-          <motion.p key={left} {...fade}>
-            {left}
-          </motion.p>
-        </AnimatePresence>
+        <p>{left}</p>
       </div>
       <div className="font-look absolute z-30 whitespace-nowrap text-right text-white" style={{ ...s, right: mobile ? 18 : 20 * u }}>
-        <AnimatePresence mode="wait">
-          <motion.p key={right} {...fade}>
-            {right}
-          </motion.p>
-        </AnimatePresence>
+        <p>{right}</p>
       </div>
     </>
   );
@@ -1737,11 +1722,13 @@ export function DetailPage({
   /* 出场起始延时：第一次是画框放大到满屏那一刻才挂上来的，稍等一拍再出；之后切项目差不多 */
   const base = entered ? 0.2 : 0.25;
 
-  /* 两边的标签：平时是正在看的这一件（滚到哪件算哪件），鼠标放到墙上某只框时换成那个项目的 */
+  /* 两边的标签：平时是正在看的这一件（滚到哪件算哪件），鼠标放到墙上某只框或点击飞回页顶期间锁定显示目标项目的标签 */
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [flying, setFlying] = useState<number | null>(null);
   const [lookIdx, setLookIdx] = useState(0);
+  const targetIdx = flying ?? hoverIdx;
   const shownLabel =
-    hoverIdx === null ? labelOf(pick, project, index, lookIdx) : labelOf(pick, labProjects[hoverIdx], hoverIdx);
+    targetIdx === null ? labelOf(pick, project, index, lookIdx) : labelOf(pick, labProjects[targetIdx], targetIdx);
 
   const vw = useViewportWidth();
   const [vh, setVh] = useState(() => window.innerHeight);
@@ -1858,7 +1845,6 @@ export function DetailPage({
    * 在墙上挑了另一件：那只框从墙上升起来飞回屏中（墙同时暗下去），边飞边歪回起始角度，
    * 到位后切项目、回顶部，屏中的主角正好接在它落点上，再把飞的这只撤掉。
    */
-  const [flying, setFlying] = useState<number | null>(null);
   const flyTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
   const onFlown = () => {
@@ -1868,6 +1854,7 @@ export function DetailPage({
     if (el) el.scrollTop = 0;
     scrollY.set(0);
     setLanded(false);
+    setLookIdx(0);
     if (flying !== index) {
       onNext?.(flying);
     }
