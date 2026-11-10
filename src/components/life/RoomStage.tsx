@@ -724,27 +724,58 @@ function LiftSprite({
  */
 function FridgeHover({ layer }: { layer: SceneLayer }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    void loadImage("/assets/life/seg03/fridge-open.webp");
+  }, []);
+  const handleOpen = () => {
+    setOpen((prev) => {
+      if (!prev) playMailboxOpen();
+      return true;
+    });
+  };
+  const handleClose = () => {
+    setOpen((prev) => {
+      if (prev) playMailboxClose();
+      return false;
+    });
+  };
   return (
-    <img
-      src={`/assets/life/seg03/${open ? "fridge-open" : "fridge"}.webp`}
-      alt=""
-      draggable={false}
-      className="absolute max-w-none select-none"
+    <div
+      className="pointer-events-auto absolute cursor-pointer select-none"
       style={{
         left: vh(layer.x),
         top: vh(layer.y),
         width: vh(open ? 887 : layer.w),
         height: vh(layer.h),
       }}
-      onMouseEnter={() => {
-        setOpen(true);
-        playMailboxOpen();
-      }}
-      onMouseLeave={() => {
-        setOpen(false);
-        playMailboxClose();
-      }}
-    />
+      onMouseEnter={handleOpen}
+      onMouseMove={handleOpen}
+      onMouseLeave={handleClose}
+      onClick={() => (open ? handleClose() : handleOpen())}
+    >
+      <img
+        src="/assets/life/seg03/fridge.webp"
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute top-0 left-0 max-w-none select-none"
+        style={{
+          width: vh(layer.w),
+          height: vh(layer.h),
+          opacity: open ? 0 : 1,
+        }}
+      />
+      <img
+        src="/assets/life/seg03/fridge-open.webp"
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute top-0 left-0 max-w-none select-none"
+        style={{
+          width: vh(887),
+          height: vh(layer.h),
+          opacity: open ? 1 : 0,
+        }}
+      />
+    </div>
   );
 }
 

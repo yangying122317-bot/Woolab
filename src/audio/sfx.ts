@@ -600,7 +600,20 @@ export function preloadSamples(ids: readonly SampleId[]): Promise<void> {
 }
 const ALL_SAMPLES = Object.keys(SAMPLES) as SampleId[];
 
-/** 全站音频预加载：立即拉取全部短音效字节 + 电话录音字节 + 当前环境音 Blob */
+/** 首页小电视阶段：加载当前时段的首页背景音 + 首页短音效（上限 2.2s，不卡慢网） */
+export function preloadHomeAudio(ambientId: AmbientId): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const tasks: Promise<unknown>[] = [
+    warmAmbient(ambientId),
+    preloadSamples(["navClick", "menuDrop", "hello"]),
+  ];
+  return Promise.race([
+    Promise.all(tasks).then(() => undefined),
+    new Promise<void>((r) => window.setTimeout(r, 2200)),
+  ]);
+}
+
+/** 后台静默预热其余短音效字节（不预下载未进入场景的大体积背景音乐，避免抢占图片带宽） */
 export function preloadAllAudio(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   const tasks: Promise<unknown>[] = [
@@ -610,14 +623,6 @@ export function preloadAllAudio(): Promise<void> {
   if (ambientWanted) {
     tasks.push(warmAmbient(ambientWanted));
   }
-  // 等首屏小电视结束后，在后台依次把其余环境音也预热进内存，不抢首屏带宽
-  window.setTimeout(() => {
-    void (async () => {
-      for (const id of ["life", "day", "calm", "night", "rain"] as const) {
-        await warmAmbient(id);
-      }
-    })();
-  }, 3800);
   return Promise.race([
     Promise.all(tasks).then(() => undefined),
     new Promise<void>((r) => window.setTimeout(r, 1500)),
@@ -836,10 +841,5 @@ export function playPhonePickup() {
   }
   syllable(line, a, 0.2, 200, 178, 560, 1700, 0.5);
   syllable(line, a + 0.24, PHONE.helloEnd - a - 0.24, 172, 262, 480, 1250, 0.45);
-}
-
-/* 一进站立即开始拉取全部音效字节（置于模块末尾，确保所有音频常量与缓存变量已初始化） */
-if (typeof window !== "undefined") {
-  void preloadAllAudio();
 }
 

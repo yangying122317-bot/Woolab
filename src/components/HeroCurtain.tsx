@@ -11,7 +11,7 @@ import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
 import { useReportNavHidden } from "../state/chrome";
 import { useLanguage } from "../i18n/LanguageContext";
 import { getViewWidth } from "../device";
-import { preloadAllAudio } from "../audio/sfx";
+import { preloadHomeAudio, type AmbientId } from "../audio/sfx";
 import { isImageReady, loadImageStrict } from "./life/preload";
 
 /**
@@ -137,6 +137,7 @@ export type CurtainCamera = {
 
 export default function HeroCurtain({
   preload,
+  ambientId,
   preview,
   slide,
   camera,
@@ -145,6 +146,8 @@ export default function HeroCurtain({
 }: {
   /** 要等的图 */
   preload: string[];
+  /** 当前首页对应的时段/天气背景音 */
+  ambientId: AmbientId;
   /** 预览入口：不写会话标记 */
   preview: boolean;
   /** 置真就往电视里推镜头 */
@@ -261,7 +264,7 @@ export default function HeroCurtain({
     const restAssets = Array.from(
       new Set(preload.filter((u) => u !== TV.src && u !== SCREEN_FRAME.src)),
     );
-    const total = restAssets.length + 3;
+    const total = restAssets.length + 4;
     const tvTask = Promise.all([loaded(TV.src), loaded(SCREEN_FRAME.src)]).then(() => {
       done += 2;
       if (alive) setTvReady(true);
@@ -292,7 +295,9 @@ export default function HeroCurtain({
     const fonts = loadFonts().then(() => {
       done += 1;
     });
-    const audio = preloadAllAudio();
+    const audio = preloadHomeAudio(ambientId).then(() => {
+      done += 1;
+    });
     const minShow = new Promise<void>((r) =>
       window.setTimeout(r, MIN_SHOW * 1000),
     );

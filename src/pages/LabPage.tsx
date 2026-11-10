@@ -94,48 +94,54 @@ function EntrancePainting({
   mobile: boolean;
   onHover: (h: boolean) => void;
 }) {
-  const spring = { stiffness: 180, damping: 20 };
-  const x = useSpring(0, spring);
-  const y = useSpring(0, spring);
-  const rotate = useSpring(0, spring);
-  const scale = useSpring(1, spring);
+  const spring = { stiffness: 160, damping: 19 };
+  const rotateX = useSpring(0, spring);
+  const rotateY = useSpring(0, spring);
+  const scale = useSpring(1, { stiffness: 180, damping: 20 });
 
   return (
-    <motion.img
+    <motion.div
       id="lab-entrance-painting"
-      src="/assets/lab/gallery-painting-big.webp"
-      alt=""
-      draggable={false}
-      className="absolute max-w-none cursor-pointer select-none"
+      className="absolute cursor-pointer select-none"
       style={{
         ...rect,
         opacity: hidden ? 0 : 1,
         pointerEvents: pe,
-        x: mobile ? undefined : x,
-        y: mobile ? undefined : y,
-        rotate: mobile ? undefined : rotate,
-        scale: mobile ? undefined : scale,
+        isolation: "isolate",
+        zIndex: 2,
       }}
       onPointerMove={(e) => {
         if (mobile) return;
         const r = e.currentTarget.getBoundingClientRect();
         const dx = (e.clientX - r.left) / r.width - 0.5;
         const dy = (e.clientY - r.top) / r.height - 0.5;
-        x.set(dx * 4.5);
-        y.set(dy * 4.5);
-        rotate.set(dx * 1.1);
+        rotateX.set(-dy * 3.6);
+        rotateY.set(dx * 3.6);
         scale.set(1.02);
         onHover(true);
       }}
       onPointerLeave={() => {
         if (mobile) return;
-        x.set(0);
-        y.set(0);
-        rotate.set(0);
+        rotateX.set(0);
+        rotateY.set(0);
         scale.set(1);
         onHover(false);
       }}
-    />
+    >
+      <motion.img
+        src="/assets/lab/gallery-painting-big.webp"
+        alt=""
+        draggable={false}
+        className="block h-full w-full max-w-none select-none"
+        style={{
+          rotateX: mobile ? undefined : rotateX,
+          rotateY: mobile ? undefined : rotateY,
+          scale: mobile ? undefined : scale,
+          z: mobile ? undefined : 30,
+          transformPerspective: mobile ? undefined : 900,
+        }}
+      />
+    </motion.div>
   );
 }
 
@@ -602,13 +608,12 @@ function CorridorStation({
      深度触到钳位后直接隐藏并 display: none，释放超大 GPU 合成纹理 */
   const visible = useTransform(camDepth, (cz) => (z - cz > minD ? 1 : 0));
   const display = useTransform(visible, (v) => (v > 0 ? "block" : "none"));
-  const transform = useMotionTemplate`translate(-50%, -100%) translate(${x}px, ${feetOffset}px) scale(${scale})`;
-  /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微浮动（纯 2D 变换，避免 Safari 3D 深度缓冲斜切） */
-  const tiltSpring = { stiffness: 180, damping: 20 };
-  const artX = useSpring(0, tiltSpring);
-  const artY = useSpring(0, tiltSpring);
-  const artRot = useSpring(0, tiltSpring);
-  const artScale = useSpring(1, tiltSpring);
+  const transform = useMotionTemplate`translate(-50%, -100%) translate3d(${x}px, ${feetOffset}px, 0) scale(${scale})`;
+  /* 展品 hover：与珍珠小羊油画同款——缓动放大 + 朝鼠标方向轻微 3D 倾斜 */
+  const tiltSpring = { stiffness: 160, damping: 19 };
+  const artRX = useSpring(0, tiltSpring);
+  const artRY = useSpring(0, tiltSpring);
+  const artScale = useSpring(1, { stiffness: 180, damping: 20 });
 
   /* 板内排版：画框水平居中、顶在 21.5%；壁灯灯具顶贴板顶、灯具高 16%；
      号码牌在画框下方居中 */
@@ -696,16 +701,14 @@ function CorridorStation({
           const r = ev.currentTarget.getBoundingClientRect();
           const dx = (ev.clientX - r.left) / r.width - 0.5;
           const dy = (ev.clientY - r.top) / r.height - 0.5;
-          artX.set(dx * 4.5);
-          artY.set(dy * 4.5);
-          artRot.set(dx * 1.1);
+          artRX.set(-dy * 3.6);
+          artRY.set(dx * 3.6);
           artScale.set(1.02);
         }}
         onPointerLeave={() => {
           if (mobile) return;
-          artX.set(0);
-          artY.set(0);
-          artRot.set(0);
+          artRX.set(0);
+          artRY.set(0);
           artScale.set(1);
         }}
         aria-label={`${project.title.zh} / ${project.title.en}`}
@@ -716,6 +719,8 @@ function CorridorStation({
           width: aw + 32,
           height: artTop + ah - lampTop + 16,
           pointerEvents: enabled ? "auto" : "none",
+          isolation: "isolate",
+          zIndex: 2,
         }}
       >
         <div
@@ -740,10 +745,11 @@ function CorridorStation({
             top: artTop - lampTop,
             width: aw,
             height: ah,
-            x: mobile ? undefined : artX,
-            y: mobile ? undefined : artY,
-            rotate: mobile ? undefined : artRot,
+            rotateX: mobile ? undefined : artRX,
+            rotateY: mobile ? undefined : artRY,
             scale: mobile ? undefined : artScale,
+            z: mobile ? undefined : 30,
+            transformPerspective: mobile ? undefined : 900,
             opacity: artHidden ? 0 : 1,
             filter: hover ? "brightness(1.08)" : "brightness(1)",
             transition: "filter 0.35s ease",
@@ -1734,13 +1740,16 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       }
       setPhase("shrink");
       /* 收尾在缩小真正开始后再计时：飞行 1.1s + 黑幕揭开的尾巴 */
-      at(1400, finish);
+      at(1150, finish);
     };
 
-    const paintingReady = loadImage(INTRO_PAINTING).then(() => {
+    void loadImage(INTRO_PAINTING).then(() => {
       setHiResReady(true);
     });
-    const entranceReady = loadImages(LAB_ENTRANCE_FIRST, 5);
+    const entranceReady = Promise.race([
+      loadImages(LAB_ENTRANCE_FIRST, 5),
+      new Promise<void>((r) => at(2200, r)),
+    ]);
 
     if (startAtShrink) {
       /*
@@ -1766,18 +1775,15 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
       at(pageY && pageY.get() !== 0 ? 1600 : 1000, go);
     } else {
       /*
-       * 高清大油画（1147×1249）一解码好立刻上屏（不再使用低清马赛克预览图）；
-       * 等油画显现满 3.2s 且入口首屏素材解码完成后，淡出文字、亮起高清画并缩进金框。
+       * 文字动画与入口首屏素材加载并行进行（不再等图下完才开始算文字停留时间）；
+       * 停留满 2.0s 且入口素材就绪后，淡出文字、亮起油画并缩进金框。
        */
-      void paintingReady.then(() => {
+      const minTextStay = new Promise<void>((r) => at(2000, r));
+      void Promise.all([minTextStay, entranceReady]).then(() => {
         if (done.current) return;
-        const minTextStay = new Promise<void>((r) => at(3200, r));
-        void Promise.all([minTextStay, entranceReady]).then(() => {
-          if (done.current) return;
-          setPhase("fade");
-          at(600, () => setPhase("bright"));
-          at(2100, shrink);
-        });
+        setPhase("fade");
+        at(450, () => setPhase("bright"));
+        at(1400, shrink);
       });
     }
 
@@ -1799,7 +1805,7 @@ function LabIntro({ onDone, startAtShrink = false }: { onDone: () => void; start
     timers.current.push(window.setTimeout(finish, 280));
   };
 
-  const textVisible = phase === "text" && hiResReady;
+  const textVisible = phase === "text";
   const lit = phase === "bright" || phase === "hold" || phase === "shrink";
   const darkFilter = isMobileView() ? INTRO_FILTER_DARK_MOBILE : INTRO_FILTER_DARK;
 

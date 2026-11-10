@@ -443,7 +443,7 @@ export default function AboutPage() {
             style={{
               left: footInset * s - ox,
               top: footY * s,
-              fontSize: 12 * s,
+              fontSize: (mobile ? 13.5 : 15) * s,
               lineHeight: 1.2,
               color: "#111",
             }}
@@ -462,7 +462,7 @@ export default function AboutPage() {
             style={{
               right: footInset * s - ox,
               top: footY * s,
-              fontSize: 12 * s,
+              fontSize: (mobile ? 13.5 : 15) * s,
               lineHeight: 1.2,
               color: "#111",
             }}

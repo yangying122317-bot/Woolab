@@ -7,6 +7,7 @@ import {
   playMailboxClose,
   playMailboxOpen,
   playNavigate,
+  preloadAllAudio,
   startAmbient,
   stopAmbient,
   warmAmbient,
@@ -35,14 +36,13 @@ import HeroCurtain from "./HeroCurtain";
 import IdentityCard from "./IdentityCard";
 import { setMobileThemeColor } from "../state/chrome";
 import {
-  LIFE_CORE_ASSETS,
   isImageReady,
   loadImage,
   loadImages,
   preloadLifeFirst,
   warmLifeFirst,
 } from "./life/preload";
-import { MENU_ASSETS, warmPages } from "../data/pageAssets";
+import { LAB_INTRO, warmMenu, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
 
@@ -298,7 +298,6 @@ export const HERO_PRELOAD: string[] = [
   "/assets/hero-base-edge-r.png",
   SPRITES.openSign.src,
   SPRITES.sheep.src,
-  SPRITES.sheep.anim,
   SPRITES.sheepShadow.src,
   SPRITES.mailbox.headClosed,
   SPRITES.mailbox.headOpen,
@@ -314,20 +313,6 @@ export const HERO_PRELOAD: string[] = [
   ...BIRD_FLAP_FRAMES,
   BIRD_STAND.src,
   "/assets/hero-window-lit.webp",
-  "/assets/hero-leaf-1.png",
-  "/assets/hero-leaf-2.png",
-  "/assets/hero-leaf-3.png",
-  "/assets/hero-rain-s.webp",
-  "/assets/hero-rain-m.webp",
-  "/assets/hero-rain-l.webp",
-  "/assets/hero-firefly-body.webp",
-  "/assets/hero-firefly-tail.webp",
-  "/assets/hero-firefly-wing-top.webp",
-  "/assets/hero-firefly-wing-bottom.webp",
-  "/assets/lab/gallery-painting-big.webp",
-  ...MENU_ASSETS,
-  /* 桌面端在小电视阶段直接把 Life 首屏全部解码进内存；手机窄屏不在首页解码 Life 全套大图，防止手机 Safari 显存超标 */
-  ...(typeof window !== "undefined" && window.innerWidth < 768 ? [] : LIFE_CORE_ASSETS),
 ];
 
 /** 手机端首页核心图层：小电视阶段只等这几张首屏静态图层，保证手机首次打开 1.6s 即刻开机，不卡慢网 */
@@ -641,17 +626,20 @@ function SceneCanvas({ cover }: { cover: boolean }) {
     const [topC, botC] = BARS[themeKey] ?? BARS.day;
     setMobileThemeColor(topC, botC);
   }, [cover, curtainUp, curtainSlide, themeKey]);
-  /* 首页自身素材已在小电视阶段或内页后台全部解码完；已就绪时第一帧直接挂上动态小羊，并立即在后台预加载 Life 页代码与第一屏图层 */
+  /* 小电视开机进院子后：后台按优先级加载小羊眨眼动图 → 目录吊牌 & Lab 大油画 → Life 首屏 */
   const [sheepAnim, setSheepAnim] = useState(() => isImageReady(SPRITES.sheep.anim));
   useEffect(() => {
     if (curtainUp) return;
     let alive = true;
     void import("../pages/LifePage");
     void import("../pages/LabPage");
+    void preloadAllAudio();
+    void warmMenu();
+    void loadImages(LAB_INTRO, 4);
     loadImage(SPRITES.sheep.anim).then(() => {
       if (!alive) return;
       setSheepAnim(true);
-      warmLifeFirst(0, () => warmPages(600));
+      warmLifeFirst(200, () => warmPages(600));
     });
     return () => {
       alive = false;
@@ -989,6 +977,8 @@ function SceneCanvas({ cover }: { cover: boolean }) {
       void loadImages(DOOR_OPEN_ASSETS);
       void preloadLifeFirst();
       warmAmbient("life");
+    } else if (id === "lab") {
+      void loadImages(LAB_INTRO, 4);
     }
     // about = WOOLAB 吊灯开灯；life = 大门玻璃亮灯
     if (id === "about" || id === "life") playLightOn();
@@ -1140,6 +1130,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
         <HeroCurtain
           key={curtainRun}
           preload={cover ? HERO_PRELOAD : MOBILE_HERO_PRELOAD}
+          ambientId={rain ? "rain" : phase === "day" ? "day" : phase === "night" ? "night" : "calm"}
           preview={introPreview}
           slide={curtainSlide}
           camera={camera}

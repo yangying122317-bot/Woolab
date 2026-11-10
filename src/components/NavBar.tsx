@@ -242,7 +242,7 @@ export default function NavBar({
       {/* 右：MENU / CN · EN / 喇叭 */}
       <motion.div
         className={`font-nav flex items-center font-bold uppercase leading-[1.2] ${rightOff ? "pointer-events-none" : "pointer-events-auto"}`}
-        style={{ fontSize: mu(12), letterSpacing: mu(0.6), gap: `calc(var(--mu) * var(--nav-gap, 26))` }}
+        style={{ fontSize: mu(lang === "zh" ? 13 : 12), letterSpacing: mu(0.6), gap: `calc(var(--mu) * var(--nav-gap, 26))` }}
         initial={false}
         animate={{ opacity: rightOff ? 0 : 1 }}
         transition={{ duration: rightOff ? 0 : 0.6, ease: "easeOut" }}

@@ -740,8 +740,8 @@ export default function LifePage() {
           </motion.div>
         )}
 
-        {/* 底部进度条（仅桌面端显示） */}
-        {!mobileView && (
+        {/* 底部进度条（仅桌面端漫游态显示，推近互动时收起避免与「先离开」重叠） */}
+        {!mobileView && !focus && (
           <div className="absolute inset-x-0 bottom-5 z-20 mx-auto w-40 rounded-full bg-black/10">
             <motion.div
               className="h-1.5 rounded-full bg-neutral-700/70"
@@ -817,8 +817,8 @@ export default function LifePage() {
                 style={{
                   ...PAPER_TAG,
                   rotate: "1deg",
-                  padding: mobileView ? "0.65vh 2vh 0.75vh" : "0.35vh 1.3vh 0.45vh",
-                  fontSize: mobileView ? "2.1vh" : "1.6vh",
+                  padding: mobileView ? "0.65vh 2vh 0.75vh" : "0.5vh 1.5vh 0.6vh",
+                  fontSize: mobileView ? "2.1vh" : "2.1vh",
                   letterSpacing: "0.04em",
                 }}
               >

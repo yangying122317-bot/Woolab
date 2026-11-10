@@ -41,9 +41,9 @@ const CUP = { w: 101, h: 121 };
 const CUP_REST = { x: 8848, y: 1428 };
 /** 手绘成品杯（drink-final-a/b/c，含柠檬片和冰块）：杯底对齐纸杯杯底 */
 const FINAL = { x: 8843, y: 1374, w: 148, h: 175 };
-/** 选中的瓶子站到杯子左前方黄桌布空位（避开后排左瓶瓶底，贴近纸杯左侧） */
-const BESIDE_X = 8750;
-const BESIDE_BOTTOM = CUP_REST.y + CUP.h + 44;
+/** 选中的瓶子站到杯子左边（瓶底与杯底对齐） */
+const BESIDE_X = 8726;
+const BESIDE_BOTTOM = CUP_REST.y + CUP.h;
 
 /** 案板（含柠檬和刀的两状态素材：整颗 → 切开） */
 const BOARD = { x: 8978, y: 1408, w: 546, h: 227 };
