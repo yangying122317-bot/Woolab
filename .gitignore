@@ -1,4 +1,18 @@
-node_modules
-dist
-.DS_Store
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+
+# Local exports and caches (not required to run the website)
+exports/
+.vercel/
+*.log
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
 *.local
+
+# OS files
+.DS_Store

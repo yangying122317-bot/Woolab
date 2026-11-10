@@ -3,10 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "typecheck": "tsc --noEmit",
+    "typecheck:api": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --skipLibCheck api/weather.ts",
+    "build": "npm run typecheck && npm run typecheck:api && vite build",
+    "preview": "vite preview",
+    "check": "npm run build",
+    "assets:life": "python3 scripts/gen-life-assets.py"
   },
   "dependencies": {
     "framer-motion": "^12.42.2",

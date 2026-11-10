@@ -1,58 +1,73 @@
-# 小羊的世界 · 角色展示网站框架
+# WOOLAB
 
-原创角色展示网站的基础框架，不预设视觉风格。首页以角色居住地的地图作为全站导航，所有图片、文案、导航名称均可替换。
+WOOLAB 是一个中英双语的沉浸式互动网站。首页、Life 房间、Lab 画廊、About 相机和 Contact 信件均有独立动画、音频、触控与 Safari 兼容逻辑。
 
-## 快速开始
+- 线上地址：<https://woolab.art>
+- GitHub：<https://github.com/yangying122317-bot/Woolab>
+- 技术栈：React 19、TypeScript、Vite 8、React Router、Framer Motion、Lenis、Tailwind CSS 4
+
+## 本地运行
+
+要求 Node `>=20.19.0`，推荐使用仓库 `.nvmrc` 指定的 Node 22。
 
 ```bash
-npm install     # 安装依赖
-npm run dev     # 启动开发服务器
-npm run build   # 类型检查 + 生产构建（输出到 dist/）
+nvm use
+npm ci
+npm run dev -- --host 0.0.0.0
 ```
 
-技术栈：Vite + React + TypeScript + Tailwind CSS + Framer Motion + React Router。纯静态站点，可直接部署到 Vercel / Netlify。
+常用命令：
 
-## 如何替换内容
-
-### 图片素材（`public/assets/`）
-
-| 文件 | 用途 |
-| --- | --- |
-| `logo.svg` | 站点 logo（页头、开场动画、favicon） |
-| `map-bg.svg` | 首页横版地图底图 |
-| `map-portrait.svg` | 首页竖版地图底图（移动端地图模式用） |
-| `about-hero.svg` | About 页头图 |
-| `characters/*.svg` | 角色立绘（建议透明底 PNG/SVG） |
-| `stories/*.svg` | 故事系列封面与配图 |
-| `lab/*.svg` | 实验室项目配图 |
-
-替换时保持文件路径不变即可；换文件名的话同步修改对应数据文件里的 `image` / `cover` 字段。
-
-### 文案与数据
-
-| 文件 | 内容 |
-| --- | --- |
-| `src/i18n/dict.ts` | 所有界面文案（站名、导航名称、标题等），中英两份 |
-| `src/data/characters.ts` | 角色列表：加一条记录 + 一张图即可新增角色 |
-| `src/data/stories.ts` | 故事系列与篇章：详情页模板自动复用 |
-| `src/data/labs.ts` | 实验室项目列表：持续追加即可 |
-| `src/data/mapLocations.ts` | 地图上各地点的位置（百分比坐标）与路由 |
-| `src/pages/AboutPage.tsx` | About 页正文段落 |
-
-所有需要翻译的字段都是 `{ zh: "...", en: "..." }` 结构。
-
-### 全局开关（`src/config.ts`）
-
-- `introEnabled`：是否播放开场动画（每个浏览器会话一次）。开场动画本体在 `src/components/IntroLoader.tsx`，以后可替换为序列帧 / Lottie / 视频。
-- `mobileMapMode`：移动端首页地图的形态，`"list"`（默认，列表导航）或 `"map"`（使用竖版地图素材）。
-
-## 目录结构
-
+```bash
+npm run check       # 类型检查（前端 + 天气 API）并生产构建
+npm run preview     # 预览 dist/
+npm run assets:life # Life 素材变化后重新生成资源清单
 ```
-src/
-├── components/   # 开场动画、地图导航、内页布局、角色弹窗、语言切换
-├── data/         # 角色 / 故事 / 实验室 / 地图地点（数据驱动）
-├── i18n/         # 语言字典 + 中英切换 Context
-├── pages/        # 首页 + 六个板块页面
-└── config.ts     # 全局开关
+
+项目没有必需环境变量，也没有数据库。`npm run dev` 默认使用 Vite；本地不会运行 Vercel Weather API，首页天气会使用前端兜底。
+
+## 导入 OpenAI Codex
+
+1. 在 Codex 中连接 GitHub。
+2. 选择 `yangying122317-bot/Woolab`，分支选择 `main`。
+3. Setup command 填写 `npm ci`。
+4. 验证命令使用 `npm run check`；需要预览时运行 `npm run dev -- --host 0.0.0.0`。
+
+Codex 会自动读取根目录 `AGENTS.md`。完整架构与已知问题见 `docs/CODEX_HANDOFF.md`，内容和素材位置见 `docs/DATA_MAP.md`。
+
+## 主要路由
+
+- `/`：首页四时段与晴雨场景
+- `/life`：横向房间与四项互动任务
+- `/about`：拍立得相机与 What's Next
+- `/lab`：沉浸式画廊及同页产品详情
+- `/contact`：信件、社交链接与电话
+- `/stories`、`/news`：保留页面，目前不在主导航中
+- `/intro`：首页开场动画预览
+
+## 目录
+
+```text
+api/             Vercel Edge 天气函数
+public/assets/   网站运行时图片、字体和音频
+scripts/         素材清单生成脚本
+src/components/  全局及页面交互组件
+src/data/        双语内容、图层坐标和资源清单
+src/i18n/        语言 Context 与界面字典
+src/pages/       页面与 Lab 详情
+src/state/       页面外壳、开场及 Life 持久状态
+网站素材/        原始设计档案，不参与运行
 ```
+
+`src/data/lifeAssets.ts` 由脚本生成，不要手动修改。`exports/` 是本地交付文件，不属于应用，也不会提交到 Git。
+
+## 部署
+
+Vercel 使用 `vercel.json`：
+
+- 所有 SPA 深链回写到 `index.html`
+- `/api/weather` 根据访客位置请求 Open-Meteo
+- 静态资源使用长期缓存
+- 旧 Vercel 域名重定向到 `woolab.art`
+
+若部署到其他平台，必须另外配置 SPA fallback，并重写天气函数；仅上传 `dist/` 时网站仍可运行，但天气会走随机兜底。
