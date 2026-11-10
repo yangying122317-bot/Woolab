@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import {
+  AnimatePresence,
   motion,
   useInView,
   useMotionValueEvent,
@@ -452,13 +453,27 @@ function LabelRow({ u, left, right }: { u: number; left: string; right: string }
     top: mobile ? "91%" : "50%",
     transform: "translateY(-50%)",
   };
+  const fade = {
+    initial: { opacity: 0, y: 4 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -4 },
+    transition: { duration: 0.18 },
+  };
   return (
     <>
       <div className="font-look absolute z-30 whitespace-nowrap text-white" style={{ ...s, left: mobile ? 18 : 25 * u }}>
-        <p>{left}</p>
+        <AnimatePresence mode="wait">
+          <motion.p key={left} {...fade}>
+            {left}
+          </motion.p>
+        </AnimatePresence>
       </div>
       <div className="font-look absolute z-30 whitespace-nowrap text-right text-white" style={{ ...s, right: mobile ? 18 : 20 * u }}>
-        <p>{right}</p>
+        <AnimatePresence mode="wait">
+          <motion.p key={right} {...fade}>
+            {right}
+          </motion.p>
+        </AnimatePresence>
       </div>
     </>
   );
