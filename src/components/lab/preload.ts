@@ -1,4 +1,4 @@
-import { loadImages, warmBytes } from "../life/preload";
+import { loadImages } from "../life/preload";
 import { labProjects, type LabProject } from "../../data/labs";
 import { isMobileView } from "../../device";
 
@@ -69,7 +69,7 @@ export function warmLabDetail(): Promise<void> {
   if (!warmed) {
     const first = [...SHARED_FIRST, ...labProjects.map(frameArt).filter((s): s is string => !!s)];
     if (isMobileView()) {
-      warmed = warmBytes(first, 3);
+      warmed = loadImages(first, 4);
       return warmed;
     }
     const rest = new Set<string>(SHARED_REST);

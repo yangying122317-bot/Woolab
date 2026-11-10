@@ -1987,20 +1987,31 @@ export default function LabPage() {
   /* 从目录吊牌跳进来的，整页被拉上来已经是过场了，开场只放最后"缩小归位"那一段 */
   const fromMenu = (useLocation().state as { from?: string } | null)?.from === "menu";
   const [introPlaying, setIntroPlaying] = useState(true);
-  /* 翻转卡片背面要用的图先取回来解码好（剪影遮罩、详情页的石墙），点开那一下才不会卡一帧或丢失翻转背面的石墙 */
+  /* 翻转卡片背面与首屏画框要用的图先取回来解码好，点开那一下才不会卡一帧或画框慢半拍 */
   useEffect(() => {
     const urls = [
       ...STATION_CFG.map((c) => `/assets/lab/${c.mask}.png`),
       "/assets/lab/detail/bg-stone-wall.webp",
       "/assets/lab/detail/bg-stone-mark.webp",
+      "/assets/lab/detail/gold-frame.webp",
+      "/assets/lab/detail/art-tee.webp",
+      "/assets/lab/detail/frame-sticker.webp",
+      "/assets/lab/detail/frame-drink.webp",
+      "/assets/lab/detail/frame-candle.webp",
       /* 尽头墙上的小场景（开门那张是碰到门才显示的，先拉好免得闪） */
       "/assets/lab/end-frame.webp",
       "/assets/lab/prop-thinker.webp",
       "/assets/life/seg03/lab-door.webp",
       "/assets/life/seg03/lab-door-open.webp",
     ];
-    void loadImages(urls, 4);
+    void loadImages(urls, 6);
   }, []);
+  /* 滚到哪个展位附近就把哪个项目的详情图提前拉齐（兼顾手机端无 hover 的情况） */
+  useEffect(() => {
+    if (active >= 1 && active <= labProjects.length) {
+      void warmLabProject(labProjects[active - 1]);
+    }
+  }, [active]);
   /* 开场播完再在后台把详情页的画、纸、照片都拉好，点画框翻面时框里不会空一下 */
   useEffect(() => {
     if (introPlaying) return;

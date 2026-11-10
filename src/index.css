@@ -133,11 +133,18 @@ body,
 }
 
 /** 沉浸式页面（如屋内横滚长卷）挂在 <html> 上：隐藏原生滚动条，滚动仍然可用 */
-.scrollbar-hidden {
+.scrollbar-hidden,
+html,
+body {
   scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
 }
-.scrollbar-hidden::-webkit-scrollbar {
+.scrollbar-hidden::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
   display: none; /* Chrome / Safari / Edge */
+  width: 0;
+  height: 0;
 }
 
 /** 点击左上角 logo 整页向上抽走回首页时：把 sticky 舞台固定在当前滚动位置，使其随整页一起上移 */

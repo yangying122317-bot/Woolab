@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import {
   AnimatePresence,
   motion,
@@ -14,6 +14,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import type { Localized } from "../i18n/dict";
 import { useSmoothContainer } from "../components/SmoothScroll";
 import { MU } from "../components/NavBar";
+import { isImageReady } from "../components/life/preload";
 import { getViewWidth } from "../device";
 import { useReportDetailOpen } from "../state/chrome";
 
@@ -152,18 +153,18 @@ function Rotated({
   );
 }
 
-/** 详情里的图：已经在缓存里的直接显示；还没到的先透明，到了 0.2s 淡进来，不"啪"地跳出 */
+/** 详情里的图：已经在缓存里的直接同步显示（第 0 帧 opacity: 1，不闪烁）；还没到的先透明，到了 0.2s 淡进来 */
 function Img({ src, style, fit = "cover" }: { src: string; style?: CSSProperties; fit?: CSSProperties["objectFit"] }) {
   const ref = useRef<HTMLImageElement>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
+  const [ready, setReady] = useState(() => isImageReady(src));
+  useLayoutEffect(() => {
     const im = ref.current;
-    if (!im) return;
-    if (im.complete && im.naturalWidth > 0) {
+    if (isImageReady(src) || (im && im.complete && im.naturalWidth > 0)) {
       setReady(true);
       return;
     }
     setReady(false);
+    if (!im) return;
     const on = () => setReady(true);
     im.addEventListener("load", on);
     im.addEventListener("error", on);
@@ -399,11 +400,16 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
   const { pick } = useLanguage();
   const h = (width * FRAME_H) / FRAME_W;
   const art = project.wall?.art;
-  /* 连框带画的整张图：各产品框型不一样（方的 / 椭圆的），整张按比例装进同一个框位 */
+  /* 连框带画的整张图：各产品框型不一样（方的 / 椭圆的），整张按比例装进同一个框位（直接同步渲染，避免切换或挂载时闪烁） */
   if (project.wall?.frame) {
     return (
       <div className="relative" style={{ width, height: h }}>
-        <Img src={project.wall.frame} fit="contain" />
+        <img
+          src={project.wall.frame}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full max-w-none object-contain select-none"
+        />
       </div>
     );
   }
@@ -414,7 +420,12 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
         style={{ left: FRAME_ART.l * width, top: FRAME_ART.t * h, width: FRAME_ART.w * width, height: FRAME_ART.h * h }}
       >
         {art ? (
-          <Img src={art} />
+          <img
+            src={art}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full max-w-none object-cover select-none"
+          />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/25 p-1 text-center text-white/60">
             <span className="font-hand" style={{ fontSize: width * 0.085, lineHeight: 1.25 }}>
@@ -1852,14 +1863,15 @@ export function DetailPage({
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
   const onFlown = () => {
     if (flying === null) return;
-    if (flying === index) {
-      const el = scroller.current;
-      if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
-      else if (el) el.scrollTop = 0;
-    } else {
+    const el = scroller.current;
+    if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
+    if (el) el.scrollTop = 0;
+    scrollY.set(0);
+    setLanded(false);
+    if (flying !== index) {
       onNext?.(flying);
     }
-    flyTimer.current = window.setTimeout(() => setFlying(null), 220);
+    flyTimer.current = window.setTimeout(() => setFlying(null), 60);
   };
   const backTop = () => {
     if (lenis.current) lenis.current.scrollTo(0, { duration: 1.4 });
@@ -1925,7 +1937,7 @@ export function DetailPage({
 
       <div
         ref={scroller}
-        className="relative h-full w-full overflow-x-hidden overflow-y-auto"
+        className="scrollbar-hidden relative h-full w-full overflow-x-hidden overflow-y-auto"
         style={{ overscrollBehavior: "contain", scrollbarWidth: "none", touchAction: "pan-y" }}
       >
         <div ref={content} className="relative">
@@ -1988,8 +2000,8 @@ export function DetailPage({
           className="pointer-events-none absolute left-0 top-0 z-20"
           initial={{
             x: wall.slotX(flying) - hero.w / 2,
-            y: wall.slotY(flying) - hero.h / 2,
-            scale: wall.wallW / hero.w,
+            y: wall.slotY(flying) - hero.h / 2 - (mobile ? 0 : 8),
+            scale: (wall.wallW * (mobile ? 1 : 1.05)) / hero.w,
             rotate: 0,
           }}
           animate={
