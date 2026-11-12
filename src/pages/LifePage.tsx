@@ -420,7 +420,7 @@ export default function LifePage() {
   const pageRevealed = ready && introDone && menuLanded && doorFadeDone;
   const noProgress = !lifeStations.some((s) => isStationDone(room, s.id));
   const guideIdle = useIdle(
-    mobileView ? 380 : 650,
+    mobileView ? 220 : 280,
     pageRevealed && noProgress && !guideDone.current && !focus && !list.open,
   );
   useEffect(() => {
@@ -668,7 +668,7 @@ export default function LifePage() {
                 guide={{
                   entry: entryHint && !checklistOpen,
                   hints:
-                    (pageRevealed || guideReady || isAllDone(room)) &&
+                    (guideReady || isAllDone(room)) &&
                     !checklistOpen &&
                     !drawerShown &&
                     !labEntry,
