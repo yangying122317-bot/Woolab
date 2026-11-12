@@ -1,7 +1,7 @@
 import { Component, Suspense, lazy, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { isMobilePreview } from "./device";
-import { LanguageProvider } from "./i18n/LanguageContext";
+import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import IntroLoader, {
   INTRO_PREVIEW_PATH,
   IntroPreview,
@@ -36,9 +36,10 @@ const NewsPage = lazy(PAGE_LOADERS.news);
 const ContactPage = lazy(PAGE_LOADERS.contact);
 
 function PageLoading() {
+  const { t } = useLanguage();
   return (
     <div className="font-hand fixed inset-0 flex items-center justify-center bg-[#F9F6EF] text-black">
-      <span className="animate-pulse text-base">Loading…</span>
+      <span className="animate-pulse text-base">{`${t("intro.loading")}...`}</span>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useSpring, useTransform, useVelocity } from "framer-motion";
 import { useLocation } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 import { config } from "../config";
 import { isMobilePreview } from "../device";
 import { MU, NavLogo, navBarStyle } from "./NavBar";
@@ -65,6 +66,7 @@ export function IntroPreview() {
 }
 
 function PlainLoader({ pathname, onDone }: { pathname: string; onDone: () => void }) {
+  const { t, lang } = useLanguage();
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -114,17 +116,17 @@ function PlainLoader({ pathname, onDone }: { pathname: string; onDone: () => voi
         <NavLogo />
       </div>
       <div
-        className="font-nav absolute flex items-baseline font-bold text-white uppercase"
+        className={`${lang === "zh" ? "font-hand" : "font-nav font-bold uppercase"} absolute flex items-baseline text-white`}
         style={{
           ["--mu" as string]: MU,
           left: `calc(var(--mu) * 25)`,
           top: `calc(var(--mu) * 52)`,
-          fontSize: `calc(var(--mu) * 10)`,
-          letterSpacing: `calc(var(--mu) * 0.8)`,
+          fontSize: `calc(var(--mu) * ${lang === "zh" ? 11.5 : 10})`,
+          letterSpacing: `calc(var(--mu) * ${lang === "zh" ? 0.3 : 0.8})`,
           opacity: 0.85,
         }}
       >
-        Loading
+        {t("intro.loading")}
         {[0, 1, 2].map((i) => (
           <motion.span
             key={i}
