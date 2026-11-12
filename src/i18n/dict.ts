@@ -130,7 +130,7 @@ export const dict = {
     "contact.hello": "嗨～你找到 Meelo 啦！",
     "intro.skip": "跳过",
     "intro.ready": "Meelo\n准备中...",
-    "intro.loading": "Meelo 正在准备中",
+    "intro.loading": "Meelo 正在准备房间",
     close: "关闭",
   },
   en: {
@@ -255,7 +255,7 @@ export const dict = {
     "contact.hello": "Hi～you found Meelo！",
     "intro.skip": "Skip",
     "intro.ready": "Getting\nMeelo ready...",
-    "intro.loading": "Getting Meelo ready",
+    "intro.loading": "Getting the room ready",
     close: "Close",
   },
 } as const;
