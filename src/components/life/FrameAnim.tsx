@@ -12,8 +12,8 @@ type Frame = ImageBitmap | HTMLImageElement;
 const cache = new Map<string, Promise<Frame>>();
 const syncCache = new Map<string, Frame>();
 
-/** 同时只解码两帧。一进 Life 就铺开几十帧时，Safari 会把请求或位图丢掉，动画就停在空画布上。 */
-const MAX_CONCURRENT = 2;
+/** 默认 4 路并发；用户开始挂衣服或播放动画时自动提速到 6 路并发 */
+let maxConcurrent = 4;
 let running = 0;
 const pending: Array<{ src: string; run: () => void }> = [];
 
@@ -32,7 +32,7 @@ function liveFrame(src: string): Frame | undefined {
 }
 
 function pump() {
-  while (running < MAX_CONCURRENT && pending.length > 0) {
+  while (running < maxConcurrent && pending.length > 0) {
     const job = pending.shift();
     if (!job) return;
     running += 1;
@@ -107,9 +107,14 @@ function loadFrame(src: string, urgent = false): Promise<Frame> {
   return task;
 }
 
-/** 提前把整段的帧解码好（触发条件快满足时调），播的时候就不等网络 */
-export function warmFrames(srcs: string[]) {
-  for (const src of srcs) void loadFrame(src).catch(() => {});
+/** 提前把整段的帧解码好（触发条件快满足时调），urgent=true 时提升并发并插队到最前 */
+export function warmFrames(srcs: string[], urgent = false) {
+  if (urgent && maxConcurrent < 6) {
+    maxConcurrent = 6;
+    pump();
+  }
+  const list = urgent ? [...srcs].reverse() : srcs;
+  for (const src of list) void loadFrame(src, urgent).catch(() => {});
 }
 
 export default function FrameAnim({
@@ -232,6 +237,9 @@ export default function FrameAnim({
     };
     const tick = () => {
       if (!alive) return;
+      for (let k = 0; k < 8 && i + k < srcs.length; k++) {
+        ensure(i + k);
+      }
       if (!draw(i)) ensure(i);
       else {
         if (i === 0 && !shown) {

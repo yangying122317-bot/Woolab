@@ -1110,6 +1110,7 @@ function HangClothes({
     const piece = pieceAt(p);
     if (piece < 0) return;
     e.preventDefault();
+    warmFrames(DRESS_SRCS, true);
     const hungNow = [...hung];
     setDrag({ piece, x: p.x, y: p.y });
 
@@ -1156,6 +1157,7 @@ function HangClothes({
   const startDressDrag = (e: React.PointerEvent) => {
     if (!canDress || dressDrag || whiteSlot < 0) return;
     e.preventDefault();
+    warmFrames(DRESS_SRCS, true);
     const zone = e.currentTarget.getBoundingClientRect();
     const s = zone.width / whitePiece.hung.w;
     const zoneArtX = HANG_SLOTS[whiteSlot] - whitePiece.hung.hook;
@@ -1725,14 +1727,15 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
   const canDress =
     isStationDone(room, "tee") && !room.dressed && !dressPlaying && interactive;
 
-  // 等窗户这些首屏帧下完，再低并发预热换装。一进门就铺开 61 帧会和房间抢带宽，Safari 容易把换装帧丢掉。
+  // 进门先预热换装前 15 帧（保证拖白T瞬间 0 等待起播），首屏窗户就绪后把剩余帧全部拉齐
   useEffect(() => {
     if (room.dressed) return;
     let alive = true;
+    warmFrames(DRESS_SRCS.slice(0, 15));
+    void loadImage("/assets/life/seg01/dress-still.webp");
     void preloadLifeFirst().then(() => {
       if (!alive) return;
       warmFrames(DRESS_SRCS);
-      void loadImage("/assets/life/seg01/dress-still.webp");
     });
     return () => {
       alive = false;
@@ -1743,10 +1746,10 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
   const paintStill = isStationDone(room, "photo") && paint === "idle";
   const paintHidden = paint === "play" || paintStill;
 
-  // 推近软木板开拼时预热作画帧，拉回后播放不卡顿
+  // 推近软木板开拼时高优预热作画帧，拉回后播放不卡顿
   useEffect(() => {
     if (!photoActive || isStationDone(room, "photo")) return;
-    warmFrames(PAINT_SRCS);
+    warmFrames(PAINT_SRCS, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoActive]);
 
