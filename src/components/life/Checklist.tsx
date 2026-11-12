@@ -474,16 +474,16 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
               {/* 纸右上角压着的那条胶带 */}
               <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(k, TAPE_TR)} />
 
-              {/* 纸底下写在牛皮上的一句："往右走，去把它们一件件做完" + 一支与"向右滑"同款的手绘箭头。
-                  全做完那次纸被揭走，这句也不用再说 */}
-              {showList && (
-                <motion.div
-                  className="pointer-events-none absolute flex items-center justify-center"
-                  style={{ ...box(k, SHEET_CX - 160, GO_HINT.y, 320), gap: 7 * k }}
-                  initial={{ opacity: 0, y: 6 * k }}
-                  animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
-                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                >
+              {/* 纸底下写在牛皮上的一句：未完成时提示"往右走，去把它们一件件做完" + 下方小字提示"屋里的东西也可以随便点点看"；
+                  全部完成后换成"从尽头的门进去 →" */}
+              <motion.div
+                className="pointer-events-none absolute flex flex-col items-center justify-center"
+                style={{ ...box(k, SHEET_CX - 160, GO_HINT.y, 320), gap: 6 * k }}
+                initial={{ opacity: 0, y: 6 * k }}
+                animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              >
+                <div className="flex items-center justify-center" style={{ gap: 7 * k }}>
                   <span
                     className="font-hand whitespace-nowrap"
                     style={{
@@ -493,7 +493,7 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                       WebkitTextStroke: `${0.4 * k}px ${GO_HINT.color}`,
                     }}
                   >
-                    {t("life.guide.scroll")}
+                    {t(allDone ? "life.done.scroll" : "life.guide.scroll")}
                   </span>
                   <motion.div
                     style={{
@@ -511,8 +511,21 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                     animate={{ x: [0, 3 * k, 0], opacity: [1, 0.55, 1] }}
                     transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
                   />
-                </motion.div>
-              )}
+                </div>
+                {!allDone && (
+                  <span
+                    className="font-hand whitespace-nowrap"
+                    style={{
+                      fontSize: `${(hand ? 11.5 : 12) * k}px`,
+                      lineHeight: 1.25,
+                      color: GO_HINT.color,
+                      opacity: 0.78,
+                    }}
+                  >
+                    {t("life.guide.explore")}
+                  </span>
+                )}
+              </motion.div>
             </div>
           </motion.div>
         </div>
@@ -577,20 +590,38 @@ function DoneNote({
         transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
         <img src={`${A}/${CTA_BOX.src}`} alt="" draggable={false} style={at(k, CTA_BOX, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
-        <span
-          className="font-look absolute whitespace-nowrap font-bold uppercase"
+        <div
+          className="pointer-events-none absolute flex items-center justify-center"
           style={{
-            left: (189.84 - CTA_ORIGIN.x) * k,
-            top: (305.98 - CTA_ORIGIN.y) * k,
-            transform: "translate(-50%, -50%) rotate(-3.44deg)",
-            fontSize: (hand ? 12 : 11.5) * k,
-            lineHeight: 1.2,
-            color: "#94541C",
+            left: (CTA_BOX.x - CTA_ORIGIN.x) * k,
+            top: (CTA_BOX.y - CTA_ORIGIN.y) * k,
+            width: CTA_BOX.w * k,
+            height: CTA_BOX.h * k,
+            gap: (hand ? 7 : 6) * k,
+            transform: "rotate(-3.44deg)",
           }}
         >
-          {cta}
-        </span>
-        <img src={`${A}/${CTA_ARROW.src}`} alt="" draggable={false} style={at(k, CTA_ARROW, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
+          <span
+            className="font-look whitespace-nowrap font-bold uppercase"
+            style={{
+              fontSize: (hand ? 12 : 11.5) * k,
+              lineHeight: 1.2,
+              color: "#94541C",
+            }}
+          >
+            {cta}
+          </span>
+          <img
+            src={`${A}/${CTA_ARROW.src}`}
+            alt=""
+            draggable={false}
+            style={{
+              width: (CTA_ARROW.w + PAD * 2) * k,
+              height: (CTA_ARROW.h + PAD * 2) * k,
+              maxWidth: "none",
+            }}
+          />
+        </div>
         <img src={`${A}/${CTA_TAPE.src}`} alt="" draggable={false} style={at(k, CTA_TAPE, CTA_ORIGIN.x, CTA_ORIGIN.y)} />
       </motion.button>
     </>

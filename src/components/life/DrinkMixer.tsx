@@ -615,7 +615,12 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
               {showBubble && (
                 <motion.span
                   key="name"
-                  className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-3 py-0.5 ${mobile ? "text-xl" : "text-base"} text-neutral-800 shadow-md`}
+                  className={`font-hand block whitespace-nowrap ${mobile ? "text-xl" : "text-base"} text-neutral-900`}
+                  style={{
+                    ...PAPER_TAG,
+                    lineHeight: 1.25,
+                    padding: mobile ? "0.45vh 1.2vh 0.55vh" : "0.35vh 1vh 0.45vh",
+                  }}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
@@ -752,7 +757,12 @@ export default function DrinkMixer({ drink, active, onDone }: Props) {
           {!done && step === "label" && finalDrink && (
             <motion.span
               key="drink-name"
-              className={`font-hand block whitespace-nowrap rounded-full bg-white/95 px-4 py-1 ${mobile ? "text-2xl" : "text-lg"} text-neutral-800 shadow-md`}
+              className={`font-hand block whitespace-nowrap ${mobile ? "text-2xl" : "text-lg"} text-neutral-900`}
+              style={{
+                ...PAPER_TAG,
+                lineHeight: 1.25,
+                padding: mobile ? "0.55vh 1.4vh 0.65vh" : "0.45vh 1.2vh 0.55vh",
+              }}
               initial={{ opacity: 0, y: 10, scale: 0.8 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0 }}

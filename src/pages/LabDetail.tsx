@@ -395,13 +395,33 @@ const FRAME_ART = {
   h: 112 / FRAME_H,
 };
 
+/** 拍立得同款显影滤镜：空白高光模糊 → 慢慢显出清晰画面 */
+const FRAME_DEVELOP_BLANK = "brightness(2.1) contrast(0.45) saturate(0) blur(3px)";
+const FRAME_DEVELOP_CLEAR = "brightness(1) contrast(1) saturate(1) blur(0px)";
+/** 连框一体图（sticker/drink/candle）内部画芯的遮罩：只让框内的画显影，外圈金属框不动 */
+const FRAME_INNER_CLIP: Record<string, string> = {
+  sticker: "inset(10.6% 24% 20.2% 19.5% round 3px)",
+  drink: "ellipse(28% 29.9% at 47.8% 44.8%)",
+  candle: "ellipse(30.7% 33.9% at 48% 45.2%)",
+};
+
 /** 按宽度画一只金框（高按切图比例跟着），框里是项目的画，没画的项目先放名字占位 */
-function FramePiece({ project, width }: { project: LabProject; width: number }) {
+function FramePiece({
+  project,
+  width,
+  develop = false,
+}: {
+  project: LabProject;
+  width: number;
+  /** 详情页主画框打开/切换时，框内画芯做 About 拍立得同款渐显 */
+  develop?: boolean;
+}) {
   const { pick } = useLanguage();
   const h = (width * FRAME_H) / FRAME_W;
   const art = project.wall?.art;
-  /* 连框带画的整张图：各产品框型不一样（方的 / 椭圆的），整张按比例装进同一个框位（直接同步渲染，避免切换或挂载时闪烁） */
+  /* 连框带画的整张图：各产品框型不一样（方的 / 椭圆的），整张按比例装进同一个框位 */
   if (project.wall?.frame) {
+    const innerClip = FRAME_INNER_CLIP[project.id];
     return (
       <div className="relative" style={{ width, height: h }}>
         <img
@@ -410,21 +430,48 @@ function FramePiece({ project, width }: { project: LabProject; width: number }) 
           draggable={false}
           className="pointer-events-none absolute inset-0 h-full w-full max-w-none object-contain select-none"
         />
+        {develop && innerClip && (
+          <motion.img
+            key={`dev-${project.id}`}
+            src={project.wall.frame}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full max-w-none object-contain select-none"
+            style={{ clipPath: innerClip }}
+            initial={{ filter: FRAME_DEVELOP_BLANK, opacity: 1 }}
+            animate={{ filter: FRAME_DEVELOP_CLEAR, opacity: 0 }}
+            transition={{
+              filter: { duration: 1.65, ease: [0.3, 0, 0.3, 1] },
+              opacity: { delay: 1.5, duration: 0.25, ease: "easeOut" },
+            }}
+          />
+        )}
       </div>
     );
   }
   return (
     <div className="relative" style={{ width, height: h }}>
       <div
-        className="absolute overflow-hidden bg-[#3f3939]"
+        className="absolute overflow-hidden bg-[#F3F1EA]"
         style={{ left: FRAME_ART.l * width, top: FRAME_ART.t * h, width: FRAME_ART.w * width, height: FRAME_ART.h * h }}
       >
         {art ? (
-          <img
+          <motion.img
+            key={develop ? `dev-${project.id}` : art}
             src={art}
             alt=""
             draggable={false}
             className="pointer-events-none absolute inset-0 h-full w-full max-w-none object-cover select-none"
+            initial={develop ? { filter: FRAME_DEVELOP_BLANK, opacity: 0.38 } : false}
+            animate={
+              develop
+                ? {
+                    filter: FRAME_DEVELOP_CLEAR,
+                    opacity: 1,
+                    transition: { duration: 1.65, ease: [0.3, 0, 0.3, 1] },
+                  }
+                : undefined
+            }
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/25 p-1 text-center text-white/60">
@@ -774,7 +821,7 @@ function Description({
   const setRef = (key: MarkKey, el: HTMLSpanElement | null) => {
     markEls.current[key] = el;
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     let alive = true;
     const measure = () => {
       if (!alive) return;
@@ -854,6 +901,8 @@ function Description({
                 src={`${A}/underline-desc.svg`}
                 alt=""
                 draggable={false}
+                initial="hidden"
+                animate={play ? "show" : "hidden"}
                 variants={deco}
                 custom={decoAt}
                 className="pointer-events-none absolute max-w-none"
@@ -870,6 +919,8 @@ function Description({
                 src={`${A}/circle-relaxed.svg`}
                 alt=""
                 draggable={false}
+                initial="hidden"
+                animate={play ? "show" : "hidden"}
                 variants={deco}
                 custom={decoAt}
                 className="pointer-events-none absolute max-w-none"
@@ -1295,11 +1346,13 @@ function HeroFrame({
   scrollY,
   tl,
   hidden,
+  develop = false,
 }: {
   project: LabProject;
   scrollY: MotionValue<number>;
   tl: Timeline;
   hidden: boolean;
+  develop?: boolean;
 }) {
   const x = useTransform(scrollY, (s) => heroPose(s, tl).x);
   const y = useTransform(scrollY, (s) => heroPose(s, tl).y);
@@ -1310,7 +1363,7 @@ function HeroFrame({
       className="pointer-events-none absolute left-0 top-0 z-20"
       style={{ x, y, rotate, scale, visibility: hidden ? "hidden" : "visible" }}
     >
-      <FramePiece project={project} width={tl.heroW} />
+      <FramePiece project={project} width={tl.heroW} develop={develop} />
     </motion.div>
   );
 }
@@ -1723,19 +1776,11 @@ export function DetailPage({
   const looks: (Lookbook | undefined)[] = project.looks?.length ? project.looks : [undefined];
   const closet = pick(project.wall?.label ?? looks[0]?.closet ?? { zh: "Meelo 的衣柜", en: "Meelo's Closet" });
 
-  /* 切到另一件后：回顶部，第一屏重新出场 */
+  /* 切到另一件后：绘制前同步回顶部，第一屏重新出场，杜绝旧项目文字在页顶闪一帧 */
   const shownIndex = useRef(index);
   const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || !interactive || shownIndex.current === index) return;
-    shownIndex.current = index;
-    setEntered(true);
-    if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
-    else el.scrollTop = 0;
-  }, [index, interactive, lenis]);
   /* 出场起始延时：第一次是画框放大到满屏那一刻才挂上来的，稍等一拍再出；之后切项目差不多 */
-  const base = entered ? 0.2 : 0.25;
+  const base = entered || shownIndex.current !== index ? 0.2 : 0.25;
 
   /* 两边的标签：平时是正在看的这一件（滚到哪件算哪件），鼠标放到墙上某只框或点击飞回页顶期间锁定显示目标项目的标签 */
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -1832,6 +1877,17 @@ export function DetailPage({
   };
 
   const { scrollY } = useScroll({ container: scroller });
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || !interactive || shownIndex.current === index) return;
+    shownIndex.current = index;
+    setEntered(true);
+    setLanded(false);
+    setLookIdx(0);
+    if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
+    el.scrollTop = 0;
+    scrollY.set(0);
+  }, [index, interactive, lenis, scrollY]);
   /* 正在看哪一件：哪件的块顶滚过了屏幕中线就算哪件（两边标签跟着换） */
   useMotionValueEvent(scrollY, "change", (s) => {
     let j = 0;
@@ -1864,14 +1920,15 @@ export function DetailPage({
   useEffect(() => () => window.clearTimeout(flyTimer.current), []);
   const onFlown = () => {
     if (flying === null) return;
-    const el = scroller.current;
-    if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
-    if (el) el.scrollTop = 0;
-    scrollY.set(0);
-    setLanded(false);
-    setLookIdx(0);
     if (flying !== index) {
       onNext?.(flying);
+    } else {
+      const el = scroller.current;
+      if (lenis.current) lenis.current.scrollTo(0, { immediate: true, force: true });
+      if (el) el.scrollTop = 0;
+      scrollY.set(0);
+      setLanded(false);
+      setLookIdx(0);
     }
     flyTimer.current = window.setTimeout(() => setFlying(null), 60);
   };
@@ -1952,27 +2009,29 @@ export function DetailPage({
            * 这个项目的每一件：那段话 + 拼贴 → 通栏照片，一件接一件，全是普通内容一路匀速滚；
            * 钉着不动的只有屏中的主角金框，这些东西从它身后依次过去。
            */}
-          {looks.map((lb, j) => (
-            <LookSection
-              key={`${project.id}-${j}`}
-              lb={lb}
-              fallbackLines={[pick(project.description)]}
-              first={j === 0}
-              fadeIn={interactive}
-              closet={closet}
-              u={u}
-              uc={uc}
-              vh={vh}
-              layout={layouts[j]}
-              photoStopY={photoStopY}
-              stripPad={stripPad}
-              tornMask={tornMask}
-              scrollY={scrollY}
-              scroller={scroller}
-              play={interactive}
-              delay={j === 0 ? base + 0.1 : 0.1}
-            />
-          ))}
+          <div style={{ visibility: flying !== null && flying !== index ? "hidden" : "visible" }}>
+            {looks.map((lb, j) => (
+              <LookSection
+                key={`${project.id}-${j}`}
+                lb={lb}
+                fallbackLines={[pick(project.description)]}
+                first={j === 0}
+                fadeIn={interactive}
+                closet={closet}
+                u={u}
+                uc={uc}
+                vh={vh}
+                layout={layouts[j]}
+                photoStopY={photoStopY}
+                stripPad={stripPad}
+                tornMask={tornMask}
+                scrollY={scrollY}
+                scroller={scroller}
+                play={interactive}
+                delay={j === 0 ? base + 0.1 : 0.1}
+              />
+            ))}
+          </div>
 
           {/* 底部画框墙（桌面端四框横排，手机端四框垂直单列排布且高度正好一屏，滑到底即固定停住不再下滚） */}
           <section className="relative" style={{ height: mobile ? vh : vh * (1 + WALL_LAND) }}>
@@ -1995,7 +2054,7 @@ export function DetailPage({
       </div>
 
       {/* 主角金框：钉在屏上跟着滚动走，滑到底部落入画框墙对应槽位 */}
-      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} />
+      <HeroFrame project={project} scrollY={scrollY} tl={tl} hidden={landed || flying !== null} develop={interactive} />
 
       {flying !== null && (
         <motion.div

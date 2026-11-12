@@ -77,7 +77,6 @@ export default function AboutPage() {
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [pressed, setPressed] = useState(false);
-  const [touched, setTouched] = useState(false);
   const shake = useAnimationControls();
   const timers = useRef<number[]>([]);
   const at = (ms: number, fn: () => void) => {
@@ -192,7 +191,6 @@ export default function AboutPage() {
 
   const press = () => {
     if (!canPress) return;
-    setTouched(true);
     click();
     /* ready：这张松开往下掉，下一张紧跟着出 */
     setPhase("drop");
@@ -259,8 +257,9 @@ export default function AboutPage() {
   }, [phase, last, flipped]);
 
   const showNotes = phase === "ready";
-  /* 快门闪烁提示：第一张出完可以按了、还没按过 */
-  const blink = !touched && phase === "ready" && !last;
+  /* 手机端第一页（idx === 0）在快门上摆一只同风格的小手按压提示；电脑端鼠标移上去直接变成小手光标。第 1～4 张快门保持闪烁 */
+  const showHandHint = mobile && idx === 0 && phase === "ready";
+  const blink = phase === "ready" && !last;
   const [hoverBtn, setHoverBtn] = useState(false);
   /* 最后一张的标注出完再提示可以滚 */
   const scrollHintAt = phase === "done" ? 0.6 : HINT_AT;
@@ -355,13 +354,47 @@ export default function AboutPage() {
               }
               transition={
                 blink
-                  ? { duration: 1.1, delay: HINT_AT, repeat: Infinity, ease: "easeInOut" }
+                  ? { duration: 1.1, delay: idx === 0 ? HINT_AT * 0.55 : HINT_AT, repeat: Infinity, ease: "easeInOut" }
                   : { duration: 0.15, ease: "easeOut" }
               }
               onHoverStart={() => setHoverBtn(true)}
               onHoverEnd={() => setHoverBtn(false)}
             />
           </motion.button>
+
+          {/* 第一页快门上的点击小手：与鼠标光标同风格，指尖对准快门做轻按提示 */}
+          <AnimatePresence>
+            {showHandHint && (
+              <motion.img
+                key="hand-hint"
+                src="/assets/cursor-hand-2x.png?v=2"
+                alt=""
+                draggable={false}
+                onClick={press}
+                className="pointer-events-auto absolute max-w-none cursor-pointer select-none"
+                style={{
+                  left: (BUTTON.x + BUTTON.w * 0.62) * s,
+                  top: (BUTTON.y + BUTTON.h * 0.56) * s,
+                  width: 31 * s,
+                  height: 32 * s,
+                }}
+                initial={{ opacity: 0, x: 5 * s, y: 6 * s, scale: 1.05 }}
+                animate={{
+                  opacity: 1,
+                  x: [0, -2 * s, 0],
+                  y: [0, -2.5 * s, 0],
+                  scale: [1, 0.92, 1],
+                }}
+                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
+                transition={{
+                  opacity: { delay: HINT_AT * 0.45, duration: 0.35, ease: "easeOut" },
+                  x: { delay: HINT_AT * 0.45 + 0.35, duration: 1.15, repeat: Infinity, ease: "easeInOut" },
+                  y: { delay: HINT_AT * 0.45 + 0.35, duration: 1.15, repeat: Infinity, ease: "easeInOut" },
+                  scale: { delay: HINT_AT * 0.45 + 0.35, duration: 1.15, repeat: Infinity, ease: "easeInOut" },
+                }}
+              />
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* 两边的手写标注：桌面端在相纸左右两侧；手机竖屏下按参考稿排在相机上方与相纸下方，配上下指向箭头 */}

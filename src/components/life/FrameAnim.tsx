@@ -12,18 +12,82 @@ type Frame = ImageBitmap | HTMLImageElement;
 const cache = new Map<string, Promise<Frame>>();
 const syncCache = new Map<string, Frame>();
 
-function loadFrame(src: string): Promise<Frame> {
-  const ready = syncCache.get(src);
+/** 同时只解码两帧。一进 Life 就铺开几十帧时，Safari 会把请求或位图丢掉，动画就停在空画布上。 */
+const MAX_CONCURRENT = 2;
+let running = 0;
+const pending: Array<{ src: string; run: () => void }> = [];
+
+function isDead(frame: Frame): boolean {
+  if ("close" in frame && !("naturalWidth" in frame)) return frame.width === 0;
+  return false;
+}
+
+function liveFrame(src: string): Frame | undefined {
+  const frame = syncCache.get(src);
+  if (!frame) return;
+  if (!isDead(frame)) return frame;
+  syncCache.delete(src);
+  cache.delete(src);
+  return;
+}
+
+function pump() {
+  while (running < MAX_CONCURRENT && pending.length > 0) {
+    const job = pending.shift();
+    if (!job) return;
+    running += 1;
+    job.run();
+  }
+}
+
+function enqueue(src: string, run: () => void, urgent: boolean) {
+  const at = pending.findIndex((job) => job.src === src);
+  if (at >= 0) pending.splice(at, 1);
+  if (urgent) pending.unshift({ src, run });
+  else pending.push({ src, run });
+  pump();
+}
+
+function finish() {
+  running = Math.max(0, running - 1);
+  pump();
+}
+
+function loadFrame(src: string, urgent = false): Promise<Frame> {
+  const ready = liveFrame(src);
   if (ready) return Promise.resolve(ready);
-  let p = cache.get(src);
-  if (!p) {
-    p = new Promise<Frame>((resolve, reject) => {
+  const existing = cache.get(src);
+  if (existing) {
+    if (urgent) {
+      const at = pending.findIndex((job) => job.src === src);
+      if (at > 0) {
+        const [job] = pending.splice(at, 1);
+        if (job) pending.unshift(job);
+      }
+    }
+    return existing;
+  }
+  const task = new Promise<Frame>((resolve, reject) => {
+    const attempt = (n: number) => {
       const im = new Image();
       im.decoding = "async";
+      const fail = () => {
+        if (n < 4) {
+          window.setTimeout(() => attempt(n + 1), 350 * (n + 1));
+          return;
+        }
+        finish();
+        reject(new Error(src));
+      };
       im.onload = () => {
-        const done = (f: Frame) => {
-          syncCache.set(src, f);
-          resolve(f);
+        const done = (frame: Frame) => {
+          if (isDead(frame)) {
+            fail();
+            return;
+          }
+          syncCache.set(src, frame);
+          finish();
+          resolve(frame);
         };
         if (typeof createImageBitmap === "function") {
           createImageBitmap(im).then(done, () => done(im));
@@ -31,24 +95,28 @@ function loadFrame(src: string): Promise<Frame> {
           done(im);
         }
       };
-      im.onerror = () => reject(new Error(src));
+      im.onerror = fail;
       im.src = src;
-    });
-    p.catch(() => cache.delete(src));
-    cache.set(src, p);
-  }
-  return p;
+    };
+    enqueue(src, () => attempt(0), urgent);
+  });
+  task.catch(() => {
+    if (cache.get(src) === task) cache.delete(src);
+  });
+  cache.set(src, task);
+  return task;
 }
 
 /** 提前把整段的帧解码好（触发条件快满足时调），播的时候就不等网络 */
 export function warmFrames(srcs: string[]) {
-  for (const s of srcs) void loadFrame(s).catch(() => {});
+  for (const src of srcs) void loadFrame(src).catch(() => {});
 }
 
 export default function FrameAnim({
   srcs,
   fps,
   playing = true,
+  onShow,
   onEnd,
   holdMs = 400,
   className = "",
@@ -59,6 +127,8 @@ export default function FrameAnim({
   fps: number;
   /** false = 先挂着不播（帧照样解码好、画出第一帧），变 true 开始播 */
   playing?: boolean;
+  /** 第一帧真正画到画布上时调。换装用它决定何时藏起原来的小羊。 */
+  onShow?: () => void;
   /** 最后一帧画出来再停 holdMs 后调 */
   onEnd?: () => void;
   holdMs?: number;
@@ -68,23 +138,33 @@ export default function FrameAnim({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const framesRef = useRef<(Frame | null)[]>([]);
   const onEndRef = useRef(onEnd);
+  const onShowRef = useRef(onShow);
   onEndRef.current = onEnd;
+  onShowRef.current = onShow;
 
   const draw = (i: number) => {
     const c = canvasRef.current;
     const f = framesRef.current[i];
-    if (!c || !f) return false;
+    if (!c || !f || isDead(f)) return false;
     const w = "naturalWidth" in f ? f.naturalWidth : f.width;
     const h = "naturalHeight" in f ? f.naturalHeight : f.height;
-    if (c.width !== w || c.height !== h) {
-      c.width = w;
-      c.height = h;
+    if (w === 0 || h === 0) return false;
+    try {
+      if (c.width !== w || c.height !== h) {
+        c.width = w;
+        c.height = h;
+      }
+      const ctx = c.getContext("2d");
+      if (!ctx) return false;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(f, 0, 0);
+      return true;
+    } catch {
+      framesRef.current[i] = null;
+      syncCache.delete(srcs[i]);
+      cache.delete(srcs[i]);
+      return false;
     }
-    const ctx = c.getContext("2d");
-    if (!ctx) return false;
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(f, 0, 0);
-    return true;
   };
 
   /* 解码所有帧；若已在同步缓存里，在浏览器绘制前（useLayoutEffect）直接画上第 1 帧，杜绝空闪 */
@@ -127,11 +207,37 @@ export default function FrameAnim({
     if (!playing) return;
     let alive = true;
     let i = 0;
+    let shown = false;
     let timer = 0;
+    const waiting = new Set<number>();
     const step = 1000 / fps;
+    const ensure = (index: number) => {
+      if (!alive || waiting.has(index)) return;
+      const current = framesRef.current[index];
+      if (current && !isDead(current)) return;
+      framesRef.current[index] = null;
+      waiting.add(index);
+      void loadFrame(srcs[index], true)
+        .then((frame) => {
+          if (!alive) return;
+          framesRef.current[index] = frame;
+          waiting.delete(index);
+        })
+        .catch(() => {
+          window.setTimeout(() => {
+            waiting.delete(index);
+            if (alive) ensure(index);
+          }, 800);
+        });
+    };
     const tick = () => {
       if (!alive) return;
-      if (draw(i)) {
+      if (!draw(i)) ensure(i);
+      else {
+        if (i === 0 && !shown) {
+          shown = true;
+          onShowRef.current?.();
+        }
         if (i >= srcs.length - 1) {
           timer = window.setTimeout(() => alive && onEndRef.current?.(), holdMs);
           return;

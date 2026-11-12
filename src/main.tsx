@@ -4,6 +4,20 @@ import "./index.css";
 import { isPhone } from "./device";
 
 async function bootstrap() {
+  /* ?fresh=1：在加载任何模块前清空本地与会话存储，模拟全新首次进入 */
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("fresh") === "1") {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+    params.delete("fresh");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+  }
+
   /*
    * 在 import 桌面 App 之前分流。否则即使 App 最后只 return MobileGate，
    * 手机仍会下载并解析 Home / HeroScene 和整套桌面路由。

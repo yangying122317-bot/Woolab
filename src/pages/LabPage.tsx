@@ -33,9 +33,6 @@ import { warmLabDetail, warmLabProject } from "../components/lab/preload";
  * 2. 往下滚：人先沿墙向右平移到走廊中轴、再往前走，一站站看展
  */
 
-/** 走廊四站 */
-const N = labProjects.length;
-
 /** 滚动总长（px）：沿墙平移 + 进走廊 + 四站节拍 + 出口 */
 const SCROLL_LEN = 7000;
 /** 点画框翻转看详情。详情页做好了，线上一起放开（之前只在本地开发时开着） */
@@ -2290,17 +2287,6 @@ export default function LabPage() {
             transition={{ delay: 0.55, duration: 0.65, ease: "easeIn" }}
           />
         )}
-
-        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-          {Array.from({ length: N + 1 }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-2.5 w-2.5 rounded-full border border-white/50 transition ${
-                i === active ? "bg-[#FFF6E4]" : "bg-white/25"
-              }`}
-            />
-          ))}
-        </div>
       </div>
 
       {introPlaying && <LabIntro onDone={() => setIntroPlaying(false)} startAtShrink={fromMenu} />}

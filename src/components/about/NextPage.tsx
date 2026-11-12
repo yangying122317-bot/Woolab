@@ -34,14 +34,6 @@ const BLUE = "#44A4D3";
 const CREAM = "#F8F9F4";
 /** 蓝底底边（稿单位）；再往下是米白条 */
 const BLUE_BOTTOM = 520;
-/** 半圆缺口：弦宽 139、深 36 → 圆心在底边下面 55.5、半径 91.5 */
-const NOTCH_R = 91.5;
-const NOTCH_CY = 575.5;
-/**
- * 缺口里的小羊水印（mark.webp 396×372，图里小羊本体占 y 7%～99%）：
- * 缺口顶 520 到屏幕底 578 的正中是 549，按本体中心对到这条线上
- */
-const NOTCH_MARK = { cx: SW / 2, y: 520, w: 58, h: 54 };
 
 /** 5 张相纸落定的位置（中心点）和歪斜；数组顺序就是叠放顺序（后面的压前面的） */
 const CARDS: { shot: number; cx: number; cy: number; rot: number; scale?: number }[] = [
@@ -242,7 +234,7 @@ export default function NextPage({
     >
       {/* 下面这层的坐标都从可见区顶边算 */}
       <div className="absolute inset-x-0 bottom-0" style={{ top: pad }}>
-        {/* 米白条 + 半圆缺口（两块噪点对到同一原点，拼起来没缝；bottom 向下多延展 120px 防止 iOS 26 悬浮胶囊栏下方露底） */}
+        {/* 米白条（bottom 向下多延展 120px 防止 iOS 26 悬浮胶囊栏下方露底） */}
         <div
           className="absolute inset-x-0"
           style={{
@@ -252,37 +244,12 @@ export default function NextPage({
             ...noiseBg("cream", s, 0, top + BLUE_BOTTOM * s),
           }}
         />
-        <div
-          className="absolute rounded-full"
-          style={{
-            left: vp.w / 2 - NOTCH_R * s,
-            top: top + (NOTCH_CY - NOTCH_R) * s,
-            width: NOTCH_R * 2 * s,
-            height: NOTCH_R * 2 * s,
-            backgroundColor: CREAM,
-            ...noiseBg("cream", s, vp.w / 2 - NOTCH_R * s, top + (NOTCH_CY - NOTCH_R) * s),
-          }}
-        />
 
         {/* 稿坐标系（直接乘 s，避免 Safari 在外层 scale 下将旋转/动画文字按 1x 位图拉伸发糊） */}
         <div
           className="absolute"
           style={{ left, top, width: SW * s, height: SH * s }}
         >
-          {/* 缺口里的小羊水印 */}
-          <img
-            src={`${A}/mark.webp`}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute max-w-none"
-            style={{
-              left: (NOTCH_MARK.cx - NOTCH_MARK.w / 2) * s,
-              top: NOTCH_MARK.y * s,
-              width: NOTCH_MARK.w * s,
-              height: NOTCH_MARK.h * s,
-            }}
-          />
-
           {/* 标题 / 副标：铺满稿宽居中（motion 会接管 transform，不能靠 translateX(-50%)） */}
           <motion.div
             className="font-nav absolute whitespace-nowrap text-center font-black text-white"

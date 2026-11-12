@@ -43,7 +43,7 @@
 /** 喜脉喜欢体的字形只占 em 的八成、笔画又细，已直接在字体文件 head.unitsPerEm 中固化 130% 缩放（1575），兼容所有版本 Safari 与 Chrome */
 @font-face {
   font-family: "HandZh";
-  src: url("/assets/fonts/hand-zh.woff2?v=20261110a") format("woff2");
+  src: url("/assets/fonts/hand-zh.woff2?v=20261112a") format("woff2");
   font-display: swap;
 }
 
@@ -163,9 +163,9 @@ body {
 }
 
 /**
- * 全站光标：About 稿里那只手绘箭头（Figma「鼠标icon」，28×41 稿单位）。
- * 箭头尖在 (5, 3)；1x / 2x 两张位图按屏幕像素密度挑。
- * 页面里的 cursor-pointer / cursor-grab 一律也用这只箭头（只有一版图），所以带 !important 盖掉工具类。
+ * 全站光标：
+ * - 默认：About 稿里那只手绘箭头（Figma「鼠标icon」，28×41 稿单位），尖在 (5, 3)。
+ * - 可点击 / 可拖拽：同风格的手绘点击小手（37×38 稿单位），食指尖在 (4, 2)。
  */
 html,
 html * {
@@ -176,6 +176,29 @@ html * {
   cursor:
     image-set(url("/assets/cursor-1x.png") 1x, url("/assets/cursor-2x.png") 2x) 5 3,
     auto !important;
+}
+
+html a[href],
+html a[href] *,
+html button:not(:disabled):not(.cursor-default),
+html button:not(:disabled):not(.cursor-default) *,
+html [role="button"]:not(.pointer-events-none):not(.cursor-default),
+html [role="button"]:not(.pointer-events-none):not(.cursor-default) *,
+html [role="link"]:not(.pointer-events-none):not(.cursor-default),
+html [role="link"]:not(.pointer-events-none):not(.cursor-default) *,
+html .cursor-pointer,
+html .cursor-pointer *,
+html .cursor-grab,
+html .cursor-grab *,
+html .cursor-grabbing,
+html .cursor-grabbing * {
+  cursor: url("/assets/cursor-hand-1x.png?v=2") 4 2, pointer !important;
+  cursor:
+    -webkit-image-set(url("/assets/cursor-hand-1x.png?v=2") 1x, url("/assets/cursor-hand-2x.png?v=2") 2x) 4 2,
+    pointer !important;
+  cursor:
+    image-set(url("/assets/cursor-hand-1x.png?v=2") 1x, url("/assets/cursor-hand-2x.png?v=2") 2x) 4 2,
+    pointer !important;
 }
 
 /**

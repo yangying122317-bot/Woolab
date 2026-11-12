@@ -57,6 +57,7 @@ export const ABOUT_FIRST = [
   `${A}/noise-cream.png`,
   `${A}/arrow-l.png`,
   `${A}/arrow-r.png`,
+  "/assets/cursor-hand-2x.png?v=2",
   "/assets/lab/scroll-arrow.svg",
   "/assets/lab/detail/arrow-down.svg",
   aboutShots[0].photo,

@@ -11,6 +11,7 @@ import PhotoPuzzle from "./PhotoPuzzle";
 import DrinkMixer from "./DrinkMixer";
 import CandleLight from "./CandleLight";
 import HandHint from "./HandHint";
+import { PAPER_TAG } from "./PaperTag";
 import { isStationDone } from "../../state/roomState";
 import type { DrinkChoice, RoomState } from "../../state/roomState";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -832,12 +833,21 @@ const SHEEP_ZONE = { x: 2130, y: 1030, w: 520, h: 680 };
 
 const DRESS_SRCS = Array.from({ length: DRESS_FRAMES }, (_, i) => dressFrameSrc(i));
 
-function DressAnim({ playing, onEnd }: { playing: boolean; onEnd: () => void }) {
+function DressAnim({
+  playing,
+  onShow,
+  onEnd,
+}: {
+  playing: boolean;
+  onShow: () => void;
+  onEnd: () => void;
+}) {
   return (
     <FrameAnim
       srcs={DRESS_SRCS}
       fps={DRESS_FPS}
       playing={playing}
+      onShow={onShow}
       onEnd={onEnd}
       style={{
         left: vh(DRESS_RECT.x),
@@ -1709,15 +1719,24 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
 
   /* 换装彩蛋：播放中 / 已换装时，镜子+小羊+影子由动画帧或定格接管 */
   const [dressPlaying, setDressPlaying] = useState(false);
-  const dressActive = dressPlaying || room.dressed;
+  const [dressFrameOn, setDressFrameOn] = useState(false);
+  /* 第一帧还没画出来时，先留着原来的小羊。马上进 Life 时帧可能还在排队，不能先把小羊藏成空白。 */
+  const dressActive = dressFrameOn || room.dressed;
   const canDress =
     isStationDone(room, "tee") && !room.dressed && !dressPlaying && interactive;
 
-  // 进衣帽区且还没换装时提前预热换装动画帧 + 定格图，挂完衣服拖白T时 0 延迟
+  // 等窗户这些首屏帧下完，再低并发预热换装。一进门就铺开 61 帧会和房间抢带宽，Safari 容易把换装帧丢掉。
   useEffect(() => {
     if (room.dressed) return;
-    warmFrames(DRESS_SRCS);
-    void loadImage("/assets/life/seg01/dress-still.webp");
+    let alive = true;
+    void preloadLifeFirst().then(() => {
+      if (!alive) return;
+      warmFrames(DRESS_SRCS);
+      void loadImage("/assets/life/seg01/dress-still.webp");
+    });
+    return () => {
+      alive = false;
+    };
   }, [room.dressed]);
 
   /* 作画动画：play 时帧接管小羊+画架；photo 完成后定格最后一帧 */
@@ -1994,6 +2013,7 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
       {(canDress || dressPlaying) && (
         <DressAnim
           playing={dressPlaying}
+          onShow={() => setDressFrameOn(true)}
           onEnd={() => {
             onDressed();
             setDressPlaying(false);
@@ -2089,8 +2109,12 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
             className="block h-full w-full cursor-pointer"
           >
             <span
-              className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300"
-              style={{ opacity: labHover ? 1 : 0 }}
+              className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap text-lg text-neutral-900 transition-opacity duration-300"
+              style={{
+                ...PAPER_TAG,
+                padding: "0.5vh 1.5vh 0.6vh",
+                opacity: labHover ? 1 : 0,
+              }}
             >
               {t("life.lab.door")} →
             </span>
@@ -2127,8 +2151,12 @@ export default function RoomStage({ room, interactive, music, onToggleMusic, gui
               className="block h-full w-full cursor-pointer"
             >
               <span
-                className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-lg text-neutral-800 shadow-md transition-opacity duration-300"
-                style={{ opacity: labHover ? 1 : 0 }}
+                className="font-hand pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 whitespace-nowrap text-lg text-neutral-900 transition-opacity duration-300"
+                style={{
+                  ...PAPER_TAG,
+                  padding: "0.5vh 1.5vh 0.6vh",
+                  opacity: labHover ? 1 : 0,
+                }}
               >
                 {t("life.lab.door")} →
               </span>

@@ -42,6 +42,7 @@ import {
   preloadLifeFirst,
   warmLifeFirst,
 } from "./life/preload";
+import { PAPER_TAG } from "./life/PaperTag";
 import { LAB_INTRO, warmMenu, warmPages } from "../data/pageAssets";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { DictKey } from "../i18n/dict";
@@ -1028,6 +1029,26 @@ function SceneCanvas({ cover }: { cover: boolean }) {
   };
 
   /*
+   * 桌面端（cover）：首页开场完全离场（introGo）后，小羊自动弹出一次 "Hi~" 纸签打招呼。
+   * 手机端由下方轮流呼吸巡演接管，首项同样是小羊打招呼。
+   */
+  useEffect(() => {
+    if (!cover || !introGo || entering) return;
+    setGreetKey("sheep.greet.1");
+    const tIn = window.setTimeout(() => {
+      if (enteringRef.current || curtainUpRef.current) return;
+      setHovered((curr) => curr ?? "sheep");
+    }, intro ? 1500 : 650);
+    const tOut = window.setTimeout(() => {
+      setHovered((curr) => (curr === "sheep" ? null : curr));
+    }, (intro ? 1500 : 650) + 2500);
+    return () => {
+      window.clearTimeout(tIn);
+      window.clearTimeout(tOut);
+    };
+  }, [cover, intro, introGo, entering]);
+
+  /*
    * 手机版（!cover）没有鼠标 hover：用"轮流呼吸巡演"把 5 个物件的微动效和名字气泡依次演出来——
    * 小羊打招呼 → 大门亮灯+晃 OPEN 牌（小羊的生活）→ 屋顶吊灯亮起（关于）→ 小黑板摇晃（实验室）→ 红邮筒开盖（联系），
    * 每项停留 1.85s、间隔 0.9s，循环往复；用户手动点击时暂停巡演。
@@ -1662,7 +1683,7 @@ function SceneCanvas({ cover }: { cover: boolean }) {
             >
               {/* 名称标签：悬停或移动端巡演/点击时淡入带轻弹；小羊显示打招呼而不是栏目名 */}
               <span
-                className={`font-hand absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-4 py-1 text-neutral-800 shadow-md transition-all duration-300 ${
+                className={`font-hand absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-neutral-900 transition-[opacity,translate,scale] duration-300 ${
                   !cover && h.id === "sheep" ? "-top-9" : "-top-2"
                 } ${
                   cover ? "text-lg" : "text-base"
@@ -1671,6 +1692,10 @@ function SceneCanvas({ cover }: { cover: boolean }) {
                     ? "-translate-y-full scale-100 opacity-100"
                     : "pointer-events-none -translate-y-[82%] scale-95 opacity-0"
                 }`}
+                style={{
+                  ...PAPER_TAG,
+                  padding: cover ? "0.45vh 1.5vh 0.55vh" : "0.5vh 1.4vh 0.6vh",
+                }}
               >
                 {h.id === "sheep" ? t(greetKey) : t(h.labelKey)}
               </span>
