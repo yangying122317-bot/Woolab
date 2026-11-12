@@ -25,7 +25,9 @@ import { config } from "../config";
 import { getViewWidth, isMobileView, useMobileHorizontalDrag } from "../device";
 import { useLanguage } from "../i18n/LanguageContext";
 import { INTRO_DISMISSED_EVENT, INTRO_SESSION_KEY } from "../state/intro";
-import { isLifeFirstReady, preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
+import { isLifeFirstReady, loadImages, preloadLifeRest, whenLifeFirstReady } from "../components/life/preload";
+import { LAB_INTRO } from "../data/pageAssets";
+import { warmLabDetail } from "../components/lab/preload";
 
 /** 第一屏素材最多等这么久；网再慢也先揭开（图会陆续补上） */
 const READY_CAP_MS = 4000;
@@ -131,6 +133,42 @@ export default function LifePage() {
   });
   useEffect(() => {
     saveRoomState(room);
+  }, [room]);
+
+  /*
+   * 从首页马上进 Life、再从 Life 进 Lab 的路径：在完成任务的过程中分步预加载 Lab：
+   * 1. 完成任意第 1 项任务（或挂好衣服）时：预加载 LabPage 代码 + Lab 开场首屏图（大油画、入口墙、雕像、台灯）；
+   * 2. 完成调酒 / 点亮蜡烛 / 全部任务完成时：继续把 Lab 走廊四幅展品画框和详情页第一眼素材预热就绪。
+   */
+  const labIntroWarmed = useRef(false);
+  const labDetailWarmed = useRef(false);
+  const warmLabEntry = () => {
+    if (!labIntroWarmed.current) {
+      labIntroWarmed.current = true;
+      void import("./LabPage");
+      void loadImages(LAB_INTRO, 4);
+    }
+  };
+  const warmLabAll = () => {
+    warmLabEntry();
+    if (!labDetailWarmed.current) {
+      labDetailWarmed.current = true;
+      void loadImages(
+        [
+          "/assets/lab/art-tee.webp",
+          "/assets/lab/art-sticker.webp",
+          "/assets/lab/art-drink.webp",
+          "/assets/lab/art-candle.webp",
+        ],
+        4,
+      ).then(() => warmLabDetail());
+    }
+  };
+  useEffect(() => {
+    const anyDone = room.tee || room.dressed || room.photo || room.drink !== null || room.candle;
+    if (anyDone) warmLabEntry();
+    if (room.drink !== null || room.candle || isAllDone(room)) warmLabAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room]);
 
   /* ---------------- 专注态（镜头推近） ---------------- */
@@ -310,8 +348,9 @@ export default function LifePage() {
         : s.left + s.width / 2;
     scrollRoomTo(centerVh);
   };
-  /** 清单底下"带我过去"：面板收回，房间滑到门口 */
+  /** 清单底下"去 LAB 门口"：面板收回，房间滑到门口，同时确保 Lab 已预加载 */
   const goDoor = () => {
+    warmLabAll();
     closeChecklist();
     scrollRoomTo(LAB_DOOR.left + LAB_DOOR.width / 2);
   };
@@ -517,6 +556,7 @@ export default function LifePage() {
   };
   const enterLab = (r: DOMRect) => {
     if (focus || labEntry) return;
+    warmLabAll();
     // 推进目标是门后的黄色门洞：开门后洞口在门框热区的左缘
     goLab(r.left + r.width * 0.1, r.top + r.height * 0.5, 3);
   };

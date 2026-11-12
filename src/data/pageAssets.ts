@@ -91,6 +91,7 @@ export const LAB_INTRO = [
   "/assets/lab/entrance-wall.webp",
   "/assets/lab/prop-statue.webp",
   "/assets/lab/gallery-lamp-entrance.webp",
+  "/assets/lab/gallery-lamp-on.webp",
   "/assets/lab/scroll-arrow.svg",
   "/assets/lab/detail/arrow-front.svg",
   "/assets/lab/detail/arrow-down.svg",
