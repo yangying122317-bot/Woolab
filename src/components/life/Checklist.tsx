@@ -10,6 +10,8 @@ import { playStamp, playStrike } from "../../audio/sfx";
 interface Props {
   room: RoomState;
   open: boolean;
+  /** 是否显示纸底下的引导文字（仅在第一次打开清单、尚未完成任何任务时显示） */
+  showGuideHint?: boolean;
   /** 点房间空白处 / Esc：把面板收回去 */
   onClose: () => void;
   /** 点了某一行：房间横移到那个站点（面板顺带收回） */
@@ -189,7 +191,7 @@ const PRELOAD = [
  * 四行全划完：这张纸被揭走，露出底下那张 "All done"，一颗"带我过去"把房间送到门口。
  * 点房间空白处 / Esc 收回。
  */
-export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, onClosed, onEnter, onLeave, onInteract }: Props) {
+export default function Checklist({ room, open, showGuideHint = false, onClose, onGoStation, onGoDoor, onClosed, onEnter, onLeave, onInteract }: Props) {
   const { t, pick, lang } = useLanguage();
   const { vh, dw, k } = useScale();
   const hand = lang === "zh";
@@ -223,9 +225,19 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
   const done = lifeStations.filter((s) => isListDone(room, s.id)).map((s) => s.id);
   const [fresh, setFresh] = useState<Set<StationId>>(new Set());
   const [wasOpen, setWasOpen] = useState(open);
+  /* 仅第一次打开抽屉时显示纸底下的引导文字；在抽屉内点击交互期间保持显示，收起后后面再弹开都不显示 */
+  const firstOpenHint = useRef(true);
+  /* 仅在首次打开（一件任务都没做完）时显示纸底下的引导文字；只要做完任意一件弹开划线盖章或全部完成，就不再显示 */
+  const hasShownFirstHint = useRef(false);
   if (open !== wasOpen) {
     setWasOpen(open);
     setFresh(open ? new Set(done.filter((id) => !seen.current.has(id))) : new Set());
+    if (open && !hasShownFirstHint.current && done.length === 0) {
+      hasShownFirstHint.current = true;
+      firstOpenHint.current = true;
+    } else if (open) {
+      firstOpenHint.current = false;
+    }
   }
   useEffect(() => {
     if (open) seen.current = new Set(done);
@@ -474,45 +486,44 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
               {/* 纸右上角压着的那条胶带 */}
               <img src={`${A}/${TAPE_TR.src}`} alt="" draggable={false} className="pointer-events-none" style={at(k, TAPE_TR)} />
 
-              {/* 纸底下写在牛皮上的一句：未完成时提示"往右走，去把它们一件件做完" + 下方小字提示"屋里的东西也可以随便点点看"；
-                  全部完成后换成"从尽头的门进去 →" */}
-              <motion.div
-                className="pointer-events-none absolute flex flex-col items-center justify-center"
-                style={{ ...box(k, SHEET_CX - 160, GO_HINT.y, 320), gap: 6 * k }}
-                initial={{ opacity: 0, y: 6 * k }}
-                animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
-                exit={{ opacity: 0, transition: { duration: 0.2 } }}
-              >
-                <div className="flex items-center justify-center" style={{ gap: 7 * k }}>
-                  <span
-                    className="font-hand whitespace-nowrap"
-                    style={{
-                      fontSize: `${(hand ? GO_HINT.fontZh : GO_HINT.fontEn) * k}px`,
-                      lineHeight: 1.25,
-                      color: GO_HINT.color,
-                      WebkitTextStroke: `${0.4 * k}px ${GO_HINT.color}`,
-                    }}
-                  >
-                    {t(allDone ? "life.done.scroll" : "life.guide.scroll")}
-                  </span>
-                  <motion.div
-                    style={{
-                      width: 12 * k,
-                      height: 16 * k,
-                      rotate: -90,
-                      background: GO_HINT.color,
-                      WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
-                      maskImage: "url(/assets/lab/scroll-arrow.svg)",
-                      WebkitMaskSize: "100% 100%",
-                      maskSize: "100% 100%",
-                      WebkitMaskRepeat: "no-repeat",
-                      maskRepeat: "no-repeat",
-                    }}
-                    animate={{ x: [0, 3 * k, 0], opacity: [1, 0.55, 1] }}
-                    transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
-                  />
-                </div>
-                {!allDone && (
+              {/* 纸底下写在牛皮上的一句：仅在第一次打开清单（一件都没做完）时显示，后面做任务弹开划线盖章或全部完成时都不显示 */}
+              {showGuideHint && firstOpenHint.current && !allDone && done.length === 0 && (
+                <motion.div
+                  className="pointer-events-none absolute flex flex-col items-center justify-center"
+                  style={{ ...box(k, SHEET_CX - 160, GO_HINT.y, 320), gap: 6 * k }}
+                  initial={{ opacity: 0, y: 6 * k }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: 0.45, duration: 0.4 } }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                >
+                  <div className="flex items-center justify-center" style={{ gap: 7 * k }}>
+                    <span
+                      className="font-hand whitespace-nowrap"
+                      style={{
+                        fontSize: `${(hand ? GO_HINT.fontZh : GO_HINT.fontEn) * k}px`,
+                        lineHeight: 1.25,
+                        color: GO_HINT.color,
+                        WebkitTextStroke: `${0.4 * k}px ${GO_HINT.color}`,
+                      }}
+                    >
+                      {t("life.guide.scroll")}
+                    </span>
+                    <motion.div
+                      style={{
+                        width: 12 * k,
+                        height: 16 * k,
+                        rotate: -90,
+                        background: GO_HINT.color,
+                        WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
+                        maskImage: "url(/assets/lab/scroll-arrow.svg)",
+                        WebkitMaskSize: "100% 100%",
+                        maskSize: "100% 100%",
+                        WebkitMaskRepeat: "no-repeat",
+                        maskRepeat: "no-repeat",
+                      }}
+                      animate={{ x: [0, 3 * k, 0], opacity: [1, 0.55, 1] }}
+                      transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
+                    />
+                  </div>
                   <span
                     className="font-hand whitespace-nowrap"
                     style={{
@@ -524,8 +535,8 @@ export default function Checklist({ room, open, onClose, onGoStation, onGoDoor, 
                   >
                     {t("life.guide.explore")}
                   </span>
-                )}
-              </motion.div>
+                </motion.div>
+              )}
             </div>
           </motion.div>
         </div>
@@ -567,11 +578,15 @@ function DoneNote({
     animate: { clipPath: "inset(-10% 0% -10% 0)" },
     transition: { duration: 0.55, ease: "easeInOut" as const, delay },
   });
+  /* 中文只有 3 行（约 65 稿单位高），英文有 4 行（约 87 稿单位高）：
+     中文把文字下移、按钮上提，让文字与按钮间距缩小且整组在白纸（y: 125.5～380.5）里上下居中 */
+  const textY = hand ? 192 : 178.5;
+  const ctaY = hand ? 266 : CTA_ORIGIN.y;
   return (
     <>
       <motion.div
         className="font-hand absolute text-center"
-        style={{ ...box(k, 197.5 - 98, 178.5, 196), fontSize: (hand ? 13.5 : 15) * k, lineHeight: hand ? 1.6 : 1.45 }}
+        style={{ ...box(k, 197.5 - 98, textY, 196), fontSize: (hand ? 13.5 : 15) * k, lineHeight: hand ? 1.6 : 1.45 }}
         {...wipe(2.45)}
       >
         <p>{line}</p>
@@ -582,7 +597,7 @@ function DoneNote({
         type="button"
         onClick={onGoDoor}
         className="absolute cursor-pointer"
-        style={{ ...box(k, CTA_ORIGIN.x, CTA_ORIGIN.y, CTA_ORIGIN.w, CTA_ORIGIN.h), transformOrigin: "50% 60%" }}
+        style={{ ...box(k, CTA_ORIGIN.x, ctaY, CTA_ORIGIN.w, CTA_ORIGIN.h), transformOrigin: "50% 60%" }}
         initial={play ? { opacity: 0, scale: 1.7, rotate: -12, y: 10 * k } : { opacity: 1, scale: 1, rotate: 0, y: 0 }}
         animate={{ opacity: 1, scale: 1, rotate: 0, y: 0, transition: { type: "spring", stiffness: 420, damping: 22, delay: play ? 3.15 : 0 } }}
         whileHover={{ scale: 1.06, rotate: 1.5 }}
@@ -597,14 +612,14 @@ function DoneNote({
             top: (CTA_BOX.y - CTA_ORIGIN.y) * k,
             width: CTA_BOX.w * k,
             height: CTA_BOX.h * k,
-            gap: (hand ? 7 : 6) * k,
+            gap: (hand ? 7 : 5) * k,
             transform: "rotate(-3.44deg)",
           }}
         >
           <span
             className="font-look whitespace-nowrap font-bold uppercase"
             style={{
-              fontSize: (hand ? 12 : 11.5) * k,
+              fontSize: (hand ? 12 : 10) * k,
               lineHeight: 1.2,
               color: "#94541C",
             }}

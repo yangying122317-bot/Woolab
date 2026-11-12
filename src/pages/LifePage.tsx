@@ -786,6 +786,7 @@ export default function LifePage() {
         <Checklist
           room={room}
           open={checklistOpen}
+          showGuideHint={list.reason !== "stamp" && list.reason !== "done"}
           onClose={closeChecklist}
           onGoStation={goStation}
           onGoDoor={goDoor}
