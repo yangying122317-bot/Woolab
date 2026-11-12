@@ -1977,36 +1977,19 @@ export function DetailPage({
               onClose();
             }
           }}
-          className="font-look pointer-events-auto absolute z-30 flex cursor-pointer items-center whitespace-nowrap text-white/90 transition hover:opacity-70 active:opacity-60"
+          className="font-look pointer-events-auto absolute z-30 cursor-pointer whitespace-nowrap text-white/90 transition hover:opacity-70 active:opacity-60"
           /* 竖直中心对齐全站顶栏那一行（顶栏高 52 个稿单位，中心在 26） */
           style={{
             left: mobile ? `calc(${MU} * 16)` : 25 * u,
             top: `calc(${MU} * 26)`,
             transform: "translateY(-50%)",
-            gap: mobile ? `calc(${MU} * 5)` : 6 * u,
             fontSize: mobile ? `calc(${MU} * ${lang === "en" ? 11 : 12.5})` : `calc(${MU} * 12)`,
             padding: mobile ? "8px 8px 8px 0" : undefined,
             touchAction: "manipulation",
             WebkitTapHighlightColor: "transparent",
           }}
         >
-          <span
-            aria-hidden
-            className="block shrink-0"
-            style={{
-              width: mobile ? `calc(${MU} * 9.5)` : 9.5 * u,
-              height: mobile ? `calc(${MU} * 12.5)` : 12.5 * u,
-              transform: "rotate(90deg) scaleX(-1)",
-              backgroundColor: "currentColor",
-              WebkitMaskImage: "url(/assets/lab/scroll-arrow.svg)",
-              maskImage: "url(/assets/lab/scroll-arrow.svg)",
-              WebkitMaskSize: "100% 100%",
-              maskSize: "100% 100%",
-              WebkitMaskRepeat: "no-repeat",
-              maskRepeat: "no-repeat",
-            }}
-          />
-          <span>{t("lab.detail.back")}</span>
+          {t("lab.detail.back")}
         </button>
         {!mobile && <LabelRow u={u} left={shownLabel.left} right={shownLabel.right} />}
       </motion.div>
